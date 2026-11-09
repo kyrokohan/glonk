@@ -11,7 +11,7 @@ Website: [glonk.dev](https://glonk.dev)
 - **2D:** cells with foreground and background colors (the 256-color palette, or exact RGB on terminals with true color) and text attributes (bold, dim, underline, reverse), lines, boxes, text, and sprites.
 - **3D:** wireframe or solid meshes through a perspective camera, with near-plane clipping. Solid meshes are shaded by any number of lights (directional, ambient, point, or your own) into an ASCII brightness ramp, face by face or, with normals, smoothly across each face. They hide each other by depth and skip faces turned away. A wireframe drawn with depth is hidden by nearer solids too.
 - **Shapes and models:** a cube, sphere, cylinder, cone, plane and grid, or OBJ files from any `io.Reader` (a file, `//go:embed`, a download), centered and scaled and drawn wireframe or shaded, in the colors of their materials when loaded from an `fs.FS`.
-- **Half blocks:** a pixel `Canvas` with two square-ish pixels per cell, drawn with `▀` and a background color, for twice the vertical detail and shading by color instead of by character.
+- **Half blocks:** a pixel `Canvas` with two square-ish pixels per cell, drawn with `▀` and a background color, for twice the vertical detail and shading by color instead of by character. Lines and wireframes can be drawn into the pixels too.
 - **Mixed:** draw a 3D scene first, then a 2D HUD on top, into the same frame.
 - **Input:** held keys and one-shot presses, including arrows. Terminals with the [kitty keyboard protocol](https://sw.kovidgoyal.net/kitty/keyboard-protocol/) (Ghostty, kitty, WezTerm, foot, iTerm2, Alacritty) report real key releases, so you can hold several keys at once.
 - **Resizing:** the frame follows the terminal window, and a game with a `Resize(width, height int)` method is told its size.
@@ -53,7 +53,7 @@ cube3d controls:
 | A / D | strafe left / right |
 | Q / E, Left / Right | turn left / right |
 | Up / Down | look up / down |
-| M | switch between character shading and half-block pixels |
+| M | switch between character shading and half-block pixels (the wireframe cube becomes pixel lines too) |
 | B | in half-block mode, switch between exact and solid edges |
 | Esc | quit |
 
@@ -66,7 +66,7 @@ viewer controls:
 | R | spin on and off |
 | N | next model (the bundled ones end with a sphere, a cylinder and a cone) |
 | V | wireframe or solid |
-| M, B | character shading or half-block pixels; exact or solid pixel edges |
+| M, B | character shading or half-block pixels (with V, the wireframe is pixel lines); exact or solid pixel edges |
 | D | draw both sides of every face (for models that look inside out) |
 | C | change color (a model with colors of its own, like the bundled house, goes from them through the six palette colors and back) |
 | F | smooth or faceted shading for this model (a model without normals is smoothed from its faces) |
@@ -143,7 +143,17 @@ cube.DrawShaded(fb, cam, lights...)
 ghost.DrawDepth(fb, cam, engine.Cell{Character: '#'}) // hidden where the cube is nearer
 ```
 
-- **Half-block pixels count.** `Canvas.Compose` gives each cell it fills the depth of its nearer pixel, so anything drawn with a depth afterwards (`DrawDepth`, `FillTriangle`, `FrameBuffer.DrawLineDepth`, `SetDepth`) is hidden behind pixel solids that are nearer. The wireframe itself is still drawn in cells, as characters.
+And as pixels, into the same canvas as the solids and before `Compose`:
+
+```go
+canvas := fb.Canvas()
+cube.DrawShadedPixels(canvas, cam, lights...)
+ghost.DrawDepthPixels(canvas, cam, engine.RGB(0, 220, 220)) // hidden to the pixel
+canvas.Compose()
+```
+
+- **Half-block pixels count.** `Canvas.Compose` gives each cell it fills the depth of its nearer pixel, so anything drawn with a depth afterwards (`DrawDepth`, `FillTriangle`, `FrameBuffer.DrawLineDepth`, `SetDepth`) is hidden behind pixel solids that are nearer.
+- **Wireframes can be pixels too.** `Mesh.DrawPixels` and `Mesh.DrawDepthPixels` are `Draw` and `DrawDepth` for a `Canvas`: the same edges, drawn as lines of pixels, twice as fine from top to bottom, and `DrawDepthPixels` is hidden by the solids drawn into the same canvas to the pixel. `Canvas.DrawLine` and `Canvas.DrawLineDepth` draw your own lines. A line is one pixel thick, so half a cell tall where it runs sideways; on a `Seamless` canvas (Apple's Terminal) it is a row of whole cells.
 - **Ties keep what is there.** A line lying exactly on a surface, a grid on a floor, flickers between the two: lift it a little. There is no bias, because depth changes too fast across a floor seen at a shallow angle for any constant to cover.
 - **Not for a mesh's own faces.** To draw a mesh's edges over its own shaded faces, use `Draw`, which does not depend on how those cells compare.
 - **Off-screen meshes are skipped.** Drawing starts by asking whether any of a mesh can be on screen, so a scene of many meshes costs little for those out of view. No picture changes.
@@ -245,7 +255,7 @@ Built to work in most terminals. The basics need only the alternate screen, curs
 - **True color is used where the terminal says it has it.** An `RGB` color is sent exactly when `COLORTERM` is `truecolor` or `24bit` (terminals that can show it set that themselves) and as the closest of palette colors 16 to 255 otherwise; `Attrs` adds bold, dim, underline and reverse. Inside tmux or over ssh `COLORTERM` often does not arrive: export `COLORTERM=truecolor`, or set `Config.Colors` to `engine.ColorsTrue`, if the terminal can show it (and to `engine.Colors256` to turn it off). A terminal that cannot but is told it can shows wrong colors. A `Palette` color is always sent as a palette color, so colors 0 to 15 follow the user's theme. `Shade` gives exact RGB, so shades are finer on a true color terminal. Apple's Terminal does not set `COLORTERM` and keeps the 256-color look.
 - **Cells are taken to be twice as tall as wide.** That is what makes a cube look like a cube in most fonts; set `Camera.CellAspect` for a font that differs.
 - **Box drawing and half blocks need a Unicode font.** `DrawBox` uses `┌─┐│└┘` and the pixel canvas uses `▀▄`; nearly every monospace font has them. Character shading (`DrawShaded`) needs only ASCII and stays the default in the examples.
-- **Apple's Terminal draws a faint line along half-block edges.** Its block characters fall a little short of the cell. glonk detects it (`TERM_PROGRAM=Apple_Terminal`) and `Canvas.Compose` then draws solid cells instead of half blocks, so there is no line but silhouettes are a pixel blockier. Set `Canvas.Seamless` yourself to override, for instance inside tmux, which hides that variable.
+- **Apple's Terminal draws a faint line along half-block edges.** Its block characters fall a little short of the cell. glonk detects it (`TERM_PROGRAM=Apple_Terminal`) and `Canvas.Compose` then draws solid cells instead of half blocks, so there is no line but silhouettes are a pixel blockier and pixel lines are rows of whole cells. Set `Canvas.Seamless` yourself to override, for instance inside tmux, which hides that variable.
 - **A fixed-size frame larger than the terminal is cut off.** Only the top-left part that fits is shown, and the screen is cleared when the window changes size. Leave `Width` and `Height` at 0 to fill the terminal.
 - **`FPS` runs from 1 to 1000;** `Run` returns an error outside that range. A key pressed during start-up, while glonk asks the terminal about the keyboard protocol, arrives as a tap rather than a hold.
 - **Without a terminal there is no terminal handling.** A headless `Run` (see `Config.Output`) treats a key as held from its press to its release, as the kitty keyboard protocol reports them, unless `LegacyKeys` is set; a plain letter with no release then stays held. Ctrl-Z does nothing and quit signals are left to your program. Reading from an input that never ends a read (a pipe nobody closes) leaves one goroutine waiting after `Run` returns.

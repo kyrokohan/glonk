@@ -4,6 +4,12 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+### Added
+
+- `Canvas.DrawLine` and `Canvas.DrawLineDepth` draw a line of pixels: the line `FrameBuffer.DrawLine` and `DrawLineDepth` draw, on twice as many rows, with the same perspective-correct depth (the formula is shared, so they cannot disagree). `DrawLine`, like `Set`, neither reads nor writes depth, and the zero Color erases.
+- `Mesh.DrawPixels` and `Mesh.DrawDepthPixels` draw a wireframe into a `Canvas`, twice as fine from top to bottom as `Draw` and `DrawDepth`, with the same edges, near-plane cutting and skipping of what is off screen. `DrawPixels` ignores depth. `DrawDepthPixels` is hidden by nearer solids drawn into the same canvas and hides farther ones, whatever the order, to the pixel; call `Canvas.Compose` afterwards. A line is one pixel thick, and on a `Seamless` canvas a row of whole cells. `Draw` and `DrawDepth` are unchanged: every picture is identical, `Draw` is within 0.2% of its time and `DrawDepth` is 2 to 3% faster.
+- cube3d draws its wireframe cube as pixel lines in half-block mode (M), hidden to the pixel by the cubes in front of it; the floor stays dotted. In the viewer, V draws the wireframe as pixel lines when half-blocks are on (M), in the palette color, and B (exact or solid edges) works with it; the HUD reads `wireframe, half-blocks, exact edges`.
+
 ## [0.2.0] - 2026-11-08
 
 The module path is now `glonk.dev`, which is a breaking change: see Changed, and "Moved to glonk.dev" in the README for the commands that move a project. On top of 0.1.0 this release adds smooth shading, true color, depth-tested wireframes and colors on models, and sends the terminal far less per frame.
