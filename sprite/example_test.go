@@ -54,3 +54,34 @@ func ExampleLayer() {
 	// └──────────┘
 	// 4 sprites
 }
+
+// A frame is a picture of several cells, made here from text art: a space is a blank
+// cell, and the style gives the letters their color. A sprite shows its frame with the
+// top left cell at its position, and whatever is off the frame is cut off, cell by cell.
+func ExampleFromLines() {
+	fb, err := engine.NewFrameBuffer(12, 6)
+	if err != nil {
+		panic(err)
+	}
+	ship := sprite.FromLines(engine.Cell{Foreground: engine.Palette(208)},
+		` /\ `,
+		`/__\`,
+	)
+
+	layer := sprite.NewLayer()
+	layer.Add(&sprite.Sprite{Position: geometry.Vector2{X: 2, Y: 1}, Frame: ship})
+	layer.Add(&sprite.Sprite{Position: geometry.Vector2{X: 10, Y: 3}, Frame: ship}) // runs off the right edge
+
+	fb.DrawBox(0, 0, fb.Width(), fb.Height(), engine.Color{})
+	layer.Draw(fb)
+	fmt.Println(fb)
+	fmt.Println(ship.Width(), "by", ship.Height())
+	// Output:
+	// ┌──────────┐
+	// │  /\      │
+	// │ /__\     │
+	// │          /
+	// │         /_
+	// └──────────┘
+	// 4 by 2
+}

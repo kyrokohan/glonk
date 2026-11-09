@@ -45,20 +45,46 @@ func (l *Layer) Len() int {
 	return len(l.sprites)
 }
 
-// Draw sets each sprite's Cell in fb, clipping anything off screen. A sprite replaces
-// the whole cell under it. A sprite whose
-// Position has a NaN or infinite X or Y is not drawn, like one that is off screen.
+// Draw sets each sprite's Cell, or the cells of its Frame, in fb, clipping anything off
+// screen. A sprite replaces the whole cell under it. A sprite whose Position has a NaN or
+// infinite X or Y is not drawn, like one that is off screen.
 func (l *Layer) Draw(fb *engine.FrameBuffer) {
 	w, h := float64(fb.Width()), float64(fb.Height())
 
 	for _, sp := range l.sprites {
 		x, y := math.Floor(sp.Position.X), math.Floor(sp.Position.Y)
 
-		// Checked before converting to int, and written so that NaN fails: what
-		// int(NaN) or int(1e300) gives differs from one CPU to the next.
-		if !(x >= 0 && x < w && y >= 0 && y < h) {
+		if sp.Frame == nil {
+			// Checked before converting to int, and written so that NaN fails: what
+			// int(NaN) or int(1e300) gives differs from one CPU to the next.
+			if x >= 0 && x < w && y >= 0 && y < h {
+				fb.Set(int(x), int(y), sp.Cell)
+			}
 			continue
 		}
-		fb.Set(int(x), int(y), sp.Cell)
+		drawFrame(fb, sp.Frame, x, y, w, h)
+	}
+}
+
+// drawFrame sets the cells of f in fb with its top left cell at (x, y), which are
+// already floored, and clips what is off the frame. The frame is w by h, in float64.
+func drawFrame(fb *engine.FrameBuffer, f *Frame, x, y, w, h float64) {
+	if f.width == 0 || f.height == 0 {
+		return
+	}
+
+	// Checked before converting to int, as for a single cell; the frame reaches onto the
+	// buffer when its left edge is less than w and its right edge is more than 0.
+	if !(x > -float64(f.width) && x < w && y > -float64(f.height) && y < h) {
+		return
+	}
+
+	ix, iy := int(x), int(y)
+	cols := max(-ix, 0)
+	colEnd := min(f.width, fb.Width()-ix)
+	for row := max(-iy, 0); row < min(f.height, fb.Height()-iy); row++ {
+		for col := cols; col < colEnd; col++ {
+			fb.Set(ix+col, iy+row, f.cells[row*f.width+col])
+		}
 	}
 }
