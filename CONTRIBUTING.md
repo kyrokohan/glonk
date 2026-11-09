@@ -1,6 +1,6 @@
 # Contributing
 
-Issues and pull requests are welcome. glonk is a one-person project, so replies can take a while.
+Issues and pull requests are welcome. glonk is a one-person project, so replies can take a while. Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Before you start
 
@@ -14,11 +14,23 @@ You need Go 1.26 or newer. The race detector needs cgo, so a C compiler must be 
 
 ```
 make check    # formatting, go vet, and all tests with the race detector
+make lint     # staticcheck, which finds mistakes that go vet does not
+make vuln     # govulncheck, which lists known vulnerabilities in Go and our dependencies
 make fuzz     # fuzz every fuzz test for FUZZTIME each (default 10s)
 make run      # try an example; EXAMPLE=./examples/cube3d picks another
 ```
 
-`make check` is what CI runs, on Linux and macOS with Go 1.26 and 1.27. CI also vets for Windows, FreeBSD and 32-bit ARM, builds for Windows, and runs the tests as a 32-bit program.
+`make check` is what CI runs, on Linux and macOS with Go 1.26 and 1.27. CI also vets for Windows, FreeBSD and 32-bit ARM, builds for Windows, runs the tests as a 32-bit program, and runs `make lint`. `make vuln` runs in CI too, on every pull request and every week, but does not block a merge. `lint` and `vuln` download their tool the first time, at the version pinned in the `Makefile`; Dependabot does not read that file, so bump the versions by hand now and then.
+
+## Sending a change
+
+Every change, the maintainer's included, goes in through a pull request; nobody pushes to `main`.
+
+1. Start from an up-to-date `main` on a branch named `type/short-subject`, with the type from the commit messages below, as in `git switch -c fix/obj-crash`.
+2. Commit, run `make check`, and push the branch (to your fork, or to the repository if you can).
+3. Open a pull request titled `type: subject`. The template asks what and why, the issue it closes, and four ticks.
+4. The checks must pass: the tests, the cross-system builds and `staticcheck`.
+5. The owner reviews and merges it. A change of several commits is merged by rebase, so each commit stays with its message; a small fix may be squashed into one commit with the pull request title. The branch is deleted afterwards.
 
 ## Making a change
 
