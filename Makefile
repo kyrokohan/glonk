@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help fmt fmtcheck test vet fuzz run build check
+.PHONY: help fmt fmtcheck test vet lint fuzz run build check
 
 help:
 	@echo "Available targets:"
@@ -7,6 +7,7 @@ help:
 	@echo "  fmtcheck - Fail if any Go file is not formatted"
 	@echo "  test     - Run tests with the race detector (RACE= to turn it off)"
 	@echo "  vet      - Check for suspicious code with go vet"
+	@echo "  lint     - Find more mistakes with staticcheck (downloads it the first time)"
 	@echo "  fuzz     - Fuzz every fuzz test for FUZZTIME each (default 10s)"
 	@echo "  run      - Run an example (default bounce2d; EXAMPLE=./examples/cube3d; ARGS= passes arguments)"
 	@echo "  build    - Compile every package"
@@ -30,6 +31,14 @@ test:
 vet:
 	@echo "Vetting..."
 	go vet ./...
+
+# Pinned, so that a new release cannot turn CI red by itself. Dependabot does not read
+# this file: bump it by hand now and then. It is not part of check because it needs
+# the network the first time.
+STATICCHECK ?= honnef.co/go/tools/cmd/staticcheck@2026.2.2
+lint:
+	@echo "Linting..."
+	go run $(STATICCHECK) ./...
 
 # Go fuzzes one target per run, so loop over every Fuzz test in every package.
 # A failing input is saved under testdata/fuzz/ and then runs with plain `make test`.

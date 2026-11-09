@@ -65,3 +65,17 @@ jobs:
         run: GOOS=windows go build ./...
       - name: test as a 32-bit program
         run: GOARCH=386 go test ./...
+
+  # Mistakes that go vet does not find. The version of the tool is pinned in the Makefile.
+  staticcheck:
+    name: staticcheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27"
+      - run: make lint
