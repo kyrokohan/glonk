@@ -125,3 +125,38 @@ func ExampleSprite_overlay() {
 	// ##o#o##
 	// ##|_|##
 }
+
+// An Animation is frames and a speed. Advance it from the game's Update with the time that
+// passed, and a sprite that has it shows the current frame. It plays once, or over and
+// over if Loop is set.
+func ExampleAnimation() {
+	walk := sprite.NewAnimation(4, // four frames a second
+		sprite.FromLines(engine.Cell{}, `o`, `|`),
+		sprite.FromLines(engine.Cell{}, `o`, `/`),
+		sprite.FromLines(engine.Cell{}, `o`, `|`),
+		sprite.FromLines(engine.Cell{}, `o`, `\`),
+	)
+	walk.Loop = true
+
+	fb, err := engine.NewFrameBuffer(4, 2)
+	if err != nil {
+		panic(err)
+	}
+	layer := sprite.NewLayer()
+	layer.Add(&sprite.Sprite{Position: geometry.Vector2{X: 1}, Animation: walk})
+
+	for range 5 {
+		fb.Clear()
+		layer.Draw(fb)
+		fmt.Printf("frame %d:%q\n", walk.Index(), fb.String())
+		walk.Advance(0.25) // a quarter of a second
+	}
+	fmt.Println("done:", walk.Done())
+	// Output:
+	// frame 0:" o\n |"
+	// frame 1:" o\n /"
+	// frame 2:" o\n |"
+	// frame 3:" o\n \\"
+	// frame 0:" o\n |"
+	// done: false
+}

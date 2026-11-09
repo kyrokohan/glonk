@@ -6,7 +6,7 @@ import (
 )
 
 // Sprite is a picture at a fractional position, floored to a cell of the frame when
-// drawn: one Cell, or a Frame of several.
+// drawn: one Cell, a Frame of several, or an Animation of frames.
 type Sprite struct {
 	// Position is where the sprite is: X is the column and Y the row, in cells from
 	// the top left, and for a Frame the place of its top left cell. Fractions are
@@ -24,6 +24,12 @@ type Sprite struct {
 	// cell replaces the cell beneath it, blanks included, as Cell does. A Frame with no
 	// cells draws nothing, and does not fall back to Cell.
 	Frame *Frame
+
+	// Animation, if it is not nil, is drawn in place of Frame and Cell: its current frame,
+	// where Frame would be drawn. An Animation with no frame to show, or a nil one among
+	// its Frames, draws nothing, and does not fall back to Frame or Cell. Advance it from
+	// the game's Update.
+	Animation *Animation
 
 	// Overlay makes the sprite see-through, for a Cell and for a Frame. Off, a sprite
 	// replaces the cells under it whole, blanks included. On, a blank cell of the sprite,

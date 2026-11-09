@@ -57,7 +57,7 @@ func (l *Layer) Draw(fb *engine.FrameBuffer) {
 
 		// Everything but a plain single cell is drawn out of the loop, which keeps the
 		// common case as short as it was.
-		if sp.Frame != nil || sp.Overlay {
+		if sp.Frame != nil || sp.Animation != nil || sp.Overlay {
 			drawSprite(fb, sp, x, y, w, h)
 			continue
 		}
@@ -70,9 +70,14 @@ func (l *Layer) Draw(fb *engine.FrameBuffer) {
 	}
 }
 
-// drawSprite draws a sprite that has a Frame or is an Overlay, with its position
-// already floored, on a buffer w by h in float64.
+// drawSprite draws a sprite that has an Animation or a Frame or is an Overlay, with its
+// position already floored, on a buffer w by h in float64. An Animation takes the place
+// of a Frame, and a Frame that of the Cell.
 func drawSprite(fb *engine.FrameBuffer, sp *Sprite, x, y, w, h float64) {
+	if sp.Animation != nil {
+		drawFrame(fb, sp.Animation.Frame(), x, y, w, h, sp.Overlay) // nothing, if it has none
+		return
+	}
 	if sp.Frame != nil {
 		drawFrame(fb, sp.Frame, x, y, w, h, sp.Overlay)
 		return
@@ -103,7 +108,7 @@ func isHole(c engine.Cell) bool {
 // drawFrame sets the cells of f in fb with its top left cell at (x, y), which are
 // already floored, and clips what is off the frame. The frame is w by h, in float64.
 func drawFrame(fb *engine.FrameBuffer, f *Frame, x, y, w, h float64, overlay bool) {
-	if f.width == 0 || f.height == 0 {
+	if f == nil || f.width == 0 || f.height == 0 {
 		return
 	}
 

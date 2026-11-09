@@ -197,13 +197,17 @@ func reference(w, h int, grid []engine.Cell, sprites []*Sprite) []engine.Cell {
 		}
 
 		fx, fy := math.Floor(sp.Position.X), math.Floor(sp.Position.Y)
-		if sp.Frame == nil {
+		look := sp.Frame
+		switch {
+		case sp.Animation != nil:
+			look = sp.Animation.Frame() // nil: nothing to draw, and no fall back
+		case sp.Frame == nil:
 			put(fx, fy, sp.Cell)
 			continue
 		}
-		for row := range sp.Frame.Height() {
-			for col := range sp.Frame.Width() {
-				put(fx+float64(col), fy+float64(row), sp.Frame.At(col, row))
+		for row := range look.Height() {
+			for col := range look.Width() {
+				put(fx+float64(col), fy+float64(row), look.At(col, row))
 			}
 		}
 	}
@@ -269,14 +273,28 @@ func TestLayerDrawsFramesLikeTheReference(t *testing.T) {
 		layer := NewLayer()
 		for range 1 + rng.IntN(4) {
 			sp := &Sprite{Position: geometry.Vector2{X: pos(), Y: pos()}, Cell: randomCell(rng), Overlay: rng.IntN(2) == 0}
-			if rng.IntN(5) != 0 { // most have a frame
+			randomFrame := func() *Frame {
 				f := NewFrame(rng.IntN(6), rng.IntN(5))
 				for y := range f.Height() {
 					for x := range f.Width() {
 						f.Set(x, y, randomCell(rng))
 					}
 				}
-				sp.Frame = f
+				return f
+			}
+			switch rng.IntN(6) {
+			case 0: // a single cell
+			case 1: // an animation, partly played, with a nil frame now and then
+				a := NewAnimation(1+rng.Float64()*4, randomFrame(), nil, randomFrame())
+				a.Frames = a.Frames[:rng.IntN(4)]
+				a.Loop = rng.IntN(2) == 0
+				a.Advance(rng.Float64() * 2)
+				sp.Animation = a
+				if rng.IntN(2) == 0 {
+					sp.Frame = randomFrame() // an animation takes the place of the frame
+				}
+			default:
+				sp.Frame = randomFrame()
 			}
 			sprites = append(sprites, sp)
 			layer.Add(sp)
