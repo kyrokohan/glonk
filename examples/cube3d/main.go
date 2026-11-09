@@ -4,8 +4,9 @@
 //
 // W and S move forward and back, A and D strafe, Q, E and the left and right
 // arrows turn, and the up and down arrows look up and down. M switches between
-// character shading and half-block pixels, B switches between exact and solid pixel
-// edges, and Esc quits. Letters work in either case.
+// character shading and half-block pixels (the wireframe cube becomes pixel lines too,
+// and the floor stays dotted), B switches between exact and solid pixel edges, and Esc
+// quits. Letters work in either case.
 package main
 
 import (
@@ -38,7 +39,7 @@ type cubeGame struct {
 	cam   mesh.Camera
 	floor mesh.Mesh
 	cubes []mesh.Mesh
-	ghost mesh.Mesh // a cube drawn as a wireframe, partly hidden by the solid ones in front of it
+	ghost mesh.Mesh // a cube drawn as a wireframe (pixel lines in half-block mode), partly hidden by the solid ones in front of it
 	fps   float64
 
 	// halfBlocks draws the cubes as pixels, two per cell, shaded by color. Off, they
@@ -138,18 +139,19 @@ func (g *cubeGame) Draw(fb *engine.FrameBuffer) {
 		for _, o := range g.cubes {
 			o.DrawShadedPixels(canvas, g.cam, lights...)
 		}
+		// The ghost is a wireframe with depth, drawn into the same pixels as the solids: a
+		// cube in front of it hides the part of its lines that it covers, to the pixel.
+		g.ghost.DrawDepthPixels(canvas, g.cam, g.ghost.Material.Color)
 		// Compose before the HUD so the HUD lands on top of the pixels.
 		canvas.Compose()
 	} else {
 		for _, o := range g.cubes {
 			o.DrawShaded(fb, g.cam, lights...)
 		}
+		// The ghost is a wireframe drawn with depth, after the solids: a cube in front of it
+		// hides the part of its edges that it covers.
+		g.ghost.DrawDepth(fb, g.cam, engine.Cell{Character: '#', Foreground: g.ghost.Material.Color})
 	}
-
-	// The ghost is a wireframe drawn with depth, after the solids: a cube in front of it
-	// hides the part of its edges that it covers. Pixels from the half-block mode hide it
-	// too, because Compose gives the cells they fill their depth.
-	g.ghost.DrawDepth(fb, g.cam, engine.Cell{Character: '#', Foreground: g.ghost.Material.Color})
 
 	fb.DrawBox(0, 0, fb.Width(), fb.Height(), engine.Color{})
 	fb.DrawText(1, 1, fmt.Sprintf("%.0f fps  %s", g.fps, mode), engine.Color{})

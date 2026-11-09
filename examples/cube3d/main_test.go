@@ -382,6 +382,54 @@ func anyCell(engine.Cell) bool { return true }
 
 func isGhost(c engine.Cell) bool { return c.Foreground == ghostColor }
 
+// pixelsOf decodes the half-block cells of a frame back into the pixels they hold, inside
+// the frame border and between the lines of text: pixel (x, 2*y) is the top of cell (x, y)
+// and (x, 2*y+1) its bottom. Cells that are not pixels, the dots of the floor, are skipped.
+func pixelsOf(fb *engine.FrameBuffer) map[[2]int]engine.Color {
+	out := map[[2]int]engine.Color{}
+	for y := 3; y < fb.Height()-4; y++ {
+		for x := 1; x < fb.Width()-1; x++ {
+			c := fb.At(x, y)
+			var top, bottom engine.Color
+			switch c.Character {
+			case '\u2580': // upper half block
+				top, bottom = c.Foreground, c.Background
+			case '\u2584': // lower half block
+				top, bottom = c.Background, c.Foreground
+			case ' ': // a solid cell, or nothing
+				top, bottom = c.Background, c.Background
+			default:
+				continue
+			}
+			if !top.IsDefault() {
+				out[[2]int{x, 2 * y}] = top
+			}
+			if !bottom.IsDefault() {
+				out[[2]int{x, 2*y + 1}] = bottom
+			}
+		}
+	}
+	return out
+}
+
+// ghostPixels is where the ghost's lines are, as pixels, with nothing else drawn and
+// nothing hiding them: the reference the pixel tests compare a whole scene with.
+func ghostPixels(t *testing.T, g *cubeGame) map[[2]int]engine.Color {
+	t.Helper()
+	fb := newFrame(t, 80, 24)
+	c := fb.Canvas()
+	g.ghost.DrawPixels(c, g.cam, ghostColor)
+	out := map[[2]int]engine.Color{}
+	for y := 2 * 3; y < 2*(fb.Height()-4); y++ {
+		for x := 1; x < fb.Width()-1; x++ {
+			if p := c.At(x, y); !p.IsDefault() {
+				out[[2]int{x, y}] = p
+			}
+		}
+	}
+	return out
+}
+
 // sceneAt is a game with the camera at a place, in glyph or half-block mode.
 func sceneAt(t *testing.T, x, z, yaw float64, halfBlocks bool) *cubeGame {
 	t.Helper()
@@ -426,8 +474,15 @@ func TestTheGhostChangesOnlyItsOwnCells(t *testing.T) {
 			g := sceneAt(t, pose.x, pose.z, pose.yaw, halfBlocks)
 			with, without, alone := newFrame(t, 80, 24), newFrame(t, 80, 24), newFrame(t, 80, 24)
 			g.Draw(with)
-			g.ghost.Draw(alone, g.cam, engine.Cell{Character: '#', Foreground: ghostColor})
-			ghostCells := cellsOf(alone, anyCell)
+			ghostCells := map[[2]int]bool{}
+			if halfBlocks {
+				for p := range ghostPixels(t, g) { // the cells its pixels are in
+					ghostCells[[2]int{p[0], p[1] / 2}] = true
+				}
+			} else {
+				g.ghost.Draw(alone, g.cam, engine.Cell{Character: '#', Foreground: ghostColor})
+				ghostCells = cellsOf(alone, anyCell)
+			}
 			g.ghost = mesh.Mesh{}
 			g.Draw(without)
 
@@ -444,9 +499,9 @@ func TestTheGhostChangesOnlyItsOwnCells(t *testing.T) {
 
 // From the start the orange cube is in front of the ghost's left side: the ghost is
 // drawn after the cubes, and the cube hides the part of its edges that it covers, while
-// the rest shows. The same in half-block mode, where the cube is pixels.
+// the rest shows. The half-block mode has its own test, to the pixel.
 func TestTheGhostIsHiddenBehindANearerCube(t *testing.T) {
-	for _, halfBlocks := range []bool{false, true} {
+	for _, halfBlocks := range []bool{false} {
 		name := "glyphs"
 		if halfBlocks {
 			name = "half blocks"
@@ -487,10 +542,10 @@ func TestTheGhostIsHiddenBehindANearerCube(t *testing.T) {
 	}
 }
 
-// A solid farther away than the ghost does not hide it, whichever way the solid is drawn:
-// as characters or, composed after the pixels are in, as half blocks.
+// A solid farther away than the ghost does not hide it. The half-block mode has its own
+// test, to the pixel.
 func TestTheGhostIsWholeWhereItIsNearerThanASolid(t *testing.T) {
-	for _, halfBlocks := range []bool{false, true} {
+	for _, halfBlocks := range []bool{false} {
 		name := "glyphs"
 		if halfBlocks {
 			name = "half blocks"
@@ -523,6 +578,98 @@ func TestTheGhostIsWholeWhereItIsNearerThanASolid(t *testing.T) {
 				t.Errorf("wanted the ghost drawn over the cube in at least 5 cells, got %d", over)
 			}
 		})
+	}
+}
+
+// In half-block mode the ghost's lines are pixels, drawn into the same pixels as the
+// solids: from the start the orange cube hides the part of the ghost that it covers,
+// pixel by pixel, and the rest shows.
+func TestInPixelModeTheGhostIsHiddenBehindANearerCubeToThePixel(t *testing.T) {
+	g := sceneAt(t, 0, -4, 0, true)
+	full, solids := newFrame(t, 80, 24), newFrame(t, 80, 24)
+	g.Draw(full)
+	noGhost := *g
+	noGhost.ghost = mesh.Mesh{}
+	noGhost.Draw(solids)
+
+	drawn, covered := pixelsOf(full), pixelsOf(solids)
+	hidden, shown := 0, 0
+	for p := range ghostPixels(t, g) {
+		_, underSolid := covered[p]
+		switch visible := drawn[p] == ghostColor; {
+		case underSolid && visible:
+			t.Fatalf("pixel %v: wanted the ghost hidden behind the cube, but it is drawn", p)
+		case !underSolid && !visible:
+			t.Fatalf("pixel %v: wanted the ghost where nothing covers it, got %v", p, drawn[p])
+		case underSolid:
+			hidden++
+		default:
+			shown++
+		}
+	}
+	if hidden < 3 || shown < 20 {
+		t.Errorf("wanted the ghost partly hidden and partly shown from the start, got %d hidden and %d shown pixels", hidden, shown)
+	}
+}
+
+// A solid farther away than the ghost does not hide it, to the pixel.
+func TestInPixelModeTheGhostIsWholeWhereItIsNearerThanASolid(t *testing.T) {
+	g := sceneAt(t, 0, -4, 0, true)
+	g.cubes = []mesh.Mesh{newCube(5, 1.6, 14, engine.Palette(208))} // a big cube behind the ghost
+	full, solids := newFrame(t, 80, 24), newFrame(t, 80, 24)
+	g.Draw(full)
+	noGhost := *g
+	noGhost.ghost = mesh.Mesh{}
+	noGhost.Draw(solids)
+
+	drawn, covered := pixelsOf(full), pixelsOf(solids)
+	over := 0
+	for p := range ghostPixels(t, g) {
+		if drawn[p] != ghostColor {
+			t.Fatalf("pixel %v: wanted the ghost drawn in front of the cube behind it, got %v", p, drawn[p])
+		}
+		if _, ok := covered[p]; ok {
+			over++
+		}
+	}
+	if over < 10 {
+		t.Errorf("wanted the ghost drawn over the cube in at least 10 pixels, got %d", over)
+	}
+}
+
+// Half-block mode draws the ghost as half blocks and no text character stands in for it,
+// and the floor stays the dotted lines it is in glyph mode.
+func TestInPixelModeTheGhostIsHalfBlocksAndTheFloorStaysDotted(t *testing.T) {
+	g := sceneAt(t, 0, -4, 0, true)
+	fb := newFrame(t, 80, 24)
+	g.Draw(fb)
+
+	hashes, dots := 0, 0
+	for y := 3; y < fb.Height()-4; y++ {
+		for x := 1; x < fb.Width()-1; x++ {
+			switch c := fb.At(x, y); {
+			case c.Character == '#':
+				hashes++
+			case c.Character == '.' && c.Foreground == engine.Palette(240):
+				dots++
+			}
+		}
+	}
+	if hashes != 0 {
+		t.Errorf("wanted no # in half-block mode, got %d", hashes)
+	}
+	if dots < 30 {
+		t.Errorf("wanted the floor still dotted in half-block mode, got %d dots", dots)
+	}
+
+	ghostPx := 0
+	for _, color := range pixelsOf(fb) {
+		if color == ghostColor {
+			ghostPx++
+		}
+	}
+	if ghostPx < 20 {
+		t.Errorf("wanted the ghost drawn as pixels of its color, got %d", ghostPx)
 	}
 }
 
