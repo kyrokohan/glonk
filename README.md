@@ -25,6 +25,17 @@ go get glonk.dev
 
 Requires Go 1.26 or newer.
 
+### Moved to glonk.dev
+
+Up to v0.1.0 glonk was imported as `github.com/kyrokohan/glonk`. From v0.2.0 it is `glonk.dev`; the code is still hosted on GitHub. To move a project that uses v0.1.0, run this in its module root (it needs `perl`, which macOS and most Linux systems have):
+
+```
+go mod edit -droprequire github.com/kyrokohan/glonk
+grep -rl 'github.com/kyrokohan/glonk' --include='*.go' . | xargs perl -pi -e 's#github.com/kyrokohan/glonk#glonk.dev#g'
+go get glonk.dev@v0.2.0
+go mod tidy
+```
+
 ## Run the examples
 
 ```
