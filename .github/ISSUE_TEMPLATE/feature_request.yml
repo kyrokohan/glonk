@@ -1,0 +1,25 @@
+name: Feature request
+description: Something glonk could do that it does not do now.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        glonk is pre-1.0 and maintained by one person, so the problem you want solved matters more than the exact change. A pull request for something large is best agreed here first.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to do and what stops you.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: A sketch of the API or behavior, if you have one.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you tried
+      description: What you do today, or other designs you considered.
