@@ -23,7 +23,7 @@ Website: [glonk.dev](https://glonk.dev)
 go get glonk.dev
 ```
 
-Requires Go 1.26 or newer.
+Requires Go 1.26 or newer. glonk has no package at its root, so import the packages you use (`glonk.dev/engine`, and `glonk.dev/mesh` for 3D) and run `go mod tidy` once, which records the dependencies they need; without it `go run` stops with a missing `go.sum` entry.
 
 ### Moved to glonk.dev
 

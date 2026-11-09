@@ -31,7 +31,7 @@
   <section aria-labelledby="install">
     <h2 id="install">Install</h2>
     <pre><code>go get glonk.dev</code></pre>
-    <p>Requires Go 1.26 or newer.</p>
+    <p>Requires Go 1.26 or newer. glonk has no package at its root, so import <code>glonk.dev/engine</code> (and <code>glonk.dev/mesh</code> for 3D) and run <code>go mod tidy</code> once; without it <code>go run</code> stops with a missing <code>go.sum</code> entry.</p>
   </section>
 
   <section aria-labelledby="try">
