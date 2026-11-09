@@ -21,8 +21,9 @@ const (
 // Get one with FrameBuffer.Canvas. It keeps its own depth per pixel, separate from
 // the FrameBuffer's, so solids drawn on a Canvas hide each other, but not the cells
 // until Compose: it then gives every cell it fills the depth of its nearer pixel, and
-// depth-tested drawing into cells afterwards (FillTriangle, DrawLineDepth, SetDepth) is
-// hidden behind the pixels where they are nearer.
+// depth-tested drawing into cells afterwards (FrameBuffer.FillTriangle,
+// FrameBuffer.DrawLineDepth, FrameBuffer.SetDepth) is hidden behind the pixels where
+// they are nearer.
 type Canvas struct {
 	// Seamless makes Compose draw solid cells only, with no half-block characters.
 	// Some terminals draw those characters a little short of the cell and leave a
@@ -124,6 +125,42 @@ func (c *Canvas) SetDepth(x, y int, z float64, color Color) bool {
 	return true
 }
 
+// DrawLine draws a line of color from pixel (x0, y0) to (x1, y1): the line
+// FrameBuffer.DrawLine draws, but into pixels, so twice as fine from top to bottom. Only
+// the part inside the canvas is visited, so a line with a far-away end costs no more
+// than one that stays on screen, and coordinates beyond +-2^29 are clamped to it.
+//
+// Like Set it never reads or writes depth: the pixels are replaced whatever is there,
+// and a solid or a line drawn afterwards with depth is hidden only by the depth that was
+// there before. The zero Color erases the pixels it passes through.
+func (c *Canvas) DrawLine(x0, y0, x1, y1 int, color Color) {
+	walkLineAt(c.width, c.height, x0, y0, x1, y1, func(x, y, _, _ int) {
+		// walkLineAt only visits pixels inside the canvas.
+		c.pixels[y*c.width+x] = color
+	})
+}
+
+// DrawLineDepth draws the same line as DrawLine, but each pixel is stored with
+// SetDepth, so a nearer surface hides it and it hides a farther one: a pixel is drawn
+// where the line is nearer than what is there, and where it ties, what is there stays.
+// z0 and z1 are the distances from the camera of the two ends, as for FillTriangle, and
+// must be positive. The depth along the line is the one FrameBuffer.DrawLineDepth gives
+// its cells, perspective-correct and exact at the ends; read there what it is and what a
+// depth that is not positive, NaN or infinite does.
+//
+// The depth is the Canvas's own, so a line drawn here is hidden by the solids drawn into
+// the Canvas and hides those behind it, in whatever order they were drawn. Once Compose
+// has run, the cells it filled have the depth of their nearer pixel.
+func (c *Canvas) DrawLineDepth(x0, y0 int, z0 float64, x1, y1 int, z1 float64, color Color) {
+	d, ok := newLineDepth(z0, z1)
+	if !ok {
+		return
+	}
+	walkLineAt(c.width, c.height, x0, y0, x1, y1, func(x, y, i, n int) {
+		c.SetDepth(x, y, d.at(i, n), color)
+	})
+}
+
 // FillTriangle fills the triangle with corners (x0, y0), (x1, y1), (x2, y2) in
 // pixel coordinates, like FrameBuffer.FillTriangle but into pixels. The z values
 // are the corners' distances from the camera and must be positive.
@@ -159,8 +196,8 @@ func (c *Canvas) FillTriangleFunc(x0, y0, z0, x1, y1, z1, x2, y2, z2 float64, co
 // left alone; every other cell is replaced, and takes the depth of its nearer pixel
 // in place of whatever depth it had. Call it at the point in drawing where the pixels
 // should sit: anything drawn into the FrameBuffer afterwards lands on top of them,
-// unless it is drawn with a depth (FillTriangle, DrawLineDepth, SetDepth) and is
-// farther than the pixels there.
+// unless it is drawn with a depth (FrameBuffer.FillTriangle, FrameBuffer.DrawLineDepth,
+// FrameBuffer.SetDepth) and is farther than the pixels there.
 //
 // A pixel set with Set has no depth, so it is as far away as can be: depth-tested
 // drawing afterwards lands on top of it.

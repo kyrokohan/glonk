@@ -43,34 +43,51 @@ func (fb *FrameBuffer) DrawLine(x0, y0, x1, y1 int, cell Cell) {
 // A depth that is not positive, or is NaN, at either end draws nothing. An infinite
 // depth is infinitely far: nothing is nearer than it, so those cells are not drawn.
 func (fb *FrameBuffer) DrawLineDepth(x0, y0 int, z0 float64, x1, y1 int, z1 float64, cell Cell) {
-	if !(z0 > 0 && z1 > 0) {
+	d, ok := newLineDepth(z0, z1)
+	if !ok {
 		return
 	}
-	near, far := min(z0, z1), max(z0, z1)
-	inv0, inv1 := 1/z0, 1/z1
-
 	walkLineAt(fb.width, fb.height, x0, y0, x1, y1, func(x, y, i, n int) {
-		var z float64
-		switch {
-		case n == 0:
-			z = near
-		case i == 0:
-			z = z0
-		case i == n:
-			z = z1
-		default:
-			t := float64(i) / float64(n)
-			z = 1 / ((1-t)*inv0 + t*inv1)
-			// Depths at the limits of a float can overflow or underflow the sum; the
-			// answer is always between the ends.
-			if !(z >= near) {
-				z = near
-			} else if z > far {
-				z = far
-			}
-		}
-		fb.SetDepth(x, y, z, cell)
+		fb.SetDepth(x, y, d.at(i, n), cell)
 	})
+}
+
+// lineDepth is the distance from the camera along a line whose ends are z0 and z1 away.
+// DrawLineDepth of a FrameBuffer and of a Canvas both take it from here, so that they
+// cannot disagree; see FrameBuffer.DrawLineDepth for what it is.
+type lineDepth struct {
+	z0, z1     float64
+	inv0, inv1 float64 // 1/z0 and 1/z1
+	near, far  float64 // the smaller and the larger of the ends
+}
+
+// newLineDepth returns the depth along a line from z0 to z1 away, and false if either
+// is not positive, or is NaN, which draws nothing.
+func newLineDepth(z0, z1 float64) (lineDepth, bool) {
+	if !(z0 > 0 && z1 > 0) {
+		return lineDepth{}, false
+	}
+	return lineDepth{z0: z0, z1: z1, inv0: 1 / z0, inv1: 1 / z1, near: min(z0, z1), far: max(z0, z1)}, true
+}
+
+// at is the depth of step i of a line n steps long, as walkLineAt counts them.
+func (d *lineDepth) at(i, n int) float64 {
+	switch {
+	case n == 0:
+		return d.near
+	case i == 0:
+		return d.z0
+	case i == n:
+		return d.z1
+	}
+	t := float64(i) / float64(n)
+	z := 1 / ((1-t)*d.inv0 + t*d.inv1)
+	// Depths at the limits of a float can overflow or underflow the sum; the
+	// answer is always between the ends.
+	if !(z >= d.near) {
+		return d.near
+	}
+	return min(z, d.far)
 }
 
 // minorOffset is how far the shorter axis of a Bresenham line has moved after i

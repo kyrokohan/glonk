@@ -191,6 +191,29 @@ func FuzzDrawLineDepth(f *testing.F) {
 		plain.DrawLine(x0, y0, x1, y1, mark)
 		deep.DrawLineDepth(x0, y0, z0, x1, y1, z1, mark)
 
+		// A Canvas draws the same pixels, with the same depths, as a buffer of its size.
+		cfb, err := NewFrameBuffer(w, h)
+		if err != nil {
+			t.Fatalf("unable to initialize frame buffer: %v", err)
+		}
+		tall, err := NewFrameBuffer(w, 2*h)
+		if err != nil {
+			t.Fatalf("unable to initialize frame buffer: %v", err)
+		}
+		canvas := cfb.Canvas()
+		canvas.DrawLineDepth(x0, y0, z0, x1, y1, z1, pixelRed)
+		tall.DrawLineDepth(x0, y0, z0, x1, y1, z1, mark)
+		if !slices.Equal(drawnPixels(canvas), drawnCells(tall, mark)) || !slices.Equal(canvas.depth, tall.depth) {
+			t.Fatalf("wanted the canvas to draw the pixels and depths a buffer of its size does")
+		}
+		canvas.Clear()
+		tall.Clear()
+		canvas.DrawLine(x0, y0, x1, y1, pixelRed)
+		tall.DrawLine(x0, y0, x1, y1, mark)
+		if !slices.Equal(drawnPixels(canvas), drawnCells(tall, mark)) {
+			t.Fatalf("wanted the canvas to draw the pixels of DrawLine a buffer of its size does")
+		}
+
 		if !(z0 > 0 && z1 > 0) {
 			for i := range deep.frame {
 				if deep.frame[i] != BlankCell || !math.IsInf(deep.depth[i], 1) {
