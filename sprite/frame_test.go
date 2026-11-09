@@ -177,12 +177,25 @@ func TestNilFrameIsAFrameOfNoCells(t *testing.T) {
 // code under test.
 func reference(w, h int, grid []engine.Cell, sprites []*Sprite) []engine.Cell {
 	out := slices.Clone(grid)
-	put := func(tx, ty float64, cell engine.Cell) {
-		if tx >= 0 && tx < float64(w) && ty >= 0 && ty < float64(h) { // false for NaN
-			out[int(ty)*w+int(tx)] = cell
-		}
-	}
 	for _, sp := range sprites {
+		overlay := sp.Overlay
+		put := func(tx, ty float64, cell engine.Cell) {
+			if !(tx >= 0 && tx < float64(w) && ty >= 0 && ty < float64(h)) { // false for NaN
+				return
+			}
+			i := int(ty)*w + int(tx)
+			if overlay {
+				blank := cell.Character == ' ' || cell.Character == 0
+				if blank && cell.Background == (engine.Color{}) && cell.Attrs == 0 {
+					return // a hole
+				}
+				if cell.Background == (engine.Color{}) {
+					cell.Background = out[i].Background
+				}
+			}
+			out[i] = cell
+		}
+
 		fx, fy := math.Floor(sp.Position.X), math.Floor(sp.Position.Y)
 		if sp.Frame == nil {
 			put(fx, fy, sp.Cell)
@@ -198,12 +211,15 @@ func reference(w, h int, grid []engine.Cell, sprites []*Sprite) []engine.Cell {
 }
 
 func randomCell(rng *rand.Rand) engine.Cell {
-	return engine.Cell{
-		Character:  rune("ab#/ .xyz"[rng.IntN(9)]),
+	c := engine.Cell{
+		Character:  rune("ab#/ .xyz\x00"[rng.IntN(10)]),
 		Foreground: engine.Palette(uint8(rng.IntN(4))),
-		Background: engine.Palette(uint8(rng.IntN(3))),
-		Attrs:      engine.Attr(rng.IntN(3)),
+		Attrs:      engine.Attr(rng.IntN(3) * rng.IntN(2)), // mostly plain
 	}
+	if rng.IntN(2) == 0 { // half have no background of their own
+		c.Background = engine.Palette(uint8(rng.IntN(3)))
+	}
+	return c
 }
 
 func gridOf(fb *engine.FrameBuffer) []engine.Cell {
@@ -252,7 +268,7 @@ func TestLayerDrawsFramesLikeTheReference(t *testing.T) {
 		var sprites []*Sprite
 		layer := NewLayer()
 		for range 1 + rng.IntN(4) {
-			sp := &Sprite{Position: geometry.Vector2{X: pos(), Y: pos()}, Cell: randomCell(rng)}
+			sp := &Sprite{Position: geometry.Vector2{X: pos(), Y: pos()}, Cell: randomCell(rng), Overlay: rng.IntN(2) == 0}
 			if rng.IntN(5) != 0 { // most have a frame
 				f := NewFrame(rng.IntN(6), rng.IntN(5))
 				for y := range f.Height() {
@@ -403,40 +419,46 @@ func TestFrameTakesThePlaceOfCell(t *testing.T) {
 
 // Drawing frames must not panic or draw outside the buffer, wherever the sprite is.
 func FuzzFrameDraw(f *testing.F) {
-	f.Add(1.9, 2.1, uint8(3), uint8(2))
-	f.Add(-0.1, -0.1, uint8(5), uint8(4))
-	f.Add(7.999, 3.999, uint8(2), uint8(2))
-	f.Add(math.NaN(), 1.0, uint8(3), uint8(3))
-	f.Add(1.0, math.Inf(-1), uint8(3), uint8(3))
-	f.Add(1e300, -1e300, uint8(255), uint8(255))
-	f.Add(-8.0, 0.0, uint8(8), uint8(1))
-	f.Add(math.MaxFloat64, math.SmallestNonzeroFloat64, uint8(1), uint8(1))
+	f.Add(1.9, 2.1, uint8(3), uint8(2), true)
+	f.Add(-0.1, -0.1, uint8(5), uint8(4), false)
+	f.Add(7.999, 3.999, uint8(2), uint8(2), true)
+	f.Add(math.NaN(), 1.0, uint8(3), uint8(3), true)
+	f.Add(1.0, math.Inf(-1), uint8(3), uint8(3), false)
+	f.Add(1e300, -1e300, uint8(255), uint8(255), true)
+	f.Add(-8.0, 0.0, uint8(8), uint8(1), true)
+	f.Add(math.MaxFloat64, math.SmallestNonzeroFloat64, uint8(1), uint8(1), false)
 
-	f.Fuzz(func(t *testing.T, x, y float64, fw, fh uint8) {
+	f.Fuzz(func(t *testing.T, x, y float64, fw, fh uint8, overlay bool) {
 		const w, h = 8, 4
 		fb, err := engine.NewFrameBuffer(w, h)
 		if err != nil {
 			t.Fatal(err)
 		}
+		// A floor of dots on a color, so that holes and inherited backgrounds show.
+		for cy := range h {
+			for cx := range w {
+				fb.Set(cx, cy, engine.Cell{Character: '.', Background: green})
+			}
+		}
+		backdrop := gridOf(fb)
+
 		frame := NewFrame(int(fw), int(fh))
 		for cy := range frame.Height() {
 			for cx := range frame.Width() {
-				frame.Set(cx, cy, engine.Cell{Character: rune('a' + (cx+cy)%26), Foreground: red})
+				if (cx+cy)%3 != 0 { // every third cell is a hole
+					frame.Set(cx, cy, engine.Cell{Character: rune('a' + (cx+cy)%26), Foreground: red})
+				}
 			}
 		}
-		sp := &Sprite{Position: geometry.Vector2{X: x, Y: y}, Frame: frame}
+		sp := &Sprite{Position: geometry.Vector2{X: x, Y: y}, Frame: frame, Overlay: overlay}
 		l := NewLayer()
 		l.Add(sp)
 
 		l.Draw(fb)
 
-		blank := make([]engine.Cell, w*h)
-		for i := range blank {
-			blank[i] = engine.BlankCell
-		}
-		want := reference(w, h, blank, []*Sprite{sp})
+		want := reference(w, h, backdrop, []*Sprite{sp})
 		if got := gridOf(fb); !slices.Equal(got, want) {
-			t.Fatalf("frame %dx%d at (%v, %v): wanted what the reference draws", fw, fh, x, y)
+			t.Fatalf("frame %dx%d at (%v, %v), overlay %v: wanted what the reference draws", fw, fh, x, y, overlay)
 		}
 	})
 }

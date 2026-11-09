@@ -24,6 +24,18 @@ type Sprite struct {
 	// cell replaces the cell beneath it, blanks included, as Cell does. A Frame with no
 	// cells draws nothing, and does not fall back to Cell.
 	Frame *Frame
+
+	// Overlay makes the sprite see-through, for a Cell and for a Frame. Off, a sprite
+	// replaces the cells under it whole, blanks included. On, a blank cell of the sprite,
+	// a space or NUL with no background and no attributes, is a hole: nothing is drawn
+	// there and what is behind it shows. Any other cell is drawn, and one that has no
+	// Background of its own keeps the background of the cell under it, so a colored letter
+	// sits on a colored floor without a box in the default color around it. A blank with a
+	// background or an attribute (Reverse, Underline) shows something, so it is not a hole.
+	//
+	// On a cell that Canvas.Compose wrote, only the background is kept: the pixel above it
+	// is lost, so do not overlay sprites on half-block pixels.
+	Overlay bool
 }
 
 // New returns a Sprite showing the character r at position, in the terminal's

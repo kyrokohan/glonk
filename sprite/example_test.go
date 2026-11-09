@@ -85,3 +85,43 @@ func ExampleFromLines() {
 	// └──────────┘
 	// 4 by 2
 }
+
+// Overlay makes a sprite see-through. Without it, a sprite stamps over the cells under
+// it, and the holes of its art erase what is behind them; with it, the holes show the
+// floor, and a letter keeps the color of the floor it stands on.
+func ExampleSprite_overlay() {
+	ghost := sprite.FromLines(engine.Cell{Foreground: engine.Palette(15)},
+		`.-.`,
+		`o o`,
+		`|_|`,
+	)
+	floor := func() *engine.FrameBuffer {
+		fb, err := engine.NewFrameBuffer(7, 3)
+		if err != nil {
+			panic(err)
+		}
+		for y := range 3 {
+			for x := range 7 {
+				fb.Set(x, y, engine.Cell{Character: '#', Background: engine.Palette(22)})
+			}
+		}
+		return fb
+	}
+
+	for _, overlay := range []bool{false, true} {
+		fb := floor()
+		layer := sprite.NewLayer()
+		layer.Add(&sprite.Sprite{Position: geometry.Vector2{X: 2, Y: 0}, Frame: ghost, Overlay: overlay})
+		layer.Draw(fb)
+		fmt.Printf("overlay %v:\n%v\n", overlay, fb)
+	}
+	// Output:
+	// overlay false:
+	// ##.-.##
+	// ##o o##
+	// ##|_|##
+	// overlay true:
+	// ##.-.##
+	// ##o#o##
+	// ##|_|##
+}

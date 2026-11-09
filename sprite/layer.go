@@ -46,29 +46,63 @@ func (l *Layer) Len() int {
 }
 
 // Draw sets each sprite's Cell, or the cells of its Frame, in fb, clipping anything off
-// screen. A sprite replaces the whole cell under it. A sprite whose Position has a NaN or
-// infinite X or Y is not drawn, like one that is off screen.
+// screen. A sprite replaces the whole cell under it, or is see-through if it has Overlay
+// set. A sprite whose Position has a NaN or infinite X or Y is not drawn, like one that is
+// off screen.
 func (l *Layer) Draw(fb *engine.FrameBuffer) {
 	w, h := float64(fb.Width()), float64(fb.Height())
 
 	for _, sp := range l.sprites {
 		x, y := math.Floor(sp.Position.X), math.Floor(sp.Position.Y)
 
-		if sp.Frame == nil {
-			// Checked before converting to int, and written so that NaN fails: what
-			// int(NaN) or int(1e300) gives differs from one CPU to the next.
-			if x >= 0 && x < w && y >= 0 && y < h {
-				fb.Set(int(x), int(y), sp.Cell)
-			}
+		// Everything but a plain single cell is drawn out of the loop, which keeps the
+		// common case as short as it was.
+		if sp.Frame != nil || sp.Overlay {
+			drawSprite(fb, sp, x, y, w, h)
 			continue
 		}
-		drawFrame(fb, sp.Frame, x, y, w, h)
+
+		// Checked before converting to int, and written so that NaN fails: what
+		// int(NaN) or int(1e300) gives differs from one CPU to the next.
+		if x >= 0 && x < w && y >= 0 && y < h {
+			fb.Set(int(x), int(y), sp.Cell)
+		}
 	}
+}
+
+// drawSprite draws a sprite that has a Frame or is an Overlay, with its position
+// already floored, on a buffer w by h in float64.
+func drawSprite(fb *engine.FrameBuffer, sp *Sprite, x, y, w, h float64) {
+	if sp.Frame != nil {
+		drawFrame(fb, sp.Frame, x, y, w, h, sp.Overlay)
+		return
+	}
+	if x >= 0 && x < w && y >= 0 && y < h { // as for a plain cell
+		putOverlay(fb, int(x), int(y), sp.Cell)
+	}
+}
+
+// putOverlay draws one cell of a sprite that is see-through, as Sprite.Overlay says, at
+// (x, y), which is on the buffer.
+func putOverlay(fb *engine.FrameBuffer, x, y int, cell engine.Cell) {
+	if isHole(cell) {
+		return
+	}
+	if cell.Background.IsDefault() {
+		cell.Background = fb.At(x, y).Background
+	}
+	fb.Set(x, y, cell)
+}
+
+// isHole reports whether a cell shows nothing by itself: a blank character, no
+// background and no attributes. The foreground of a blank is not seen, so it does not count.
+func isHole(c engine.Cell) bool {
+	return (c.Character == ' ' || c.Character == 0) && c.Background.IsDefault() && c.Attrs == 0
 }
 
 // drawFrame sets the cells of f in fb with its top left cell at (x, y), which are
 // already floored, and clips what is off the frame. The frame is w by h, in float64.
-func drawFrame(fb *engine.FrameBuffer, f *Frame, x, y, w, h float64) {
+func drawFrame(fb *engine.FrameBuffer, f *Frame, x, y, w, h float64, overlay bool) {
 	if f.width == 0 || f.height == 0 {
 		return
 	}
@@ -84,7 +118,11 @@ func drawFrame(fb *engine.FrameBuffer, f *Frame, x, y, w, h float64) {
 	colEnd := min(f.width, fb.Width()-ix)
 	for row := max(-iy, 0); row < min(f.height, fb.Height()-iy); row++ {
 		for col := cols; col < colEnd; col++ {
-			fb.Set(ix+col, iy+row, f.cells[row*f.width+col])
+			if overlay {
+				putOverlay(fb, ix+col, iy+row, f.cells[row*f.width+col])
+			} else {
+				fb.Set(ix+col, iy+row, f.cells[row*f.width+col])
+			}
 		}
 	}
 }
