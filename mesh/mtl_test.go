@@ -417,11 +417,10 @@ func TestLoadOBJFSReadsEachLibraryUpToTheCap(t *testing.T) {
 
 func TestLoadOBJFSReadsAtMostEightLibraries(t *testing.T) {
 	files := map[string]string{}
-	var names, uses []string
+	var names []string
 	for i := range 10 {
 		files[fmt.Sprintf("l%d.mtl", i)] = fmt.Sprintf("newmtl m%d\nKd 1 0 0\n", i)
 		names = append(names, fmt.Sprintf("l%d.mtl", i))
-		uses = append(uses, fmt.Sprintf("m%d", i))
 	}
 
 	// Two statements, the second starting where the first stopped; names that do not

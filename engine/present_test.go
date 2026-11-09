@@ -470,7 +470,7 @@ func FuzzPresenterChanges(f *testing.F) {
 			t.Fatal(err)
 		}
 		if d := v.screenDiff(fb, cw, ch); d != "" {
-			t.Fatal(fmt.Sprintf("second frame (mask %08b): %s", mask, d))
+			t.Fatalf("second frame (mask %08b): %s", mask, d)
 		}
 	})
 }
