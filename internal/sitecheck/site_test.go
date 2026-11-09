@@ -4,6 +4,7 @@
 package sitecheck
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -71,6 +72,33 @@ func TestTheTagsComeBeforeAnythingTheParserMightStopAt(t *testing.T) {
 				t.Errorf("%s: wanted %s before the first link, style, script or body (at %d), found it at %d", name, tag, limit, i)
 			}
 		}
+	}
+}
+
+// wrangler.jsonc tells Cloudflare which folder to serve and what to send for a path with
+// no file. Without the 404 page a request for glonk.dev/engine?go-get=1 would get an
+// empty 404 with no tags, so the go command could not find the module from a sub-path.
+// The file must stay plain JSON, with no comments, for this test to read it.
+func TestCloudflareServesTheSiteFolderWithItsNotFoundPage(t *testing.T) {
+	var cfg struct {
+		Name   string `json:"name"`
+		Assets struct {
+			Directory string `json:"directory"`
+			NotFound  string `json:"not_found_handling"`
+		} `json:"assets"`
+	}
+	if err := json.Unmarshal([]byte(read(t, "wrangler.jsonc")), &cfg); err != nil {
+		t.Fatalf("wanted wrangler.jsonc to be plain JSON, got %v", err)
+	}
+
+	if cfg.Name == "" {
+		t.Errorf("wanted the Worker to have a name")
+	}
+	if got := filepath.Clean(cfg.Assets.Directory); got != "site" {
+		t.Errorf("wanted the served directory to be site, got %q", cfg.Assets.Directory)
+	}
+	if cfg.Assets.NotFound != "404-page" {
+		t.Errorf(`wanted not_found_handling "404-page", so unknown paths get 404.html, got %q`, cfg.Assets.NotFound)
 	}
 }
 
