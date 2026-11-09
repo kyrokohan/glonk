@@ -1,5 +1,6 @@
 {
-  "name": "glonk-site",
+  "name": "glonk",
   "compatibility_date": "2026-11-08",
-  "assets": { "directory": "./site", "not_found_handling": "404-page" }
+  "assets": { "directory": "./site", "not_found_handling": "404-page" },
+  "previews": {}
 }
