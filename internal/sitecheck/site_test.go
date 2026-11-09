@@ -78,7 +78,9 @@ func TestTheTagsComeBeforeAnythingTheParserMightStopAt(t *testing.T) {
 // wrangler.jsonc tells Cloudflare which folder to serve and what to send for a path with
 // no file. Without the 404 page a request for glonk.dev/engine?go-get=1 would get an
 // empty 404 with no tags, so the go command could not find the module from a sub-path.
-// The file must stay plain JSON, with no comments, for this test to read it.
+// Cloudflare builds every pull request branch with `wrangler preview`, which stops with
+// an error unless the file has a previews block, even an empty one. The file must stay
+// plain JSON, with no comments, for this test to read it.
 func TestCloudflareServesTheSiteFolderWithItsNotFoundPage(t *testing.T) {
 	var cfg struct {
 		Name   string `json:"name"`
@@ -86,6 +88,7 @@ func TestCloudflareServesTheSiteFolderWithItsNotFoundPage(t *testing.T) {
 			Directory string `json:"directory"`
 			NotFound  string `json:"not_found_handling"`
 		} `json:"assets"`
+		Previews map[string]any `json:"previews"`
 	}
 	if err := json.Unmarshal([]byte(read(t, "wrangler.jsonc")), &cfg); err != nil {
 		t.Fatalf("wanted wrangler.jsonc to be plain JSON, got %v", err)
@@ -96,6 +99,9 @@ func TestCloudflareServesTheSiteFolderWithItsNotFoundPage(t *testing.T) {
 	}
 	if got := filepath.Clean(cfg.Assets.Directory); got != "site" {
 		t.Errorf("wanted the served directory to be site, got %q", cfg.Assets.Directory)
+	}
+	if cfg.Previews == nil {
+		t.Errorf(`wanted a "previews" block (it may be empty), without which Cloudflare's builds of pull request branches fail`)
 	}
 	if cfg.Assets.NotFound != "404-page" {
 		t.Errorf(`wanted not_found_handling "404-page", so unknown paths get 404.html, got %q`, cfg.Assets.NotFound)
