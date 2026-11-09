@@ -220,7 +220,7 @@ func (v *viewer) Update(dt float64, in *engine.Input) error {
 	if pressed('l', 'L') {
 		v.lamp = !v.lamp
 	}
-	if v.halfBlocks && !v.wire && pressed('b', 'B') {
+	if v.halfBlocks && pressed('b', 'B') {
 		v.flipEdges = true
 	}
 
@@ -329,9 +329,6 @@ func (v *viewer) Draw(fb *engine.FrameBuffer) {
 
 	mode := "characters"
 	switch {
-	case v.wire:
-		mode = "wireframe"
-		m.Draw(fb, cam, engine.Cell{Character: '#', Foreground: color})
 	case v.halfBlocks:
 		canvas := fb.Canvas()
 		if v.flipEdges {
@@ -342,8 +339,17 @@ func (v *viewer) Draw(fb *engine.FrameBuffer) {
 		if canvas.Seamless {
 			mode = "half-blocks, solid edges"
 		}
-		m.DrawShadedPixels(canvas, cam, lights...)
+		if v.wire {
+			// Lines of pixels, as fine as the solids, in the palette color.
+			mode = "wireframe, " + mode
+			m.DrawPixels(canvas, cam, color)
+		} else {
+			m.DrawShadedPixels(canvas, cam, lights...)
+		}
 		canvas.Compose()
+	case v.wire:
+		mode = "wireframe"
+		m.Draw(fb, cam, engine.Cell{Character: '#', Foreground: color})
 	default:
 		m.DrawShaded(fb, cam, lights...)
 	}

@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"os"
 	"path/filepath"
@@ -207,6 +208,8 @@ func TestEveryModelDrawsInEveryMode(t *testing.T) {
 		{"half-blocks", func(v *viewer) { v.halfBlocks = true }},
 		{"half-blocks solid edges", func(v *viewer) { v.halfBlocks, v.flipEdges = true, true }},
 		{"half-blocks two-sided", func(v *viewer) { v.halfBlocks, v.doubleSided = true, true }},
+		{"wireframe half-blocks", func(v *viewer) { v.wire, v.halfBlocks = true, true }},
+		{"wireframe half-blocks solid edges", func(v *viewer) { v.wire, v.halfBlocks, v.flipEdges = true, true, true }},
 	}
 
 	models := loadSamples(t)
@@ -433,9 +436,15 @@ func TestDefaultLimitSuitsTheSamplesAndIsGenerous(t *testing.T) {
 
 // B flips the pixel edges once per press, and the setting then stays across frames.
 func TestEdgeKeyFlipsTheEdgeStyleOncePerPress(t *testing.T) {
+	for _, wire := range []bool{false, true} {
+		t.Run(fmt.Sprintf("wireframe %v", wire), func(t *testing.T) { edgeKeyFlipsTheEdgeStyleOncePerPress(t, wire) })
+	}
+}
+
+func edgeKeyFlipsTheEdgeStyleOncePerPress(t *testing.T, wire bool) {
 	t.Setenv("TERM_PROGRAM", "") // the default style depends on the terminal
 	v := newViewer(loadSamples(t))
-	v.halfBlocks = true
+	v.halfBlocks, v.wire = true, wire
 	kb := engine.NewKeyboard()
 
 	fb, err := engine.NewFrameBuffer(80, 24)
@@ -590,7 +599,7 @@ func TestEdgeKeyOnlyWorksOnHalfBlockPixels(t *testing.T) {
 	}{
 		{"half blocks", true, false, true},
 		{"glyphs", false, false, false},
-		{"half blocks, but wireframe", true, true, false},
+		{"half blocks and wireframe", true, true, true},
 		{"neither", false, true, false},
 	}
 	for _, tt := range tests {
@@ -1441,4 +1450,126 @@ func rgbOf(c engine.Color) (r, g, b int) {
 		return 0, 0, 0 // a default or palette color
 	}
 	return r, g, b
+}
+
+// pixelsOf decodes the half-block cells of a frame back into the pixels they hold, inside
+// the frame border and between the lines of text: pixel (x, 2*y) is the top of cell (x, y)
+// and (x, 2*y+1) its bottom.
+func pixelsOf(fb *engine.FrameBuffer) map[[2]int]engine.Color {
+	out := map[[2]int]engine.Color{}
+	for y := 3; y < fb.Height()-4; y++ {
+		for x := 1; x < fb.Width()-1; x++ {
+			c := fb.At(x, y)
+			var top, bottom engine.Color
+			switch c.Character {
+			case '\u2580': // upper half block
+				top, bottom = c.Foreground, c.Background
+			case '\u2584': // lower half block
+				top, bottom = c.Background, c.Foreground
+			case ' ': // a solid cell, or nothing
+				top, bottom = c.Background, c.Background
+			default:
+				continue
+			}
+			if !top.IsDefault() {
+				out[[2]int{x, 2 * y}] = top
+			}
+			if !bottom.IsDefault() {
+				out[[2]int{x, 2*y + 1}] = bottom
+			}
+		}
+	}
+	return out
+}
+
+// With half-blocks on, V draws the wireframe as lines of pixels: no # stands in for them,
+// they are in the palette color, and they are exactly the pixels DrawPixels draws for the
+// model as the viewer shows it, for every model and shape.
+func TestWireframeWithHalfBlocksIsLinesOfPixels(t *testing.T) {
+	models := browseAll(t).models
+	for i, m := range models {
+		t.Run(m.name, func(t *testing.T) {
+			v := newViewer(models)
+			v.current, v.wire, v.halfBlocks, v.color, v.doubleSided = i, true, true, 2, i%2 == 0
+			fb := drawAll(t, v)
+
+			for _, c := range modelCells(fb) {
+				if fb.At(c[0], c[1]).Character == '#' {
+					t.Fatalf("wanted no # in a pixel wireframe, got one at %v", c)
+				}
+			}
+			got := pixelsOf(fb)
+			if len(got) < 40 {
+				t.Fatalf("wanted the wireframe on screen as pixels, got %d", len(got))
+			}
+			for p, color := range got {
+				if color != palette[2] {
+					t.Fatalf("pixel %v: wanted the palette color %v, got %v", p, palette[2], color)
+				}
+			}
+
+			ref := newFrame(t, 80, 24)
+			canvas := ref.Canvas()
+			shown := v.shown()
+			shown.DoubleSided = v.doubleSided
+			shown.DrawPixels(canvas, v.camera(), palette[2])
+			canvas.Compose()
+			if want := pixelsOf(ref); !maps.Equal(got, want) {
+				t.Fatalf("wanted exactly the pixels DrawPixels draws for the model (%d), got %d", len(want), len(got))
+			}
+		})
+	}
+}
+
+func newFrame(t *testing.T, w, h int) *engine.FrameBuffer {
+	t.Helper()
+	fb, err := engine.NewFrameBuffer(w, h)
+	if err != nil {
+		t.Fatalf("unable to initialize frame buffer: %v", err)
+	}
+	return fb
+}
+
+func TestHUDNamesAWireframeOfPixels(t *testing.T) {
+	v := newViewer(loadSamples(t))
+	v.wire, v.halfBlocks = true, true
+
+	if got := hudText(drawAll(t, v), 2); !strings.Contains(got, "wireframe, half-blocks, exact edges") {
+		t.Errorf("wanted wireframe, half-blocks, exact edges, got %q", got)
+	}
+	v.flipEdges, v.doubleSided = true, true
+	got := hudText(drawAll(t, v), 2)
+	if !strings.Contains(got, "wireframe, half-blocks, solid edges, two-sided") {
+		t.Errorf("wanted wireframe, half-blocks, solid edges, two-sided, got %q", got)
+	}
+	for _, word := range []string{"smooth", "faceted", "sun", "lamp", "model colors"} {
+		if strings.Contains(got, word) {
+			t.Errorf("wanted a wireframe to say nothing of %q, got %q", word, got)
+		}
+	}
+}
+
+// Each of V and M alone is what it was: # characters for a wireframe, shaded half blocks
+// for M. Only the two together are new.
+func TestWireframeAndHalfBlocksAloneAreAsTheyWere(t *testing.T) {
+	v := newViewer(loadSamples(t))
+	v.wire = true
+	fb := drawAll(t, v)
+	hashes := 0
+	for _, c := range modelCells(fb) {
+		if fb.At(c[0], c[1]).Character == '#' {
+			hashes++
+		}
+	}
+	if hashes < 20 || len(pixelsOf(fb)) != 0 {
+		t.Errorf("wanted a wireframe of # alone, got %d # and %d pixels", hashes, len(pixelsOf(fb)))
+	}
+
+	v.dist = 2.5 // close, where an area grows faster than a line does
+	v.wire, v.halfBlocks = true, true
+	lines := len(pixelsOf(drawAll(t, v)))
+	v.wire = false
+	if solid := len(pixelsOf(drawAll(t, v))); solid < 2*lines || lines < 40 {
+		t.Errorf("wanted shaded half blocks alone to fill far more pixels than their wireframe, got %d against %d", solid, lines)
+	}
 }
