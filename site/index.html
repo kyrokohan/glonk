@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="go-import" content="glonk.dev git https://github.com/kyrokohan/glonk">
+<meta name="go-source" content="glonk.dev https://github.com/kyrokohan/glonk https://github.com/kyrokohan/glonk/tree/main{/dir} https://github.com/kyrokohan/glonk/blob/main{/dir}/{file}#L{line}">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>glonk: a terminal rendering engine for Go</title>
+<meta name="description" content="A terminal rendering engine for Go. Draw 2D, 3D, or both in the same frame, using plain terminal cells.">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main>
+  <header>
+    <h1>glonk</h1>
+    <p class="lede">A terminal rendering engine for Go. Draw 2D, 3D, or both in the same frame, using plain terminal cells.</p>
+    <p class="note">Early and pre-1.0: the API may change.</p>
+  </header>
+
+  <section aria-labelledby="what">
+    <h2 id="what">What it does</h2>
+    <ul>
+      <li><strong>2D:</strong> cells with colors and text attributes, lines, boxes, text and sprites.</li>
+      <li><strong>3D:</strong> wireframe or shaded meshes through a perspective camera, lit by directional, ambient and point lights, faceted or smooth.</li>
+      <li><strong>Models:</strong> shapes, and OBJ files with the colors of their materials.</li>
+      <li><strong>Half blocks:</strong> a pixel canvas with twice the vertical detail, shaded by color.</li>
+      <li><strong>Input and testing:</strong> held keys and one-shot presses, and a whole game can be driven without a terminal.</li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="install">
+    <h2 id="install">Install</h2>
+    <pre><code>go get github.com/kyrokohan/glonk</code></pre>
+    <p>Requires Go 1.26 or newer.</p>
+  </section>
+
+  <section aria-labelledby="try">
+    <h2 id="try">Try it</h2>
+    <pre><code>git clone https://github.com/kyrokohan/glonk
+cd glonk
+make run EXAMPLE=./examples/viewer</code></pre>
+  </section>
+
+  <section aria-labelledby="links">
+    <h2 id="links">Links</h2>
+    <ul>
+      <li><a href="https://github.com/kyrokohan/glonk">Source on GitHub</a></li>
+      <li><a href="https://pkg.go.dev/github.com/kyrokohan/glonk">Documentation on pkg.go.dev</a></li>
+      <li><a href="https://github.com/kyrokohan/glonk/blob/main/CHANGELOG.md">Changelog</a></li>
+      <li><a href="https://github.com/kyrokohan/glonk/tree/main/examples">Examples</a></li>
+      <li><a href="https://github.com/kyrokohan/glonk/blob/main/SECURITY.md">Security policy</a></li>
+      <li><a href="https://github.com/kyrokohan/glonk/blob/main/LICENSE">MIT license</a></li>
+    </ul>
+  </section>
+</main>
+<footer>
+  <p>glonk is open source under the MIT license.</p>
+</footer>
+</body>
+</html>
