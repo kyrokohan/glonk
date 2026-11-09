@@ -4,6 +4,10 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-08
+
+The module path is now `glonk.dev`, which is a breaking change: see Changed, and "Moved to glonk.dev" in the README for the commands that move a project. On top of 0.1.0 this release adds smooth shading, true color, depth-tested wireframes and colors on models, and sends the terminal far less per frame.
+
 ### Added
 
 - Smooth shading. `Mesh.Normals`, one normal per vertex in model space, makes `DrawShaded` and `DrawShadedPixels` light every cell instead of every face, from the position and normal blended across the face with perspective-correct weights; a mesh without `Normals` is lit as before. A `Light` is then asked about the place on the surface and the unit normal there. A zero normal means none here and takes the face's own; normals turn with the `Transform` and ignore its scale; a list of the wrong length or with a number that is not finite is not used (the mesh is shaded flat) and `Validate` reports it. A back face of a `DoubleSided` mesh uses the flipped normal, and near-plane clipping blends the position and normal at the cut. Smooth shading costs about 12 to 23% more than facets on a scene of spheres; flat meshes pay nothing.
@@ -23,6 +27,7 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ### Changed
 
+- **Breaking:** the module path is now `glonk.dev`, where up to 0.1.0 it was `github.com/kyrokohan/glonk`. Imports become `glonk.dev/engine`, `glonk.dev/mesh`, `glonk.dev/geometry` and `glonk.dev/sprite`. The code is still hosted on GitHub; `glonk.dev` tells the go command where. Nothing else in the API changed because of this.
 - The viewer reads OBJ files up to 128 MiB, where it stopped at 64, so a model of 800,000 triangles (81 MB) loads.
 - A model file whose faces refer to normals now comes back with `Normals`, and so is drawn smooth where it used to be drawn flat. A file whose faces use no normals loads as it did, with no `Normals`, in the same time and with a little less memory (93 MB for the 3.7 MB benchmark file, 20% fewer allocations). Memory use is roughly 25 times the input size, up to about 35 for a file that gives most corners a normal of their own; `LoadOBJLimit` now says 35.
 - Drawing a mesh allocates nothing once warm, where it took 7 to 40 allocations a draw, and is up to about 20% faster on the benchmark scene. The camera's trigonometry is worked out once per draw instead of once per vertex, with the same arithmetic in the same order, so no picture moved.
@@ -67,5 +72,6 @@ The first release. The API is pre-1.0 and may still change. The README lists the
 - Three example programs (`bounce2d`, `cube3d` and a model `viewer`), runnable examples in the package documentation, fuzz tests for the parsers, rasterizers and clipping, and a test that keeps the documentation complete.
 - Continuous integration (format, vet and race tests on Linux and macOS for Go 1.26 and 1.27, cross-compilation, 32-bit tests), Dependabot, a security policy and contributing notes.
 
-[Unreleased]: https://github.com/kyrokohan/glonk/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/kyrokohan/glonk/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/kyrokohan/glonk/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/kyrokohan/glonk/releases/tag/v0.1.0
