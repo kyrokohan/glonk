@@ -141,16 +141,21 @@ func TestCullingChangesNoPicture(t *testing.T) {
 		}
 		w, h := 4+rng.IntN(100), 2+rng.IntN(40)
 
-		draw := func() [4]string {
-			var out [4]string
+		draw := func() [6]string {
+			var out [6]string
 			wire, depth, glyphs, pixels := mustBuffer(t, w, h), mustBuffer(t, w, h), mustBuffer(t, w, h), mustBuffer(t, w, h)
+			pixelWire, pixelDepth := mustBuffer(t, w, h), mustBuffer(t, w, h)
 			m.Draw(wire, cam, wireCell)
 			m.DrawDepth(depth, cam, wireCell)
 			m.withColor(engine.Palette(33)).DrawShaded(glyphs, cam, light)
 			canvas := pixels.Canvas()
 			m.withColor(engine.Palette(33)).DrawShadedPixels(canvas, cam, light)
 			canvas.Compose()
-			for i, fb := range []*engine.FrameBuffer{wire, depth, glyphs, pixels} {
+			m.DrawPixels(pixelWire.Canvas(), cam, engine.Palette(33))
+			pixelWire.Canvas().Compose()
+			m.DrawDepthPixels(pixelDepth.Canvas(), cam, engine.Palette(33))
+			pixelDepth.Canvas().Compose()
+			for i, fb := range []*engine.FrameBuffer{wire, depth, glyphs, pixels, pixelWire, pixelDepth} {
 				out[i] = picture(fb)
 			}
 			return out
@@ -161,7 +166,7 @@ func TestCullingChangesNoPicture(t *testing.T) {
 		without := draw()
 		cullingOn = true
 
-		for i, name := range []string{"Draw", "DrawDepth", "DrawShaded", "DrawShadedPixels"} {
+		for i, name := range []string{"Draw", "DrawDepth", "DrawShaded", "DrawShadedPixels", "DrawPixels", "DrawDepthPixels"} {
 			if with[i] != without[i] {
 				t.Fatalf("scene %d (%dx%d): wanted %s to draw the same with and without skipping, got\n%s\nwanted\n%s", scene, w, h, name, with[i], without[i])
 			}

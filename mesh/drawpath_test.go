@@ -98,6 +98,8 @@ func TestDrawingAllocatesNothing(t *testing.T) {
 	tests := map[string]func(){
 		"wireframe":              func() { m.Draw(fb, cam, engine.Cell{Character: '#'}) },
 		"depth wireframe":        func() { m.DrawDepth(fb, cam, engine.Cell{Character: '#'}) },
+		"pixel wireframe":        func() { m.DrawPixels(canvas, cam, engine.RGB(10, 250, 10)) },
+		"pixel depth wireframe":  func() { m.DrawDepthPixels(canvas, cam, engine.RGB(10, 250, 10)) },
 		"shaded":                 func() { m.DrawShaded(fb, cam, lights...) },
 		"shaded, a ramp":         func() { ramped.DrawShaded(fb, cam, lights...) },
 		"shaded, two-sided":      func() { both.DrawShaded(fb, cam, lights...) },
@@ -138,6 +140,10 @@ func TestDrawingFromSeveralGoroutinesGivesTheSamePictures(t *testing.T) {
 		fb := newShadeBuffer(t)
 		m.Draw(fb, cam, engine.Cell{Character: '#'})
 		m.DrawShaded(fb, cam, lights...)
+		canvas := fb.Canvas()
+		m.DrawPixels(canvas, cam, engine.RGB(10, 250, 10))
+		m.DrawDepthPixels(canvas, cam, engine.RGB(250, 10, 10))
+		canvas.Compose()
 		return picture(fb)
 	}
 	want := make([]string, len(meshes))

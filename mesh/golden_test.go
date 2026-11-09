@@ -227,6 +227,44 @@ var goldenScenes = []struct {
 		canvas.Compose()
 		return fb
 	}},
+	{"pixel-wire-cube", func(t *testing.T) *engine.FrameBuffer {
+		t.Setenv("TERM_PROGRAM", "") // Canvas.Seamless depends on the terminal running the tests
+		fb := goldenBuffer(t)
+		cube := Cube(2)
+		cube.Transform = Transform{Position: geometry.Vector3{Z: 5}, Yaw: 0.6, Pitch: -0.4}
+		canvas := fb.Canvas()
+		cube.DrawPixels(canvas, shadeCam(), engine.Palette(46))
+		canvas.Compose()
+		return fb
+	}},
+	{"pixel-depth-wire-behind-solid", func(t *testing.T) *engine.FrameBuffer {
+		t.Setenv("TERM_PROGRAM", "")
+		fb := goldenBuffer(t)
+		solid := Cube(2)
+		solid.Transform = Transform{Position: geometry.Vector3{Z: 5}, Yaw: 0.6, Pitch: -0.4}
+		wire := Cube(2)
+		wire.Transform = Transform{Position: geometry.Vector3{X: 1.6, Y: 0.4, Z: 7}, Yaw: 0.3}
+		// The wireframe is drawn after the solid it is behind: DrawPixels would show it through.
+		canvas := fb.Canvas()
+		solid.withColor(engine.Palette(208)).DrawShadedPixels(canvas, shadeCam(), goldenSun)
+		wire.DrawDepthPixels(canvas, shadeCam(), engine.Palette(46))
+		canvas.Compose()
+		return fb
+	}},
+	{"pixel-depth-wire-in-front-of-solid", func(t *testing.T) *engine.FrameBuffer {
+		t.Setenv("TERM_PROGRAM", "")
+		fb := goldenBuffer(t)
+		solid := Cube(2)
+		solid.Transform = Transform{Position: geometry.Vector3{Z: 5}, Yaw: 0.6, Pitch: -0.4}
+		wire := Cube(1)
+		wire.Transform = Transform{Position: geometry.Vector3{X: 0.3, Z: 2.8}, Yaw: 0.6, Pitch: -0.3}
+		// The wireframe is drawn before the solid behind it: DrawPixels would be covered.
+		canvas := fb.Canvas()
+		wire.DrawDepthPixels(canvas, shadeCam(), engine.Palette(46))
+		solid.withColor(engine.Palette(208)).DrawShadedPixels(canvas, shadeCam(), goldenSun)
+		canvas.Compose()
+		return fb
+	}},
 }
 
 func TestGoldenPictures(t *testing.T) {

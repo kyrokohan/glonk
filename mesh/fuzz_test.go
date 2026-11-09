@@ -2,6 +2,7 @@ package mesh
 
 import (
 	"encoding/binary"
+	"maps"
 	"math"
 	"slices"
 	"strings"
@@ -120,6 +121,14 @@ func FuzzDraw(f *testing.F) {
 				if big := math.Abs(size) > 1e100 || math.Abs(mx) > 1e100 || math.Abs(my) > 1e100 || math.Abs(mz) > 1e100 || math.Abs(cx) > 1e100 || math.Abs(cy) > 1e100 || math.Abs(cz) > 1e100; !big {
 					if deep.String() != plain.String() {
 						t.Errorf("wanted DrawDepth to draw what Draw does\n%s\nwanted\n%s", deep.String(), plain.String())
+					}
+					// The same on a blank canvas for the pixel pair.
+					pixelPlain, _ := engine.NewFrameBuffer(20, 8)
+					pixelDeep, _ := engine.NewFrameBuffer(20, 8)
+					cube.DrawPixels(pixelPlain.Canvas(), cam, engine.Palette(1))
+					cube.DrawDepthPixels(pixelDeep.Canvas(), cam, engine.Palette(1))
+					if !maps.Equal(pixelsOf(pixelPlain.Canvas()), pixelsOf(pixelDeep.Canvas())) {
+						t.Errorf("wanted DrawDepthPixels to draw the pixels DrawPixels does")
 					}
 				}
 			}

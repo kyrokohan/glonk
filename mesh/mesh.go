@@ -150,9 +150,12 @@ func validIndex(i, n int) bool {
 //
 // Draw ignores depth: the lines land on top of whatever is already drawn, so a
 // wireframe shows through solids, and it neither hides nor is hidden by anything drawn
-// after it. Use DrawDepth for lines that are hidden by nearer surfaces.
+// after it. Use DrawDepth for lines that are hidden by nearer surfaces, and DrawPixels
+// for lines of half-block pixels.
 func (m Mesh) Draw(fb *engine.FrameBuffer, cam Camera, cell engine.Cell) {
-	m.drawEdges(fb, cam, cell, false)
+	m.eachEdge(cam, fb.Width(), fb.Height(), func(ax, ay, _, bx, by, _ float64) {
+		drawEdge(fb, ax, ay, bx, by, cell)
+	})
 }
 
 // DrawDepth is Draw with depth: an edge is drawn where it is nearer than what is
@@ -168,18 +171,53 @@ func (m Mesh) Draw(fb *engine.FrameBuffer, cam Camera, cell engine.Cell) {
 // Edges drawn over the mesh's own faces are best drawn with Draw, which does not depend
 // on how those cells happen to compare.
 func (m Mesh) DrawDepth(fb *engine.FrameBuffer, cam Camera, cell engine.Cell) {
-	m.drawEdges(fb, cam, cell, true)
+	m.eachEdge(cam, fb.Width(), fb.Height(), func(ax, ay, za, bx, by, zb float64) {
+		drawEdgeDepth(fb, ax, ay, za, bx, by, zb, cell)
+	})
 }
 
-// drawEdges is Draw and DrawDepth.
-func (m Mesh) drawEdges(fb *engine.FrameBuffer, cam Camera, cell engine.Cell, depth bool) {
+// DrawPixels is Draw for a pixel Canvas: the same edges, near-plane cutting and
+// skipping, drawn as lines of color with twice as many rows, so they are as fine as
+// the solids DrawShadedPixels draws. Like Draw it ignores depth: the lines land on
+// top of whatever pixels are already drawn, and neither hide nor are hidden by anything
+// drawn after them. Call Canvas.Compose afterwards to put the pixels into the
+// FrameBuffer. The zero Color is an empty pixel, so it draws nothing visible.
+//
+// A line is one pixel thick, half a cell tall where it runs sideways and a cell wide
+// where it runs up, as everything drawn on a Canvas is. On a Canvas with Seamless set,
+// Compose draws whole cells, so a line there is a row of whole cells.
+func (m Mesh) DrawPixels(c *engine.Canvas, cam Camera, color engine.Color) {
+	// Project onto the cell grid the canvas belongs to, then stretch y to pixel rows.
+	m.eachEdge(cam, c.Width(), c.Height()/2, func(ax, ay, _, bx, by, _ float64) {
+		drawEdgePixels(c, ax, ay, bx, by, color)
+	})
+}
+
+// DrawDepthPixels is DrawDepth for a pixel Canvas: an edge is drawn where it is nearer
+// than the pixels already there, and a solid or line drawn into the Canvas later hides
+// it where that is nearer, so the order of drawing does not matter. The depth is the
+// Canvas's own (see Canvas.DrawLineDepth), perspective-correct along each edge. A tie
+// keeps what is there. Call Canvas.Compose afterwards; the cells it fills then hide
+// depth-tested drawing into the FrameBuffer that is farther than these lines.
+func (m Mesh) DrawDepthPixels(c *engine.Canvas, cam Camera, color engine.Color) {
+	m.eachEdge(cam, c.Width(), c.Height()/2, func(ax, ay, za, bx, by, zb float64) {
+		drawEdgeDepthPixels(c, ax, ay, za, bx, by, zb, color)
+	})
+}
+
+// eachEdge calls fn for every edge of the mesh that can be seen, cut where it crosses
+// the near plane, with its two ends projected onto a grid of w by h cells and how far
+// each end is from the camera. It skips what is off screen as a whole, and edges that
+// name a vertex the mesh does not have, and draws nothing for a mesh or camera that
+// cannot be used. The ends are not trimmed to the grid: see trimEdge.
+func (m Mesh) eachEdge(cam Camera, w, h int, fn func(ax, ay, za, bx, by, zb float64)) {
 	cam, ok := cam.withDefaults()
 	if !ok || !m.Transform.valid() {
 		return
 	}
 
 	eye := cam.viewTransform()
-	proj := cam.projector(fb.Width(), fb.Height())
+	proj := cam.projector(w, h)
 	if m.offscreen(eye, proj, cam.Near) {
 		return
 	}
@@ -212,11 +250,7 @@ func (m Mesh) drawEdges(fb *engine.FrameBuffer, cam Camera, cell engine.Cell, de
 
 		ax, ay := proj.project(a)
 		bx, by := proj.project(b)
-		if depth {
-			drawEdgeDepth(fb, ax, ay, a.Z, bx, by, b.Z, cell)
-		} else {
-			drawEdge(fb, ax, ay, bx, by, cell)
-		}
+		fn(ax, ay, a.Z, bx, by, b.Z)
 	}
 }
 
@@ -252,14 +286,15 @@ func drawEdge(fb *engine.FrameBuffer, ax, ay, bx, by float64, cell engine.Cell) 
 	fb.DrawLine(int(math.Floor(cx0)), int(math.Floor(cy0)), int(math.Floor(cx1)), int(math.Floor(cy1)), cell)
 }
 
-// drawEdgeDepth is drawEdge for an edge whose ends are za and zb away from the camera.
-// 1/z runs evenly along the edge on the screen, so where trimming has cut an end short,
-// the depth there is worked out from how far along the edge the cut is, and the
-// line drawer is handed the depth the edge has at the place it now starts and stops.
-func drawEdgeDepth(fb *engine.FrameBuffer, ax, ay, za, bx, by, zb float64, cell engine.Cell) {
-	cx0, cy0, cx1, cy1, ok := trimEdge(fb.Width(), fb.Height(), ax, ay, bx, by)
+// trimEdgeDepth is trimEdge for an edge whose ends are za and zb away from the camera,
+// which also says how far away the ends it returns are. 1/z runs evenly along the edge on
+// the screen, so where trimming has cut an end short, the depth there is worked out from
+// how far along the edge the cut is, and the line drawer is handed the depth the edge has
+// at the place it now starts and stops.
+func trimEdgeDepth(w, h int, ax, ay, za, bx, by, zb float64) (cx0, cy0, z0, cx1, cy1, z1 float64, ok bool) {
+	cx0, cy0, cx1, cy1, ok = trimEdge(w, h, ax, ay, bx, by)
 	if !ok {
-		return
+		return 0, 0, 0, 0, 0, 0, false
 	}
 
 	// How far along the edge a point on it is, from 0 at a to 1 at b, by the longer axis.
@@ -281,10 +316,44 @@ func drawEdgeDepth(fb *engine.FrameBuffer, ax, ay, za, bx, by, zb float64, cell 
 	if cx1 != bx || cy1 != by {
 		t1 = along(cx1, cy1)
 	}
+	return cx0, cy0, depthAlong(za, zb, t0), cx1, cy1, depthAlong(za, zb, t1), true
+}
+
+// drawEdgeDepth is drawEdge for an edge whose ends are za and zb away; see trimEdgeDepth.
+func drawEdgeDepth(fb *engine.FrameBuffer, ax, ay, za, bx, by, zb float64, cell engine.Cell) {
+	cx0, cy0, z0, cx1, cy1, z1, ok := trimEdgeDepth(fb.Width(), fb.Height(), ax, ay, za, bx, by, zb)
+	if !ok {
+		return
+	}
 	fb.DrawLineDepth(
-		int(math.Floor(cx0)), int(math.Floor(cy0)), depthAlong(za, zb, t0),
-		int(math.Floor(cx1)), int(math.Floor(cy1)), depthAlong(za, zb, t1),
+		int(math.Floor(cx0)), int(math.Floor(cy0)), z0,
+		int(math.Floor(cx1)), int(math.Floor(cy1)), z1,
 		cell)
+}
+
+// drawEdgePixels is drawEdge for the pixels of a Canvas. The edge is given on the grid of
+// cells the canvas belongs to, as for DrawShadedPixels, and trimmed there; the line is
+// drawn with y stretched to pixel rows, so a point of the edge at y falls in pixel row
+// floor(2*y).
+func drawEdgePixels(c *engine.Canvas, ax, ay, bx, by float64, color engine.Color) {
+	cx0, cy0, cx1, cy1, ok := trimEdge(c.Width(), c.Height()/2, ax, ay, bx, by)
+	if !ok {
+		return
+	}
+	c.DrawLine(int(math.Floor(cx0)), int(math.Floor(2*cy0)), int(math.Floor(cx1)), int(math.Floor(2*cy1)), color)
+}
+
+// drawEdgeDepthPixels is drawEdgeDepth for the pixels of a Canvas, as drawEdgePixels is
+// drawEdge.
+func drawEdgeDepthPixels(c *engine.Canvas, ax, ay, za, bx, by, zb float64, color engine.Color) {
+	cx0, cy0, z0, cx1, cy1, z1, ok := trimEdgeDepth(c.Width(), c.Height()/2, ax, ay, za, bx, by, zb)
+	if !ok {
+		return
+	}
+	c.DrawLineDepth(
+		int(math.Floor(cx0)), int(math.Floor(2*cy0)), z0,
+		int(math.Floor(cx1)), int(math.Floor(2*cy1)), z1,
+		color)
 }
 
 // depthAlong is the depth a fraction t of the way along an edge from depth za to depth
