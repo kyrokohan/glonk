@@ -8,7 +8,7 @@ Website: [glonk.dev](https://glonk.dev)
 
 ## What it does
 
-- **2D:** cells with foreground and background colors (the 256-color palette, or exact RGB on terminals with true color) and text attributes (bold, dim, underline, reverse), lines, boxes, text, and sprites.
+- **2D:** cells with foreground and background colors (the 256-color palette, or exact RGB on terminals with true color) and text attributes (bold, dim, underline, reverse), lines, boxes, text, and sprites (several cells, see-through, animated).
 - **3D:** wireframe or solid meshes through a perspective camera, with near-plane clipping. Solid meshes are shaded by any number of lights (directional, ambient, point, or your own) into an ASCII brightness ramp, face by face or, with normals, smoothly across each face. They hide each other by depth and skip faces turned away. A wireframe drawn with depth is hidden by nearer solids too.
 - **Shapes and models:** a cube, sphere, cylinder, cone, plane and grid, or OBJ files from any `io.Reader` (a file, `//go:embed`, a download), centered and scaled and drawn wireframe or shaded, in the colors of their materials when loaded from an `fs.FS`.
 - **Half blocks:** a pixel `Canvas` with two square-ish pixels per cell, drawn with `▀` and a background color, for twice the vertical detail and shading by color instead of by character. Lines and wireframes can be drawn into the pixels too.
@@ -40,6 +40,7 @@ go mod tidy
 
 ```
 make run                                      # bounce2d: a ball in a box that fills the window (Esc quits)
+make run EXAMPLE=./examples/sprites          # sprites: a ship you steer, a walking figure and a blinking ghost on a colored floor
 make run EXAMPLE=./examples/cube3d            # cube3d: walk around a floor with six shaded cubes and a wireframe one
 make run EXAMPLE=./examples/viewer            # viewer: look at the bundled OBJ models and shapes
 make run EXAMPLE=./examples/viewer ARGS=my.obj  # viewer: look at your own model (its .mtl beside it gives it colors)
@@ -158,6 +159,36 @@ canvas.Compose()
 - **Not for a mesh's own faces.** To draw a mesh's edges over its own shaded faces, use `Draw`, which does not depend on how those cells compare.
 - **Off-screen meshes are skipped.** Drawing starts by asking whether any of a mesh can be on screen, so a scene of many meshes costs little for those out of view. No picture changes.
 
+## Sprites
+
+A sprite is a picture at a position: one `Cell`, a `Frame` of several made from text art, or an `Animation` of frames. A `Layer` draws its sprites in the order they were added.
+
+```go
+ship := sprite.FromLines(engine.Cell{Foreground: engine.Palette(208)},
+	` /\ `,
+	`/__\`,
+)
+walk := sprite.NewAnimation(8, frame0, frame1, frame2, frame3) // 8 frames a second
+walk.Loop = true
+
+layer := sprite.NewLayer()
+layer.Add(&sprite.Sprite{Position: geometry.Vector2{X: 2, Y: 1}, Frame: ship, Overlay: true})
+layer.Add(&sprite.Sprite{Position: geometry.Vector2{X: 20, Y: 5}, Animation: walk, Overlay: true})
+
+// in Update:
+walk.Advance(dt)
+// in Draw:
+layer.Draw(fb)
+```
+
+- **A space is a hole.** `FromLines` puts the style's colors on every rune that is not a space; per-cell colors come from `NewFrame` and `Frame.Set`.
+- **`Overlay` makes a sprite see-through.** Off, a sprite replaces the cells under it, blanks included. On, its blank cells show what is behind them, and a colored letter keeps the background of the floor it stands on. It is off by default, so every sprite written before it draws as it did. Do not overlay sprites on half-block pixels: only the background of those cells is kept.
+- **Animations run in time.** `Advance(dt)` from `Update` plays them at the same speed at any frame rate. They stop on the last frame (`Done`) unless `Loop` is set.
+- **The position is the top left of the frame**, and a frame that runs off an edge is cut off cell by cell.
+- **Frames are shared by pointer.** Two sprites with one `Frame` see each other's `Set`; `Clone` makes a copy.
+
+`examples/sprites` has a ship, a walking figure and a ghost, on a sea and a beach.
+
 ## Quickstart
 
 ```go
@@ -240,7 +271,7 @@ To test a whole run (start-up, key bytes in, frames out), give `Config.Input` an
 | `engine` | The loop, `FrameBuffer`, pixel `Canvas`, drawing helpers, keyboard `Input` |
 | `geometry` | 2D and 3D vector math |
 | `mesh` | 3D meshes (wireframe and shaded), shapes, OBJ loading, lights, and the perspective `Camera` |
-| `sprite` | Sprites (a `Cell` at a position) drawn in layers |
+| `sprite` | Sprites (a `Cell`, a text-art `Frame` or an `Animation` at a position, optionally see-through) drawn in layers |
 
 ## Compatibility and limits
 
