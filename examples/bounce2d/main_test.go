@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kyrokohan/glonk/engine"
+	"glonk.dev/engine"
 )
 
 func newFrame(t *testing.T, w, h int) *engine.FrameBuffer {

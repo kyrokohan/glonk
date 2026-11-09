@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kyrokohan/glonk/engine"
-	"github.com/kyrokohan/glonk/geometry"
+	"glonk.dev/engine"
+	"glonk.dev/geometry"
 )
 
 // offscreenFor runs the culling test the way a draw does, on a w x h grid.

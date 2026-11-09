@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/kyrokohan/glonk/geometry"
+	"glonk.dev/geometry"
 )
 
 func ExampleVector3_Cross() {

@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/kyrokohan/glonk/engine"
-	"github.com/kyrokohan/glonk/geometry"
+	"glonk.dev/engine"
+	"glonk.dev/geometry"
 )
 
 // shape is one generated mesh with what is known about it.

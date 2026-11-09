@@ -1,4 +1,4 @@
-module github.com/kyrokohan/glonk
+module glonk.dev
 
 go 1.26.0
 

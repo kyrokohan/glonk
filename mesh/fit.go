@@ -3,7 +3,7 @@ package mesh
 import (
 	"math"
 
-	"github.com/kyrokohan/glonk/geometry"
+	"glonk.dev/geometry"
 )
 
 // Bounds returns the smallest axis-aligned box around the mesh's vertices, in

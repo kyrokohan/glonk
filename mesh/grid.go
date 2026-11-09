@@ -1,7 +1,7 @@
 package mesh
 
 import (
-	"github.com/kyrokohan/glonk/geometry"
+	"glonk.dev/geometry"
 )
 
 // Grid returns a flat grid of lines on the y=0 plane, centered on the origin,

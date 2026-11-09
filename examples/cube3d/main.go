@@ -15,9 +15,9 @@ import (
 	"os"
 	"unicode"
 
-	"github.com/kyrokohan/glonk/engine"
-	"github.com/kyrokohan/glonk/geometry"
-	"github.com/kyrokohan/glonk/mesh"
+	"glonk.dev/engine"
+	"glonk.dev/geometry"
+	"glonk.dev/mesh"
 )
 
 const (

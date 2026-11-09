@@ -4,8 +4,8 @@ import (
 	"math"
 	"slices"
 
-	"github.com/kyrokohan/glonk/engine"
-	"github.com/kyrokohan/glonk/geometry"
+	"glonk.dev/engine"
+	"glonk.dev/geometry"
 )
 
 // Mesh describes an object that holds

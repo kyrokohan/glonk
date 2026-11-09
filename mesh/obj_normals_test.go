@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kyrokohan/glonk/geometry"
+	"glonk.dev/geometry"
 )
 
 // facing is what a loaded model's corners must carry: the place and the normal.

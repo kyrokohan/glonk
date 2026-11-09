@@ -3,7 +3,7 @@ package mesh
 import (
 	"math"
 
-	"github.com/kyrokohan/glonk/geometry"
+	"glonk.dev/geometry"
 )
 
 // The shapes below are solid: they have faces, so DrawShaded and DrawShadedPixels

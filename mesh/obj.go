@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/kyrokohan/glonk/engine"
-	"github.com/kyrokohan/glonk/geometry"
+	"glonk.dev/engine"
+	"glonk.dev/geometry"
 )
 
 // maxOBJLine is the longest logical line LoadOBJ accepts, in bytes. A polygon with

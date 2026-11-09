@@ -6,8 +6,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/kyrokohan/glonk/engine"
-	"github.com/kyrokohan/glonk/geometry"
+	"glonk.dev/engine"
+	"glonk.dev/geometry"
 )
 
 // closeVector says whether a and b agree to a few bits of a float64, relative to the

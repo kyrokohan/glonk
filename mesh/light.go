@@ -1,8 +1,8 @@
 package mesh
 
 import (
-	"github.com/kyrokohan/glonk/engine"
-	"github.com/kyrokohan/glonk/geometry"
+	"glonk.dev/engine"
+	"glonk.dev/geometry"
 )
 
 // Light lights the surfaces of a mesh. [Directional], [Ambient] and [Point] are the

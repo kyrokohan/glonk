@@ -13,9 +13,9 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/kyrokohan/glonk/engine"
-	"github.com/kyrokohan/glonk/geometry"
-	"github.com/kyrokohan/glonk/mesh"
+	"glonk.dev/engine"
+	"glonk.dev/geometry"
+	"glonk.dev/mesh"
 )
 
 //go:embed models/*.obj models/*.mtl

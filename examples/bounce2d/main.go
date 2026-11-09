@@ -12,9 +12,9 @@ import (
 	"math"
 	"os"
 
-	"github.com/kyrokohan/glonk/engine"
-	"github.com/kyrokohan/glonk/geometry"
-	"github.com/kyrokohan/glonk/sprite"
+	"glonk.dev/engine"
+	"glonk.dev/geometry"
+	"glonk.dev/sprite"
 )
 
 // hint is the text on the bottom border.

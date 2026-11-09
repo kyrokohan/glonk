@@ -5,7 +5,7 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/kyrokohan/glonk/geometry"
+	"glonk.dev/geometry"
 )
 
 // viewTransform carries a camera's pose from world space into view space (camera at

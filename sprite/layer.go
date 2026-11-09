@@ -4,7 +4,7 @@ import (
 	"math"
 	"slices"
 
-	"github.com/kyrokohan/glonk/engine"
+	"glonk.dev/engine"
 )
 
 // Layer is an ordered set of sprites drawn together; later sprites draw over earlier ones.

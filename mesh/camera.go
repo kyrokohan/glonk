@@ -3,7 +3,7 @@ package mesh
 import (
 	"math"
 
-	"github.com/kyrokohan/glonk/geometry"
+	"glonk.dev/geometry"
 )
 
 // Camera views the world from Position, looking down +z when Yaw and Pitch are 0.

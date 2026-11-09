@@ -6,8 +6,8 @@ import (
 	"math/rand/v2"
 	"testing"
 
-	"github.com/kyrokohan/glonk/engine"
-	"github.com/kyrokohan/glonk/geometry"
+	"glonk.dev/engine"
+	"glonk.dev/geometry"
 )
 
 // benchScene is what cube3d draws: a floor of lines and six cubes at mixed distances

@@ -11,7 +11,7 @@ import (
 	"testing/fstest"
 	"time"
 
-	"github.com/kyrokohan/glonk/engine"
+	"glonk.dev/engine"
 )
 
 // mapFS makes a file system out of file names and their text.

@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/kyrokohan/glonk/geometry"
+	"glonk.dev/geometry"
 )
 
 type cameraOutput struct {

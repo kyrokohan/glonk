@@ -4,8 +4,8 @@ import (
 	"math"
 	"testing"
 
-	"github.com/kyrokohan/glonk/engine"
-	"github.com/kyrokohan/glonk/geometry"
+	"glonk.dev/engine"
+	"glonk.dev/geometry"
 )
 
 // Drawing a sprite anywhere must not panic, and must touch exactly the cell the

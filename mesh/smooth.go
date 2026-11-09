@@ -3,8 +3,8 @@ package mesh
 import (
 	"math"
 
-	"github.com/kyrokohan/glonk/engine"
-	"github.com/kyrokohan/glonk/geometry"
+	"glonk.dev/engine"
+	"glonk.dev/geometry"
 )
 
 // SmoothNormals returns a copy of the mesh with a normal at every vertex, found by

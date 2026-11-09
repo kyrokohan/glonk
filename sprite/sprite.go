@@ -1,8 +1,8 @@
 package sprite
 
 import (
-	"github.com/kyrokohan/glonk/engine"
-	"github.com/kyrokohan/glonk/geometry"
+	"glonk.dev/engine"
+	"glonk.dev/geometry"
 )
 
 // Sprite is one Cell at a fractional position, floored to a cell of the frame when

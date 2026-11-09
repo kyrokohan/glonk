@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/kyrokohan/glonk/engine"
-	"github.com/kyrokohan/glonk/geometry"
-	"github.com/kyrokohan/glonk/sprite"
+	"glonk.dev/engine"
+	"glonk.dev/geometry"
+	"glonk.dev/sprite"
 )
 
 // A sprite is a Cell at a position, so it can have colors and attributes too. A layer

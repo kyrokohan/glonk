@@ -20,7 +20,7 @@ Website: [glonk.dev](https://glonk.dev)
 ## Install
 
 ```
-go get github.com/kyrokohan/glonk
+go get glonk.dev
 ```
 
 Requires Go 1.26 or newer.
@@ -147,7 +147,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kyrokohan/glonk/engine"
+	"glonk.dev/engine"
 )
 
 type game struct{ x float64 }
@@ -174,7 +174,7 @@ func main() {
 }
 ```
 
-`Run` owns the terminal. Each frame it calls `Update` (move things, read input) and then `Draw` (write cells into the `FrameBuffer`), then prints the frame. The terminal is restored when `Run` returns, and Ctrl-C, `kill` and a closing window (SIGINT, SIGTERM, SIGHUP) end it cleanly (`Run` returns `nil`), so the game needs no signal handler. When your `context` ends it, `Run` returns the context's error. The full API is in each package's documentation, with runnable examples: `go doc github.com/kyrokohan/glonk/engine`, or the package pages on pkg.go.dev.
+`Run` owns the terminal. Each frame it calls `Update` (move things, read input) and then `Draw` (write cells into the `FrameBuffer`), then prints the frame. The terminal is restored when `Run` returns, and Ctrl-C, `kill` and a closing window (SIGINT, SIGTERM, SIGHUP) end it cleanly (`Run` returns `nil`), so the game needs no signal handler. When your `context` ends it, `Run` returns the context's error. The full API is in each package's documentation, with runnable examples: `go doc glonk.dev/engine`, or the package pages on pkg.go.dev.
 
 ## Testing a game
 

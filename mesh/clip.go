@@ -3,7 +3,7 @@ package mesh
 import (
 	"math"
 
-	"github.com/kyrokohan/glonk/geometry"
+	"glonk.dev/geometry"
 )
 
 // clipVert is a corner of a triangle being clipped: where it is in view space and,

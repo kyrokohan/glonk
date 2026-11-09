@@ -1,6 +1,6 @@
 package mesh
 
-import "github.com/kyrokohan/glonk/geometry"
+import "glonk.dev/geometry"
 
 // Transform says where a model sits in the world and how large it is. The zero
 // Transform leaves the model as it was built: at the origin, unturned, full size.

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kyrokohan/glonk/geometry"
+	"glonk.dev/geometry"
 )
 
 func v3(x, y, z float64) geometry.Vector3 { return geometry.Vector3{X: x, Y: y, Z: z} }

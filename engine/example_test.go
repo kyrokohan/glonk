@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/kyrokohan/glonk/engine"
+	"glonk.dev/engine"
 )
 
 // walker is a game: a dot that crosses the screen until Escape is pressed.

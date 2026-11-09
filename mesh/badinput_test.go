@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kyrokohan/glonk/engine"
-	"github.com/kyrokohan/glonk/geometry"
+	"glonk.dev/engine"
+	"glonk.dev/geometry"
 )
 
 // drawEverything draws m with all four ways to draw a mesh into a fresh frame.

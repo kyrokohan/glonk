@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/kyrokohan/glonk/geometry"
+	"glonk.dev/geometry"
 )
 
 func TestBounds(t *testing.T) {

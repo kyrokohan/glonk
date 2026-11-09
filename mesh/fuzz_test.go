@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kyrokohan/glonk/engine"
-	"github.com/kyrokohan/glonk/geometry"
+	"glonk.dev/engine"
+	"glonk.dev/geometry"
 )
 
 func FuzzClipTriangleNear(f *testing.F) {

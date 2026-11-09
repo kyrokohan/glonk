@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/kyrokohan/glonk/engine"
+	"glonk.dev/engine"
 )
 
 // The most an OBJ can ask of the MTL files it names. The files come from the same

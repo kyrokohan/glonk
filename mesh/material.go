@@ -3,7 +3,7 @@ package mesh
 import (
 	"math"
 
-	"github.com/kyrokohan/glonk/engine"
+	"glonk.dev/engine"
 )
 
 // Material says how a mesh's surface looks when it is drawn shaded.
