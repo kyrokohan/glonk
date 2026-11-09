@@ -41,6 +41,7 @@ Every change, the maintainer's included, goes in through a pull request; nobody 
 - What `Run` writes to the terminal is tested by replaying the bytes onto a small virtual terminal (`engine/vterm_test.go`) and requiring that it shows exactly the frame; do the same for a change to how frames are drawn.
 - Text and cell contents reach the terminal only through the frame buffer, which checks every cell. Do not send them by another route. Control sequences are built in one place, `engine/escape.go`.
 - Comments say why, not what.
+- The website at glonk.dev is the plain HTML in `site/`, deployed from `main` by Cloudflare Pages. Its install line must match the README's and the module in `go.mod`, and both pages must keep their `go-import` tags at the top of the head, because the import path depends on them. `internal/sitecheck` checks all of that.
 
 ## License
 
