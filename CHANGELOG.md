@@ -4,6 +4,10 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-09
+
+On top of 0.2.0 this release adds sprites of several cells, see-through and animated, and wireframes drawn as half-block pixels. Nothing was removed or renamed.
+
 ### Added
 
 - `Canvas.DrawLine` and `Canvas.DrawLineDepth` draw a line of pixels: the line `FrameBuffer.DrawLine` and `DrawLineDepth` draw, on twice as many rows, with the same perspective-correct depth (the formula is shared, so they cannot disagree). `DrawLine`, like `Set`, neither reads nor writes depth, and the zero Color erases.
@@ -13,6 +17,10 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 - `Sprite.Overlay` makes a sprite see-through: a blank cell with no background and no attributes is a hole where what is behind shows, and any other cell with no background of its own keeps the background underneath. It works for a single `Cell` too. Off by default, so existing sprites draw as before; on a cell written by `Canvas.Compose` only the background is kept. Plain single-cell sprites cost about 0.5 ns more each to draw (the larger `Sprite` and the extra test): 1,000 of them take 2.0 microseconds where they took 1.4, with no allocation.
 - `sprite.Animation`: frames at a speed, advanced from `Update` with `Advance(dt)`, so it plays at the same speed at any frame rate. `NewAnimation(fps, frames...)`, `Loop`, `Index`, `Frame`, `Done` and `Reset`; it plays once unless `Loop` is set, a time that is negative or not a number is ignored, and an `FPS` that is not positive and finite does not run. `Sprite.Animation` takes the place of `Sprite.Frame`, which takes the place of `Sprite.Cell`.
 - `examples/sprites`: a ship drawn from text art that the arrow keys steer, a figure with a four-frame walk cycle that comes back in from the left, and a ghost that blinks and floats over the sea, all see-through. `make run EXAMPLE=./examples/sprites`.
+
+### Changed
+
+- `sprite.Sprite` has three new fields: `Frame`, `Animation` and `Overlay`. Code that sets fields by name is unaffected, and a sprite with none of them set draws as before. A `Sprite{...}` literal that lists its values without field names no longer compiles, and `go vet` already warns about those: name the fields.
 
 ## [0.2.0] - 2026-11-08
 
@@ -82,6 +90,7 @@ The first release. The API is pre-1.0 and may still change. The README lists the
 - Three example programs (`bounce2d`, `cube3d` and a model `viewer`), runnable examples in the package documentation, fuzz tests for the parsers, rasterizers and clipping, and a test that keeps the documentation complete.
 - Continuous integration (format, vet and race tests on Linux and macOS for Go 1.26 and 1.27, cross-compilation, 32-bit tests), Dependabot, a security policy and contributing notes.
 
-[Unreleased]: https://github.com/kyrokohan/glonk/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/kyrokohan/glonk/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/kyrokohan/glonk/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/kyrokohan/glonk/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/kyrokohan/glonk/releases/tag/v0.1.0

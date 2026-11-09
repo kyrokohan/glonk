@@ -32,7 +32,7 @@ Up to v0.1.0 glonk was imported as `github.com/kyrokohan/glonk`. From v0.2.0 it 
 ```
 go mod edit -droprequire github.com/kyrokohan/glonk
 grep -rl 'github.com/kyrokohan/glonk' --include='*.go' . | xargs perl -pi -e 's#github.com/kyrokohan/glonk#glonk.dev#g'
-go get glonk.dev@v0.2.0
+go get glonk.dev@latest
 go mod tidy
 ```
 
