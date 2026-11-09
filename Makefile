@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help fmt fmtcheck test vet lint fuzz run build check
+.PHONY: help fmt fmtcheck test vet lint vuln fuzz run build check
 
 help:
 	@echo "Available targets:"
@@ -8,6 +8,7 @@ help:
 	@echo "  test     - Run tests with the race detector (RACE= to turn it off)"
 	@echo "  vet      - Check for suspicious code with go vet"
 	@echo "  lint     - Find more mistakes with staticcheck (downloads it the first time)"
+	@echo "  vuln     - List known vulnerabilities in Go and our dependencies with govulncheck"
 	@echo "  fuzz     - Fuzz every fuzz test for FUZZTIME each (default 10s)"
 	@echo "  run      - Run an example (default bounce2d; EXAMPLE=./examples/cube3d; ARGS= passes arguments)"
 	@echo "  build    - Compile every package"
@@ -39,6 +40,13 @@ STATICCHECK ?= honnef.co/go/tools/cmd/staticcheck@2026.2.2
 lint:
 	@echo "Linting..."
 	go run $(STATICCHECK) ./...
+
+# Pinned and bumped by hand, like STATICCHECK. A new report can appear against code that
+# has not changed, so CI also runs this every week.
+GOVULNCHECK ?= golang.org/x/vuln/cmd/govulncheck@v1.9.0
+vuln:
+	@echo "Checking for known vulnerabilities..."
+	go run $(GOVULNCHECK) ./...
 
 # Go fuzzes one target per run, so loop over every Fuzz test in every package.
 # A failing input is saved under testdata/fuzz/ and then runs with plain `make test`.

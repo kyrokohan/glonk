@@ -1,0 +1,37 @@
+name: vuln
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # A report can land against code that has not changed, so look every Monday.
+    - cron: "23 6 * * 1"
+
+permissions:
+  contents: read
+
+# As in ci.yml: never download a different Go than the one a job asked for.
+env:
+  GOTOOLCHAIN: local
+
+concurrency:
+  group: vuln-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Known vulnerabilities in the Go release and in the modules this code reaches. It is
+  # not a required check: a report against the standard library would otherwise block
+  # every pull request until Go is updated. The tool is pinned in the Makefile.
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27"
+      - run: make vuln
