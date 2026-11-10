@@ -51,7 +51,7 @@ func (c Color) paletteIndex() (index uint8, ok bool) {
 	case colorPalette:
 		return uint8(c.bits), true
 	case colorRGB:
-		r, g, b := c.rgb()
+		r, g, b := c.RGB()
 		return nearestPalette(float64(r), float64(g), float64(b)), true
 	}
 	return 0, false
@@ -111,7 +111,7 @@ func (sb *sequenceBuilder) SetStyle(from, to style) {
 // color otherwise.
 func (sb *sequenceBuilder) appendColor(layer, def string, c Color) {
 	if c.kind() == colorRGB && sb.trueColor {
-		r, g, b := c.rgb()
+		r, g, b := c.RGB()
 		sb.buf = append(sb.buf, layer...)
 		sb.buf = append(sb.buf, ";2;"...)
 		sb.buf = strconv.AppendUint(sb.buf, uint64(r), 10)

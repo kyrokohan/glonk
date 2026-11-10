@@ -196,7 +196,7 @@ func TestCanvasFillTriangleFuncWeightsAreFromTheScene(t *testing.T) {
 					continue
 				}
 				covered++
-				r, g, _ := col.rgb()
+				r, g, _ := col.RGB()
 				b := seen[int(r)<<8|int(g)]
 
 				if sum := b.b0 + b.b1 + b.b2; math.Abs(sum-1) > 1e-9 {

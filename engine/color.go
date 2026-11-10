@@ -60,9 +60,11 @@ func (c Color) String() string {
 	return "default"
 }
 
-// rgb returns the red, green and blue of c. A palette color is read as xterm
-// defines it, and the default, which is whatever the terminal likes, as black.
-func (c Color) rgb() (r, g, b uint8) {
+// RGB returns the red, green and blue of c, each 0 to 255, for working with colors, such
+// as mixing two. An RGB color gives the numbers it was made from. A palette color is read
+// as xterm defines it, whatever the user's theme makes of colors 0 to 15, and the default
+// color, which is whatever the terminal likes, as black.
+func (c Color) RGB() (r, g, b uint8) {
 	switch c.kind() {
 	case colorPalette:
 		p := paletteRGB[uint8(c.bits)]
@@ -156,7 +158,7 @@ func Shade(color Color, intensity float64) Color {
 	}
 	intensity = min(max(intensity, 0), 1)
 
-	r, g, b := color.rgb()
+	r, g, b := color.RGB()
 	scale := func(v uint8) uint8 { return uint8(math.Round(float64(v) * intensity)) }
 	return RGB(scale(r), scale(g), scale(b))
 }

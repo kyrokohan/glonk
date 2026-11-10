@@ -251,10 +251,16 @@ func TestColorRGB(t *testing.T) {
 		{"palette orange", Palette(208), [3]uint8{255, 135, 0}},
 		{"palette gray", Palette(244), [3]uint8{128, 128, 128}},
 		{"rgb as it is", RGB(12, 34, 56), [3]uint8{12, 34, 56}},
+		{"rgb black is black, not the default", RGB(0, 0, 0), [3]uint8{0, 0, 0}},
+		{"rgb white", RGB(255, 255, 255), [3]uint8{255, 255, 255}},
+		{"rgb with one channel set", RGB(0, 200, 0), [3]uint8{0, 200, 0}},
+		{"theme color 7 as xterm has it", Palette(7), [3]uint8{229, 229, 229}},
+		{"cube color", Palette(100), [3]uint8{135, 135, 0}},
+		{"last gray", Palette(255), [3]uint8{238, 238, 238}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, g, b := tt.color.rgb()
+			r, g, b := tt.color.RGB()
 			if got := [3]uint8{r, g, b}; got != tt.want {
 				t.Errorf("wanted %v, got %v", tt.want, got)
 			}
@@ -415,6 +421,25 @@ func TestNearestPaletteTieBetweenCubeAndGrayGoesToTheCube(t *testing.T) {
 		}
 		if want := nearestPaletteScan(c[0], c[1], c[2]); got != want {
 			t.Errorf("wanted what the scan picks (%d) for %v, got %d", want, c, got)
+		}
+	}
+}
+
+// Every palette color reads as the table says, and every RGB color as what it was made
+// from, in each channel and together.
+func TestColorRGBOfEveryPaletteAndRGBColor(t *testing.T) {
+	for i := range 256 {
+		r, g, b := Palette(uint8(i)).RGB()
+		if want := paletteRGB[i]; [3]int{int(r), int(g), int(b)} != want {
+			t.Errorf("palette %d: wanted %v, got %v", i, want, [3]uint8{r, g, b})
+		}
+	}
+	for v := range 256 {
+		for _, c := range [][3]uint8{{uint8(v), 0, 0}, {0, uint8(v), 0}, {0, 0, uint8(v)}, {uint8(v), uint8(255 - v), uint8(v / 2)}} {
+			r, g, b := RGB(c[0], c[1], c[2]).RGB()
+			if [3]uint8{r, g, b} != c {
+				t.Fatalf("RGB%v: got %v", c, [3]uint8{r, g, b})
+			}
 		}
 	}
 }

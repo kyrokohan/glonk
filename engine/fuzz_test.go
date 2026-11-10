@@ -397,8 +397,8 @@ func FuzzShade(f *testing.F) {
 			t.Fatalf("wanted a shade that shows as a palette color in 16..255, got %v for color %d at %v", got, color, intensity)
 		}
 		// Shading never brightens.
-		r, g, b := Palette(color).rgb()
-		sr, sg, sb := got.rgb()
+		r, g, b := Palette(color).RGB()
+		sr, sg, sb := got.RGB()
 		if sr > r || sg > g || sb > b {
 			t.Fatalf("wanted no channel brighter than %v, got %v at %v", Palette(color), got, intensity)
 		}

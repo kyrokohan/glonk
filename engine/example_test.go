@@ -191,3 +191,15 @@ func ExampleCell() {
 	// #ff8700 palette(0)
 	// true false
 }
+
+// A color can say its red, green and blue, for mixing it with another. A palette color is
+// read as xterm defines it, and the default color as black.
+func ExampleColor_RGB() {
+	fmt.Println(engine.Palette(208).RGB())
+	fmt.Println(engine.RGB(12, 34, 56).RGB())
+	fmt.Println(engine.Color{}.RGB())
+	// Output:
+	// 255 135 0
+	// 12 34 56
+	// 0 0 0
+}
