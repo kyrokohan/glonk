@@ -104,6 +104,11 @@ type shadedTriangle struct {
 	// The color of the face this piece belongs to, where the light meets it fully.
 	color engine.Color
 
+	// tinted is set when a corner has a vertex color: the triangle is drawn in the
+	// blend of rgb, each corner's red, green and blue from 0 to 255, in place of color.
+	tinted bool
+	rgb    [3]geometry.Vector3
+
 	// A flat triangle is lit once, as a whole.
 	smooth    bool
 	intensity float64
@@ -122,6 +127,63 @@ func (t *shadedTriangle) brightnessAt(lights []Light, b0, b1, b2 float64) float6
 	return brightness(lights, point, normal)
 }
 
+// colorAt is the color of the cell at weights b0, b1 and b2 of the three corners: their
+// colors blended with the weights, rounded to whole numbers from 0 to 255.
+func (t *shadedTriangle) colorAt(b0, b1, b2 float64) engine.Color {
+	c := t.rgb[0].Scale(b0).Add(t.rgb[1].Scale(b1)).Add(t.rgb[2].Scale(b2))
+	return engine.RGB(channel(c.X), channel(c.Y), channel(c.Z))
+}
+
+// channel rounds v to a whole number from 0 to 255. NaN and anything below 0 give 0.
+func channel(v float64) uint8 {
+	switch {
+	case !(v > 0):
+		return 0
+	case v >= 255:
+		return 255
+	}
+	return uint8(math.Round(v))
+}
+
+// cornerColor is the color of a corner of a face whose own color is base, which is
+// FaceColors if hasFaceColor and else Material.Color. A corner with a vertex color is
+// drawn in it, multiplied by the face's color if it has one; a corner without takes the
+// base, which the default color makes black.
+func cornerColor(vertex, base engine.Color, hasFaceColor bool) geometry.Vector3 {
+	if vertex.IsDefault() {
+		return colorVector(base)
+	}
+	v := colorVector(vertex)
+	if !hasFaceColor {
+		return v
+	}
+	f := colorVector(base)
+	return geometry.Vector3{X: v.X * f.X / 255, Y: v.Y * f.Y / 255, Z: v.Z * f.Z / 255}
+}
+
+// colorAtPoint is the color at p, a point on the triangle v0, v1, v2 in view space, of
+// a triangle whose corners have the colors corner: the corners' colors blended with the
+// barycentric weights of p. Color changes linearly across a face in space, so this is
+// the color it had before the triangle was cut, whatever the cut.
+func colorAtPoint(corner [3]geometry.Vector3, v0, v1, v2, p geometry.Vector3) geometry.Vector3 {
+	e1, e2, e3 := v1.Sub(v0), v2.Sub(v0), p.Sub(v0)
+	d11, d12, d22 := e1.Dot(e1), e1.Dot(e2), e2.Dot(e2)
+	d31, d32 := e3.Dot(e1), e3.Dot(e2)
+	denom := d11*d22 - d12*d12
+	if denom == 0 {
+		return corner[0] // a triangle with no area: it has no cells either
+	}
+	w1 := (d22*d31 - d12*d32) / denom
+	w2 := (d11*d32 - d12*d31) / denom
+	return corner[0].Scale(1 - w1 - w2).Add(corner[1].Scale(w1)).Add(corner[2].Scale(w2))
+}
+
+// colorVector is c as red, green and blue from 0 to 255.
+func colorVector(c engine.Color) geometry.Vector3 {
+	r, g, b := c.RGB()
+	return geometry.Vector3{X: float64(r), Y: float64(g), Z: float64(b)}
+}
+
 // cornerNormal is the normal to use at a corner of a face: the vertex's own, turned
 // to face the camera if the face is a back face, or the face's if the vertex has none.
 // face is the face's unit normal, already turned that way.
@@ -133,4 +195,29 @@ func cornerNormal(vertex, face geometry.Vector3, front bool) geometry.Vector3 {
 		return vertex.Neg()
 	}
 	return vertex
+}
+
+// fillTinted draws a triangle that has vertex colors into cells. Every cell has a color of
+// its own, so, flat or smooth, each is asked for.
+func fillTinted(fb *engine.FrameBuffer, t *shadedTriangle, ramp []rune, lights []Light) {
+	c := &t.corners
+	fb.FillTriangleFunc(c[0].x, c[0].y, c[0].z, c[1].x, c[1].y, c[1].z, c[2].x, c[2].y, c[2].z, func(b0, b1, b2 float64) engine.Cell {
+		intensity := t.intensity
+		if t.smooth {
+			intensity = t.brightnessAt(lights, b0, b1, b2)
+		}
+		return engine.Cell{Character: shadeChar(ramp, intensity), Foreground: t.colorAt(b0, b1, b2)}
+	})
+}
+
+// fillTintedPixels is fillTinted for a Canvas, where brightness is a shade of the color.
+func fillTintedPixels(c *engine.Canvas, t *shadedTriangle, lights []Light) {
+	p := &t.corners
+	c.FillTriangleFunc(p[0].x, 2*p[0].y, p[0].z, p[1].x, 2*p[1].y, p[1].z, p[2].x, 2*p[2].y, p[2].z, func(b0, b1, b2 float64) engine.Color {
+		intensity := t.intensity
+		if t.smooth {
+			intensity = t.brightnessAt(lights, b0, b1, b2)
+		}
+		return engine.Shade(t.colorAt(b0, b1, b2), intensity)
+	})
 }

@@ -187,6 +187,9 @@ func (m Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(t
 	tri := &s.tri // in the scratch, because a pointer handed to fn would move a local to the heap
 	tri.smooth = smooth
 	faceColors := len(m.FaceColors) == len(m.Faces) // otherwise they are not used
+	vertexColors := len(m.VertexColors) == len(m.Vertices) && len(m.Vertices) > 0
+	tri.tinted = false
+	var corner [3]geometry.Vector3 // the colors of the corners of the face being drawn, if it has any
 	for i, f := range m.Faces {
 		if !validIndex(f[0], len(view)) || !validIndex(f[1], len(view)) || !validIndex(f[2], len(view)) {
 			continue
@@ -206,8 +209,20 @@ func (m Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(t
 		}
 
 		tri.color = m.Material.Color
-		if faceColors && !m.FaceColors[i].IsDefault() {
+		hasFaceColor := faceColors && !m.FaceColors[i].IsDefault()
+		if hasFaceColor {
 			tri.color = m.FaceColors[i]
+		}
+
+		var cut bool // the near plane crosses a tinted triangle
+		if vertexColors {
+			vc := [3]engine.Color{m.VertexColors[f[0]], m.VertexColors[f[1]], m.VertexColors[f[2]]}
+			if tri.tinted = !vc[0].IsDefault() || !vc[1].IsDefault() || !vc[2].IsDefault(); tri.tinted {
+				for k := range corner {
+					corner[k] = cornerColor(vc[k], tri.color, hasFaceColor)
+				}
+				cut = v0.Z < cam.Near || v1.Z < cam.Near || v2.Z < cam.Near
+			}
 		}
 
 		a, b, c := clipVert{view: v0}, clipVert{view: v1}, clipVert{view: v2}
@@ -228,6 +243,15 @@ func (m Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(t
 				tri.corners[i] = screenPoint{x, y, v.view.Z}
 				if smooth {
 					tri.world[i], tri.normal[i] = v.world, v.normal
+				}
+				if tri.tinted {
+					// An uncut triangle comes out with its corners as they went in. A cut
+					// one has corners on the near plane, given the color at that place.
+					if cut {
+						tri.rgb[i] = colorAtPoint(corner, v0, v1, v2, v.view)
+					} else {
+						tri.rgb[i] = corner[i]
+					}
 				}
 			}
 			fn(tri)
@@ -251,6 +275,10 @@ func (m Mesh) DrawShaded(fb *engine.FrameBuffer, cam Camera, lights ...Light) {
 	ramp := rs.rampFor(m.Material)
 	m.eachShadedTriangle(cam, lights, fb.Width(), fb.Height(), func(t *shadedTriangle) {
 		c := &t.corners
+		if t.tinted {
+			fillTinted(fb, t, ramp, lights)
+			return
+		}
 		if !t.smooth {
 			cell := engine.Cell{Character: shadeChar(ramp, t.intensity), Foreground: t.color}
 			fb.FillTriangle(c[0].x, c[0].y, c[0].z, c[1].x, c[1].y, c[1].z, c[2].x, c[2].y, c[2].z, cell)
@@ -270,6 +298,10 @@ func (m Mesh) DrawShadedPixels(c *engine.Canvas, cam Camera, lights ...Light) {
 	// Project onto the cell grid the canvas belongs to, then stretch y to pixel rows.
 	m.eachShadedTriangle(cam, lights, c.Width(), c.Height()/2, func(t *shadedTriangle) {
 		p := &t.corners
+		if t.tinted {
+			fillTintedPixels(c, t, lights)
+			return
+		}
 		if !t.smooth {
 			c.FillTriangle(p[0].x, 2*p[0].y, p[0].z, p[1].x, 2*p[1].y, p[1].z, p[2].x, 2*p[2].y, p[2].z, engine.Shade(t.color, t.intensity))
 			return

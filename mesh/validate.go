@@ -33,6 +33,9 @@ func (m Mesh) Validate() error {
 	if len(m.FaceColors) != 0 && len(m.FaceColors) != len(m.Faces) {
 		return fmt.Errorf("mesh: %d face colors for %d faces: wanted none, or one for each face", len(m.FaceColors), len(m.Faces))
 	}
+	if len(m.VertexColors) != 0 && len(m.VertexColors) != n {
+		return fmt.Errorf("mesh: %d vertex colors for %d vertices: wanted none, or one for each vertex", len(m.VertexColors), n)
+	}
 	for i, e := range m.Edges {
 		for _, v := range e {
 			if !validIndex(v, n) {

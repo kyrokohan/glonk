@@ -51,6 +51,23 @@ type Mesh struct {
 	// fills it from a model's materials.
 	FaceColors []engine.Color
 
+	// VertexColors are the colors of the vertices, in the order of Vertices: one for
+	// each, or none. Each cell of a face is drawn in the blend of the colors of its
+	// three corners, worked out with the same perspective-correct weights as smooth
+	// shading, so a face can fade from one color to another; brightness is still
+	// shown by the character or the shade. A zero entry means "none here".
+	//
+	// A face's own color, FaceColors from a model's material, is the color of the
+	// surface and a vertex color tints it: each channel is multiplied, so white leaves
+	// it as it is and gray darkens it. A face without one is drawn in the vertex colors
+	// as they are. A corner without a vertex color is drawn in what the face would be
+	// without any, its FaceColors or Material.Color, and a default color there is read
+	// as black, as Shade reads it. A face none of whose corners has a color is drawn as
+	// if the mesh had none. A list of any other length than Vertices is not used and
+	// Validate reports it. Wireframes (Draw, DrawDepth) ignore vertex colors.
+	// LoadOBJ reads them from lines of the form "v x y z r g b".
+	VertexColors []engine.Color
+
 	// Transform places the model in the world.
 	Transform Transform
 
@@ -123,7 +140,7 @@ func Cube(size float64) Mesh {
 }
 
 // Clone returns a copy of the mesh that shares nothing with it, so changing the
-// copy's Vertices, Edges, Faces, Normals or FaceColors leaves the original alone.
+// copy's Vertices, Edges, Faces, Normals, FaceColors or VertexColors leaves the original alone.
 // Assigning a Mesh to a new variable copies the struct but not these lists, which
 // both would still share.
 func (m Mesh) Clone() Mesh {
@@ -133,6 +150,7 @@ func (m Mesh) Clone() Mesh {
 	out.Faces = slices.Clone(m.Faces)
 	out.Normals = slices.Clone(m.Normals)
 	out.FaceColors = slices.Clone(m.FaceColors)
+	out.VertexColors = slices.Clone(m.VertexColors)
 	return out
 }
 
