@@ -26,6 +26,15 @@ const maxOBJLine = 1 << 20
 // It understands vertices (v), normals (vn), faces (f, in the v, v/vt, v//vn and
 // v/vt/vn forms) and line elements (l). Texture coordinates, materials, groups and
 // anything else are skipped, and all objects in the file are merged into one Mesh.
+//
+// A vertex line of the form "v x y z r g b", exactly six numbers, gives the vertex a
+// color, which goes in Mesh.VertexColors: red, green and blue from 0 to 1, clamped, as a
+// material's Kd is read. Any other count gives no color (a w after the coordinates is
+// one), and so do three numbers that are not understood; neither fails the load. Vertex
+// colors are in the vertex line, so LoadOBJLimit and LoadOBJFS read them too. A file whose
+// vertices have none has no VertexColors, and one where only some do has the zero Color
+// for the others. A vertex that is copied for a normal (see below) keeps its color.
+//
 // Indices start at 1, and a negative index counts back from the vertices (or
 // normals) read so far. A face with more than three corners is cut into triangles,
 // which are used for shading, while Edges follows the face's outline so a wireframe
@@ -104,6 +113,9 @@ func LoadOBJLimit(r io.Reader, maxBytes int64) (Mesh, error) {
 // triangle is one flat color, however fine the picture. The coordinates are read as the
 // file comes, so an mtllib and the vt lines must come before the faces that use them, and
 // a mtllib before the usemtl that uses it.
+//
+// Vertex colors (see LoadOBJ) are read as well and kept apart from these: they are in
+// Mesh.VertexColors and tint the color a face gets here, as that field says.
 //
 // The MTL files and pictures are as untrusted as the OBJ, and a model that has no colors
 // is still a model, so a problem with one does not fail the load; the faces it would
@@ -230,11 +242,19 @@ func readOBJ(r io.Reader, limit int64, lib *materialLibrary) (Mesh, error) {
 
 		switch fields[0] {
 		case "v":
-			v, err := parseOBJVertex(fields[1:])
+			v, color, err := parseOBJVertex(fields[1:])
 			if err != nil {
 				return fmt.Errorf("obj line %d: %w", line, err)
 			}
 			m.Vertices = append(m.Vertices, v)
+			// VertexColors starts at the first vertex with a color, and the vertices before
+			// it get none, so a file without any never has the list.
+			if m.VertexColors == nil && !color.IsDefault() {
+				m.VertexColors = make([]engine.Color, len(m.Vertices)-1)
+			}
+			if m.VertexColors != nil {
+				m.VertexColors = append(m.VertexColors, color)
+			}
 
 		case "vn":
 			n, err := parseOBJNumbers("normal", fields[1:])
@@ -367,11 +387,17 @@ func readOBJ(r io.Reader, limit int64, lib *materialLibrary) (Mesh, error) {
 	return m, nil
 }
 
-// parseOBJVertex reads the coordinates of a v statement. Anything after the first
-// three numbers (an optional w, or vertex colors some exporters add) is ignored.
-// Z is negated to convert from OBJ's right-handed space.
-func parseOBJVertex(args []string) (geometry.Vector3, error) {
-	return parseOBJNumbers("vertex", args)
+// parseOBJVertex reads a v statement: the coordinates, with Z negated to convert from
+// OBJ's right-handed space, and the vertex color some exporters add after them. A color
+// is exactly three more numbers, from 0 to 1 as Kd is read; with any other count, such as
+// a w after the coordinates, or numbers that are not understood, the vertex has none and
+// the zero Color is returned, and only bad coordinates are an error.
+func parseOBJVertex(args []string) (geometry.Vector3, engine.Color, error) {
+	v, err := parseOBJNumbers("vertex", args)
+	if err != nil || len(args) != 6 {
+		return v, engine.Color{}, err
+	}
+	return v, parseKd(args[3:]), nil
 }
 
 // parseOBJNumbers reads the three numbers of a v or vn statement, naming what it is
@@ -610,6 +636,9 @@ func (s *smoothing) finish(m *Mesh, normals []geometry.Vector3) {
 		}
 		m.Vertices = append(m.Vertices, m.Vertices[c[0]])
 		m.Normals = append(m.Normals, n)
+		if m.VertexColors != nil {
+			m.VertexColors = append(m.VertexColors, m.VertexColors[c[0]])
+		}
 	}
 	for i := range m.Faces {
 		for k, v := range m.Faces[i] {

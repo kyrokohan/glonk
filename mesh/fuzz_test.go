@@ -344,6 +344,14 @@ func FuzzLoadOBJ(f *testing.F) {
 		"v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\nvn 1 1 1\nf 1//1 2//1 3//1\nf 1//-1 2 3//9\n",
 		"v 0 0 0\nv 1 0 0\nv 0 1 0\nvn 0 0 0\nvn 1e308 -1e308 5e-324\nf 1//1 2//2 3/1/-2\n",
 		"vn nan 0 0\n", "vn 1 2\n", "vn 1 \\\n 2 3\nv 0 0 0\nf 1//1 1//1 1//1\n",
+		// Vertex colors: some vertices with and some without, odd counts, bad and extreme numbers,
+		// colors on places that are split for their normals.
+		"v 0 0 0 1 0 0\nv 1 0 0 0 1 0\nv 0 1 0 0 0 1\nf 1 2 3\n",
+		"v 0 0 0\nv 1 0 0 0.5 0.5 0.5\nv 0 1 0\nv 1 1 0 1 1 1 1\nf 1 2 3\nf 2 4 3\n",
+		"v 0 0 0 nan 0 0\nv 1 0 0 1e999 0 0\nv 0 1 0 -5 700 x\nv 1 1 0 1 2\nf 1 2 3\n",
+		"v -1 -1 -1 1 0 0\nv 1 -1 -1\nv 1 1 -1 0 1 0\nv -1 1 -1 0 0 1\nvn 0 0 1\nvn 0 1 0\nf 1//1 2//1 3//1\nf 1//2 3//2 4//2\n",
+		"v 0 0 0 0 0 0\nv 1 0 0 0 0 0\nl 1 2\n",
+		strings.Replace(objCubeWithNormals, "v 1 1 1\n", "v 1 1 1 0.2 0.4 0.6\n", 1),
 	} {
 		f.Add(seed)
 	}
@@ -399,6 +407,9 @@ func FuzzLoadOBJ(f *testing.F) {
 				t.Fatalf("wanted finite normals, got %v", n)
 			}
 		}
+		if m.VertexColors != nil && len(m.VertexColors) != len(m.Vertices) {
+			t.Fatalf("wanted a vertex color for each of %d vertices, or none, got %d", len(m.Vertices), len(m.VertexColors))
+		}
 		if err := m.Validate(); err != nil {
 			t.Fatalf("wanted a loaded model to be valid, got %v", err)
 		}
@@ -415,13 +426,13 @@ func FuzzLoadOBJ(f *testing.F) {
 
 		// Loading is a pure function of the text.
 		again, err := LoadOBJ(strings.NewReader(text))
-		if err != nil || !slices.Equal(again.Vertices, m.Vertices) || !slices.Equal(again.Faces, m.Faces) || !slices.Equal(again.Edges, m.Edges) || !slices.Equal(again.Normals, m.Normals) {
+		if err != nil || !slices.Equal(again.Vertices, m.Vertices) || !slices.Equal(again.Faces, m.Faces) || !slices.Equal(again.Edges, m.Edges) || !slices.Equal(again.Normals, m.Normals) || !slices.Equal(again.VertexColors, m.VertexColors) {
 			t.Fatalf("wanted loading twice to give the same mesh")
 		}
 
 		// The limit variant agrees with the unlimited one at the exact size, and one
 		// byte under it never succeeds.
-		if exact, exactErr := LoadOBJLimit(strings.NewReader(text), int64(len(text))); exactErr != nil || !slices.Equal(exact.Vertices, m.Vertices) || !slices.Equal(exact.Faces, m.Faces) || !slices.Equal(exact.Edges, m.Edges) || !slices.Equal(exact.Normals, m.Normals) {
+		if exact, exactErr := LoadOBJLimit(strings.NewReader(text), int64(len(text))); exactErr != nil || !slices.Equal(exact.Vertices, m.Vertices) || !slices.Equal(exact.Faces, m.Faces) || !slices.Equal(exact.Edges, m.Edges) || !slices.Equal(exact.Normals, m.Normals) || !slices.Equal(exact.VertexColors, m.VertexColors) {
 			t.Fatalf("wanted LoadOBJLimit at the exact size to match LoadOBJ, got err %v", exactErr)
 		}
 		if len(text) >= 2 {
