@@ -4,6 +4,16 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+### Added
+
+- Texture colors on models. `LoadOBJFS` reads the `map_Kd` picture of a material (JPEG or PNG, found by its content, beside the OBJ) and the texture coordinates of the faces (`vt`), and colors each triangle with the nearest pixel of the picture at the middle of its three corners' coordinates, in `Mesh.FaceColors`: the picture repeats, `v` runs from the bottom, transparency is ignored and colors are not gamma converted, as for `Kd`. A triangle without usable coordinates, or whose picture could not be had, keeps the material's `Kd`, and a material with both shows the picture. One color for each triangle means a large one is flat; a model of small triangles looks textured. Only the plain `map_Kd name` form is read (not `-s`, `-o` and the like), and no other map.
+- The picture is as untrusted as the model, and a problem with it never fails the load. Its size is read from the header and refused before decoding: 4096 by 4096 pixels (16,777,216) may be decoded per model in all, including a picture that then fails; 8 pictures are tried; a file is read up to 64 MiB or `maxBytes`. A picture is read when the first face that uses it comes, once. While loading, a decoded picture is held (up to 128 MiB, freed after) and 16 bytes for each `vt` line.
+
+### Changed
+
+- A model that used to load with no colors, or some, may now load with all: the pirate ship test model went from 1,552 colored faces of 29,860 to all of them, and a model of 800,000 faces from none to all. Loading takes longer by the time to decode the picture (23 to 61 ms, and 615 to 844 ms for the two), and `LoadOBJFS` of a file with many `vt` lines and no texture takes about 17% longer to read them. `LoadOBJ` and `LoadOBJLimit` are unchanged and read no `vt`.
+- Programs that import `mesh` now link the standard library's `image/jpeg` and `image/png` decoders, about 320 KB more in the viewer (3.08 to 3.40 MB); they also register those formats with `image.Decode` in the program, as importing them always does.
+
 ## [0.3.0] - 2026-11-09
 
 On top of 0.2.0 this release adds sprites of several cells, see-through and animated, and wireframes drawn as half-block pixels. Nothing was removed or renamed.

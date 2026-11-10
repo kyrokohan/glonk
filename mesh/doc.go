@@ -26,7 +26,9 @@
 // A mesh is one color, [Material.Color], unless it has [Mesh.FaceColors]: a color for
 // each face, which replaces the material's for that face and is still lit. [LoadOBJFS]
 // fills it from the materials of a model, reading the MTL files beside the OBJ from
-// an [io/fs.FS]; [LoadOBJ] skips materials.
+// an [io/fs.FS]: the diffuse color of each, or the color of its texture picture (JPEG or
+// PNG) at the face's texture coordinates, one color for each triangle. [LoadOBJ] skips
+// materials.
 //
 // Yaw and Pitch turn a model the way they turn a [Camera]: positive Yaw swings the
 // front toward +x and positive Pitch tips it up.
