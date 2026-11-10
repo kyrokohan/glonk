@@ -86,23 +86,42 @@ func LoadOBJLimit(r io.Reader, maxBytes int64) (Mesh, error) {
 // LoadOBJLimit, and name must satisfy fs.ValidPath.
 //
 // A material is named by usemtl, and defined in an MTL file that an mtllib statement
-// names and that sits beside the OBJ. Only the diffuse color, Kd, is read: three
-// numbers from 0 to 1, or one for a gray. Textures and everything else about a
-// material are skipped, so a textured material shows whatever plain Kd it has. The
-// colors are used as they are, with no gamma conversion. A polygon cut into triangles
-// gives them all its color.
+// names and that sits beside the OBJ. Two things in it are read. Kd is the diffuse color:
+// three numbers from 0 to 1, or one for a gray. map_Kd is a picture, a JPEG or PNG file
+// beside the OBJ (found by what is in it, not by its name), and the plain form is the
+// only one read: a name that starts with a dash, as when options come first, is skipped.
+// Everything else about a material is skipped. Colors are used as they are, with no
+// gamma conversion. A polygon cut into triangles gives them all its color.
 //
-// The MTL files are as untrusted as the OBJ, and a model that has no colors is still
-// a model, so a problem with one does not fail the load; the faces it would have
-// colored come out without. That covers a name that is not a plain path inside the
+// A picture colors a triangle through the texture coordinates (vt) of its corners: the
+// color is that of the nearest pixel of the picture at the middle of the three. The
+// coordinates are as an OBJ gives them, (0, 0) at the bottom left and (1, 1) at the top
+// right, and the picture repeats beyond that. The picture's own transparency is ignored.
+// A triangle takes the picture's color where a corner is missing its coordinates (or
+// they are not numbers, or name none that was read), the picture could not be had or the
+// material has none, and then the Kd of the material, if it has one, so a material with
+// both shows the picture where it can. One color for each triangle means a large
+// triangle is one flat color, however fine the picture. The coordinates are read as the
+// file comes, so an mtllib and the vt lines must come before the faces that use them, and
+// a mtllib before the usemtl that uses it.
+//
+// The MTL files and pictures are as untrusted as the OBJ, and a model that has no colors
+// is still a model, so a problem with one does not fail the load; the faces it would
+// have colored come out without. That covers a name that is not a plain path inside the
 // OBJ's directory (a leading /, a leading .., a backslash), a file that is missing, a
-// material that is not defined, a Kd that is not understood, and a file that is longer
-// than 1 MiB (or maxBytes, if less) or cannot be read, which is skipped whole. At most
-// 8 files are read per OBJ and 10,000 materials kept, so the memory of LoadOBJLimit
-// grows by at most about 10 MiB while loading. An mtllib is read where it stands, so
-// it must come before the usemtl that uses it. A file name with a space in it cannot
-// be used, for spaces separate the names. os.DirFS follows symbolic links inside its
-// folder, so give it a folder you trust.
+// material that is not defined, a Kd that is not understood, a file that is longer than
+// 1 MiB (or maxBytes, if less) for an MTL and 64 MiB (or maxBytes) for a picture or
+// cannot be read, which is skipped whole, a picture that is not a JPEG or PNG or is
+// broken or cut short, and a picture too large: the size is read from its header and
+// refused before anything is decoded, and 16,777,216 pixels (4096 by 4096) may be decoded
+// for one OBJ in all, including those of a picture that then fails. At most 8 MTL files
+// and 8 pictures are read per OBJ, and 10,000 materials kept. The memory of LoadOBJLimit
+// grows by at most about 10 MiB for the MTL files, and by a decoded picture while the
+// model loads, up to 128 MiB for the largest allowed, and the 16 bytes of each vt line,
+// which are freed with the load. Pictures are read when the first face that uses one
+// comes, once. An mtllib is read where it stands. A file name with a space in it cannot
+// be used for an mtllib, for spaces separate the names. os.DirFS follows symbolic links
+// inside its folder, so give it a folder you trust.
 //
 // A model with no usable material loads as LoadOBJLimit would, with no FaceColors.
 func LoadOBJFS(fsys fs.FS, name string, maxBytes int64) (Mesh, error) {
@@ -161,7 +180,10 @@ func readOBJ(r io.Reader, limit int64, lib *materialLibrary) (Mesh, error) {
 		normals    []geometry.Vector3 // every vn, Z already negated
 		sm         smoothing          // how corners with normals become vertices; see there
 		cornerBuf  []objCorner        // the corners of the face being read, kept to read the next
-		material   engine.Color       // the Kd of the usemtl in effect; zero for none
+		uvs        [][2]float64       // every vt, when materials are being read; see parseOBJUV
+		mat        material           // the usemtl in effect; zero for none
+		tex        *texture           // mat's image, once it has been asked for
+		texAsked   bool               // tex has been asked for since mat last changed
 	)
 
 	// The scanner reads through lr. When the limit is hit it sees a read error, which
@@ -221,8 +243,15 @@ func readOBJ(r io.Reader, limit int64, lib *materialLibrary) (Mesh, error) {
 			}
 			normals = append(normals, n)
 
+		case "vt":
+			// Only a model with materials can use them, and the others stay as lean as
+			// they were.
+			if lib != nil {
+				uvs = append(uvs, parseOBJUV(fields[1:]))
+			}
+
 		case "f":
-			corners, anyNormal, err := parseOBJFace(cornerBuf[:0], fields[1:], len(m.Vertices), len(normals))
+			corners, anyNormal, err := parseOBJFace(cornerBuf[:0], fields[1:], len(m.Vertices), len(normals), len(uvs))
 			cornerBuf = corners
 			if err != nil {
 				return fmt.Errorf("obj line %d: %w", line, err)
@@ -242,18 +271,30 @@ func readOBJ(r io.Reader, limit int64, lib *materialLibrary) (Mesh, error) {
 					corners[i].vertex = sm.vertexFor(c, &m)
 				}
 			}
-			// FaceColors starts at the first face with a color, and the faces before it
-			// get none, so a file without any never has the list.
-			if m.FaceColors == nil && !material.IsDefault() {
-				m.FaceColors = make([]engine.Color, len(m.Faces))
+			// The image is read when the first face that uses it comes, so one that no face
+			// uses is never opened.
+			if !texAsked && mat.texture != "" {
+				tex, texAsked = lib.texture(mat.texture), true
 			}
 			// Fan from the first corner. Each triangle is listed backwards because
 			// the Z flip mirrors the model.
 			for i := 1; i+1 < len(corners); i++ {
 				m.Faces = append(m.Faces, [3]int{corners[0].vertex, corners[i+1].vertex, corners[i].vertex})
-			}
-			for m.FaceColors != nil && len(m.FaceColors) < len(m.Faces) {
-				m.FaceColors = append(m.FaceColors, material)
+
+				c := mat.color
+				if tex != nil {
+					if t := tex.at(uvCentroid(uvs, corners[0], corners[i], corners[i+1])); !t.IsDefault() {
+						c = t
+					}
+				}
+				// FaceColors starts at the first face with a color, and the faces before it
+				// get none, so a file without any never has the list.
+				if m.FaceColors == nil && !c.IsDefault() {
+					m.FaceColors = make([]engine.Color, len(m.Faces)-1)
+				}
+				if m.FaceColors != nil {
+					m.FaceColors = append(m.FaceColors, c)
+				}
 			}
 
 		case "mtllib":
@@ -264,7 +305,7 @@ func readOBJ(r io.Reader, limit int64, lib *materialLibrary) (Mesh, error) {
 		case "usemtl":
 			// An unknown name, or none, means no color.
 			if lib != nil {
-				material = lib.materials[argument(text, "usemtl")].color
+				mat, tex, texAsked = lib.materials[argument(text, "usemtl")], nil, false
 			}
 
 		case "l":
@@ -390,22 +431,22 @@ func parseOBJVertexIndex(vertex, tok string, have int) (int, error) {
 	return i, nil
 }
 
-// objCorner is one corner of a face: a vertex, and the normal the file gives it
-// there, or -1 for none.
+// objCorner is one corner of a face: a vertex, and the normal and texture coordinates
+// the file gives it there, or -1 for none.
 type objCorner struct {
-	vertex, normal int
+	vertex, normal, texture int
 }
 
 // parseOBJFace turns the corner tokens of an f statement ("7", "7/2", "7//3",
-// "7/2/3") into corners with 0-based vertex indices, and normal indices where there
-// are usable ones, appended to dst. haveVertices and haveNormals are how many
-// vertices and normals have been read so far, which is what negative indices count
-// back from. anyNormal says whether any corner has a normal.
+// "7/2/3") into corners with 0-based vertex indices, and normal and texture indices
+// where there are usable ones, appended to dst. haveVertices, haveNormals and haveUVs
+// are how many vertices, normals and texture coordinates have been read so far, which is
+// what negative indices count back from. anyNormal says whether any corner has a normal.
 //
-// A vertex index that is not valid is an error. A normal index is not: one that is
-// missing, is not a number or names no normal read so far leaves the corner without a
-// normal, as an index into texture coordinates, which are never read, always has.
-func parseOBJFace(dst []objCorner, args []string, haveVertices, haveNormals int) (corners []objCorner, anyNormal bool, err error) {
+// A vertex index that is not valid is an error. A normal or texture index is not: one
+// that is missing, is not a number or names none read so far leaves the corner without
+// one. A file read without materials counts no texture coordinates, so none is usable.
+func parseOBJFace(dst []objCorner, args []string, haveVertices, haveNormals, haveUVs int) (corners []objCorner, anyNormal bool, err error) {
 	for _, tok := range args {
 		vertex, rest, _ := strings.Cut(tok, "/")
 		i, err := parseOBJVertexIndex(vertex, tok, haveVertices)
@@ -413,23 +454,30 @@ func parseOBJFace(dst []objCorner, args []string, haveVertices, haveNormals int)
 			return dst, anyNormal, err
 		}
 
-		normal := -1
+		normal, texture := -1, -1
 		if rest != "" {
 			// What follows the vertex is "texture", "texture/normal" or "/normal".
-			if _, field, found := strings.Cut(rest, "/"); found {
-				normal = parseOBJNormalIndex(field, haveNormals)
+			field, normalField, found := strings.Cut(rest, "/")
+			texture = parseOBJOptionalIndex(field, haveUVs)
+			if found {
+				normal = parseOBJOptionalIndex(normalField, haveNormals)
 				anyNormal = anyNormal || normal >= 0
 			}
 		}
-		dst = append(dst, objCorner{vertex: i, normal: normal})
+		dst = append(dst, objCorner{vertex: i, normal: normal, texture: texture})
 	}
 	return dst, anyNormal, nil
 }
 
-// parseOBJNormalIndex reads the normal index field of a corner as a 0-based index, or
-// -1 if it is not a usable one. have is how many normals have been read so far, which
-// is what a negative index counts back from.
-func parseOBJNormalIndex(field string, have int) int {
+// parseOBJOptionalIndex reads the normal or texture index field of a corner as a
+// 0-based index, or -1 if it is not a usable one. have is how many normals or texture
+// coordinates have been read so far, which is what a negative index counts back from.
+func parseOBJOptionalIndex(field string, have int) int {
+	// Nothing is usable with none read, and an empty field is the common "v//vn", whose
+	// failed Atoi would allocate an error for every corner.
+	if have == 0 || field == "" {
+		return -1
+	}
 	n, err := strconv.Atoi(field)
 	if err != nil {
 		return -1
@@ -442,6 +490,36 @@ func parseOBJNormalIndex(field string, have int) int {
 		return -1
 	}
 	return i
+}
+
+// parseOBJUV reads the arguments of a vt statement: u, then v (0 if it is left out), and
+// a w that is ignored. A statement that is not understood gives NaN, which no texture
+// has a color for, instead of failing the load: it still takes its place in the list, so
+// the indices after it mean what the file meant.
+func parseOBJUV(args []string) [2]float64 {
+	uv := [2]float64{math.NaN(), math.NaN()}
+	if len(args) == 0 {
+		return uv
+	}
+	var c [2]float64
+	for i := range min(len(args), 2) {
+		f, err := strconv.ParseFloat(args[i], 64)
+		if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
+			return uv
+		}
+		c[i] = f
+	}
+	return c
+}
+
+// uvCentroid is the middle of the texture coordinates of three corners, or NaN if one
+// of them has none.
+func uvCentroid(uvs [][2]float64, a, b, c objCorner) (u, v float64) {
+	if a.texture < 0 || b.texture < 0 || c.texture < 0 {
+		return math.NaN(), math.NaN()
+	}
+	p, q, r := uvs[a.texture], uvs[b.texture], uvs[c.texture]
+	return (p[0] + q[0] + r[0]) / 3, (p[1] + q[1] + r[1]) / 3
 }
 
 // smoothing turns the corners of faces that have normals into vertices. A Mesh has
