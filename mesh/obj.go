@@ -118,13 +118,7 @@ func LoadOBJFS(fsys fs.FS, name string, maxBytes int64) (Mesh, error) {
 	}
 	defer f.Close()
 
-	lib := &materialLibrary{
-		fsys:   fsys,
-		dir:    path.Dir(name),
-		limit:  min(maxBytes, maxMTLBytes),
-		colors: map[string]engine.Color{},
-	}
-	return readOBJ(f, maxBytes, lib)
+	return readOBJ(f, maxBytes, newMaterialLibrary(fsys, path.Dir(name), maxBytes))
 }
 
 // limitReader passes through at most limit bytes and fails on the first byte past
@@ -270,7 +264,7 @@ func readOBJ(r io.Reader, limit int64, lib *materialLibrary) (Mesh, error) {
 		case "usemtl":
 			// An unknown name, or none, means no color.
 			if lib != nil {
-				material = lib.colors[argument(text, "usemtl")]
+				material = lib.materials[argument(text, "usemtl")].color
 			}
 
 		case "l":
