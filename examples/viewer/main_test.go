@@ -35,6 +35,7 @@ func TestSamplesLoad(t *testing.T) {
 	}{
 		{"house.obj", 30, 44},
 		{"icosphere.obj", 42, 80},
+		{"octahedron.obj", 6, 8},
 		{"torus.obj", 128, 256},
 	}
 	if len(models) != len(want) {
@@ -238,13 +239,25 @@ func hudText(fb *engine.FrameBuffer, row int) string {
 	return sb.String()
 }
 
+// modelIndex is where the model called name is in models.
+func modelIndex(t *testing.T, models []model, name string) int {
+	t.Helper()
+	for i, m := range models {
+		if m.name == name {
+			return i
+		}
+	}
+	t.Fatalf("wanted a model called %s", name)
+	return 0
+}
+
 func TestHUDNamesTheModelAndMode(t *testing.T) {
 	models := loadSamples(t)
 	v := newViewer(models)
 	v.current = 1
 
 	fb := drawAll(t, v)
-	if got := hudText(fb, 1); !strings.Contains(got, "icosphere.obj (2/3)") || !strings.Contains(got, "42 vertices, 80 faces") {
+	if got := hudText(fb, 1); !strings.Contains(got, "icosphere.obj (2/4)") || !strings.Contains(got, "42 vertices, 80 faces") {
 		t.Errorf("wanted the model and its counts on the first line, got %q", got)
 	}
 	if got := hudText(fb, 2); !strings.Contains(got, "characters") {
@@ -751,6 +764,7 @@ func TestBrowsingShowsTheSamplesThenTheShapes(t *testing.T) {
 	}{
 		{"house.obj", 30, 44, false},
 		{"icosphere.obj", 42, 80, false},
+		{"octahedron.obj", 6, 8, false},
 		{"torus.obj", 128, 256, false},
 		{"sphere", 266, 528, true},
 		{"cylinder", 98, 96, true},
@@ -903,14 +917,15 @@ func TestSmoothingFindsNormalsOnceAndKeepsTheOriginal(t *testing.T) {
 
 func TestShapesKeepTheirOwnNormalsWhenFaceted(t *testing.T) {
 	v := browseAll(t)
-	v.current = 3 // the sphere
-	own := v.models[3].mesh.Normals
+	sphere := modelIndex(t, v.models, "sphere")
+	v.current = sphere
+	own := v.models[sphere].mesh.Normals
 
-	v.models[3].smooth = false
+	v.models[sphere].smooth = false
 	if v.shown().Normals != nil {
 		t.Errorf("wanted a faceted sphere drawn without normals")
 	}
-	v.models[3].smooth = true
+	v.models[sphere].smooth = true
 	if got := v.shown().Normals; len(got) != len(own) || &got[0] != &own[0] {
 		t.Errorf("wanted a smooth sphere drawn with its own normals, not found ones")
 	}
@@ -1073,7 +1088,7 @@ func TestTheLampFollowsTheCameraAndTheSunDoesNot(t *testing.T) {
 // upper left. The sun, from above and to one side, lights it from somewhere else.
 func TestTheLampLightsTheUpperLeftOfASphere(t *testing.T) {
 	v := browseAll(t)
-	v.current = 3 // the sphere
+	v.current = modelIndex(t, v.models, "sphere")
 	v.lamp = true
 	fb := drawAll(t, v)
 
@@ -1134,7 +1149,7 @@ func TestHUDNamesTheShadingAndTheLight(t *testing.T) {
 	if got := line(); !strings.Contains(got, "two-sided, smooth, lamp") {
 		t.Errorf("wanted the shading and light after the mode, got %q", got)
 	}
-	v.current = 3 // the sphere starts smooth
+	v.current = modelIndex(t, v.models, "sphere") // it starts smooth
 	v.lamp = false
 	if got := line(); !strings.Contains(got, "smooth, sun") {
 		t.Errorf("wanted the sphere smooth and in the sun, got %q", got)
@@ -1178,13 +1193,18 @@ func foregrounds(fb *engine.FrameBuffer) map[engine.Color]bool {
 	return seen
 }
 
-func TestOnlyTheHouseHasColorsOfItsOwn(t *testing.T) {
+func TestOnlyTheHouseAndTheOctahedronHaveColorsOfTheirOwn(t *testing.T) {
 	for _, m := range loadSamples(t) {
-		if want := m.name == "house.obj"; m.colored != want {
+		if want := m.name == "house.obj" || m.name == "octahedron.obj"; m.colored != want {
 			t.Errorf("%s: wanted colored=%v, got %v", m.name, want, m.colored)
 		}
-		if m.colored && len(m.mesh.FaceColors) != m.faces {
+		// The house has a color for each face, from its materials, and the octahedron one
+		// for each vertex, from the vertex lines of its file.
+		if m.name == "house.obj" && len(m.mesh.FaceColors) != m.faces {
 			t.Errorf("%s: wanted a color for each of %d faces, got %d", m.name, m.faces, len(m.mesh.FaceColors))
+		}
+		if m.name == "octahedron.obj" && (len(m.mesh.VertexColors) != m.verts || len(m.mesh.FaceColors) != 0) {
+			t.Errorf("%s: wanted a color for each of %d vertices and none for faces, got %d and %d", m.name, m.verts, len(m.mesh.VertexColors), len(m.mesh.FaceColors))
 		}
 	}
 	for _, m := range shapeModels() {
@@ -1210,6 +1230,68 @@ func TestHouseOpensInItsOwnColors(t *testing.T) {
 	}
 	if got := hudText(fb, 2); !strings.Contains(got, "characters, faceted, sun, model colors") {
 		t.Errorf("wanted the HUD to say the model's colors are shown, got %q", got)
+	}
+}
+
+// The octahedron has a color on each corner, so its faces fade from one to the next: more
+// colors on screen than it has corners, and none of them the palette color.
+func TestOctahedronOpensInItsVertexColors(t *testing.T) {
+	models := loadSamples(t)
+	v := newViewer(models)
+	v.current = modelIndex(t, models, "octahedron.obj")
+	fb := drawAll(t, v)
+
+	got := foregrounds(fb)
+	if len(got) <= len(v.models[v.current].mesh.VertexColors) {
+		t.Errorf("wanted more colors than the 6 corners, as the faces fade, got %d: %v", len(got), got)
+	}
+	if got[palette[0]] {
+		t.Errorf("wanted the palette color to stay out of it, got %v", got)
+	}
+	if text := hudText(fb, 2); !strings.Contains(text, "model colors") {
+		t.Errorf("wanted the HUD to say the model's colors are shown, got %q", text)
+	}
+}
+
+func TestVertexColorsReachHalfBlockPixels(t *testing.T) {
+	models := loadSamples(t)
+	v := newViewer(models)
+	v.current = modelIndex(t, models, "octahedron.obj")
+	v.halfBlocks = true
+	fb := drawAll(t, v)
+
+	shown := map[engine.Color]bool{}
+	for _, c := range modelCells(fb) {
+		cell := fb.At(c[0], c[1])
+		shown[cell.Foreground], shown[cell.Background] = true, true
+	}
+	if len(shown) < 12 {
+		t.Errorf("wanted many shades of the corners' colors among the pixels, got %d: %v", len(shown), shown)
+	}
+	if got := hudText(fb, 2); !strings.Contains(got, "model colors") {
+		t.Errorf("wanted the HUD to say the model's colors are shown, got %q", got)
+	}
+}
+
+// C puts the vertex colors aside for each palette color in turn and brings them back.
+func TestColorKeyCyclesTheOctahedronsVertexColors(t *testing.T) {
+	v := quiet(t)
+	v.current = modelIndex(t, v.models, "octahedron.obj")
+	kb := engine.NewKeyboard()
+
+	for i := 1; i <= len(palette)+1; i++ {
+		kb.Press('c')
+		step(v, kb, 0.1)
+		kb.Release('c')
+
+		got := foregrounds(drawAll(t, v))
+		if i <= len(palette) {
+			if len(got) != 1 || !got[palette[i-1]] {
+				t.Fatalf("after %d presses: wanted only %v, got %v", i, palette[i-1], got)
+			}
+		} else if len(got) < 7 || !v.ownColors {
+			t.Fatalf("after %d presses: wanted the vertex colors back, got %d colors (own=%v)", i, len(got), v.ownColors)
+		}
 	}
 }
 

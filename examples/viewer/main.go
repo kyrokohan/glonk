@@ -90,7 +90,7 @@ func loadModel(fsys fs.FS, name string) (model, error) {
 	}
 	return model{
 		name: path.Base(name), mesh: m.Fit(modelSize), verts: len(m.Vertices), faces: len(m.Faces),
-		colored: len(m.FaceColors) > 0, smooth: len(m.Normals) > 0,
+		colored: len(m.FaceColors) > 0 || len(m.VertexColors) > 0, smooth: len(m.Normals) > 0,
 	}, nil
 }
 
@@ -324,7 +324,7 @@ func (v *viewer) Draw(fb *engine.FrameBuffer) {
 	// The palette color also covers any face the file gave no color.
 	m.Material.Color = color
 	if !v.showsModelColors() {
-		m.FaceColors = nil
+		m.FaceColors, m.VertexColors = nil, nil
 	}
 
 	mode := "characters"

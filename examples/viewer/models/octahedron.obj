@@ -1,0 +1,16 @@
+# An octahedron with a color on each corner: vertex colors, 8 triangles.
+# CC0: public domain, made for glonk.
+v 1 0 0 1.00 0.15 0.15
+v -1 0 0 0.10 0.90 0.90
+v 0 1 0 0.20 0.90 0.20
+v 0 -1 0 0.90 0.10 0.90
+v 0 0 1 0.15 0.25 1.00
+v 0 0 -1 1.00 0.90 0.10
+f 1 3 5
+f 1 6 3
+f 1 5 4
+f 1 4 6
+f 2 5 3
+f 2 3 6
+f 2 4 5
+f 2 6 4
