@@ -10,7 +10,7 @@ Website: [glonk.dev](https://glonk.dev)
 
 - **2D:** cells with foreground and background colors (the 256-color palette, or exact RGB on terminals with true color) and text attributes (bold, dim, underline, reverse), lines, boxes, text, and sprites (several cells, see-through, animated).
 - **3D:** wireframe or solid meshes through a perspective camera, with near-plane clipping. Solid meshes are shaded by any number of lights (directional, ambient, point, or your own) into an ASCII brightness ramp, face by face or, with normals, smoothly across each face. They hide each other by depth and skip faces turned away. A wireframe drawn with depth is hidden by nearer solids too.
-- **Shapes and models:** a cube, sphere, cylinder, cone, plane and grid, or OBJ files from any `io.Reader` (a file, `//go:embed`, a download), centered and scaled and drawn wireframe or shaded, in the colors and texture pictures of their materials when loaded from an `fs.FS`.
+- **Shapes and models:** a cube, sphere, cylinder, cone, plane and grid, or OBJ files from any `io.Reader` (a file, `//go:embed`, a download), centered and scaled and drawn wireframe or shaded, in the colors and texture pictures of their materials when loaded from an `fs.FS`, and with a color on each vertex.
 - **Half blocks:** a pixel `Canvas` with two square-ish pixels per cell, drawn with `▀` and a background color, for twice the vertical detail and shading by color instead of by character. Lines and wireframes can be drawn into the pixels too.
 - **Mixed:** draw a 3D scene first, then a 2D HUD on top, into the same frame.
 - **Input:** held keys and one-shot presses, including arrows. Terminals with the [kitty keyboard protocol](https://sw.kovidgoyal.net/kitty/keyboard-protocol/) (Ghostty, kitty, WezTerm, foot, iTerm2, Alacritty) report real key releases, so you can hold several keys at once.
@@ -69,7 +69,7 @@ viewer controls:
 | V | wireframe or solid |
 | M, B | character shading or half-block pixels (with V, the wireframe is pixel lines); exact or solid pixel edges |
 | D | draw both sides of every face (for models that look inside out) |
-| C | change color (a model with colors of its own, like the bundled house or one with a texture, goes from them through the six palette colors and back) |
+| C | change color (a model with colors of its own, like the bundled house and octahedron or one with a texture, goes from them through the six palette colors and back) |
 | F | smooth or faceted shading for this model (a model without normals is smoothed from its faces) |
 | L | light from the sun, or from a lamp held up and to the left of the camera |
 | Esc | quit |
@@ -108,7 +108,7 @@ A mesh is placed by its `Transform` (`Position`, `Yaw`, `Pitch`, `Roll`, `Scale`
 
 `LoadOBJ` reads any `io.Reader`, so a file, an embedded asset or a download all work. For input you do not control, use `LoadOBJLimit(r, maxBytes)`: it fails with `mesh.ErrOBJTooLarge` instead of reading without end (a plain `io.LimitReader` would quietly cut the model short).
 
-- **Understood:** vertices (`v`), normals (`vn`), faces (`f`, with or without texture and normal indices, any number of corners, negative indices) and lines (`l`). Faces with more than three corners are split into triangles for shading, and the wireframe shows the original polygons.
+- **Understood:** vertices (`v`, with a color after them if the file has one: `v x y z r g b`), normals (`vn`), faces (`f`, with or without texture and normal indices, any number of corners, negative indices) and lines (`l`). Faces with more than three corners are split into triangles for shading, and the wireframe shows the original polygons.
 - **Skipped:** groups and curves, and texture coordinates and materials too in `LoadOBJ` and `LoadOBJLimit`. Everything in the file becomes one mesh, in the color of its `Material` unless `LoadOBJFS` gave faces colors of their own. If the faces use normals the mesh is shaded smooth, with a vertex split into one per normal where the file lights it differently on different faces (the sides of a cube); if not, it is shaded flat.
 - **Colors:** `Kd`, the diffuse color (three numbers from 0 to 1, or one for a gray), and `map_Kd`, the picture, are read; the rest of a material is skipped. Colors are used as RGB with no gamma conversion. Each `.mtl` is read up to 1 MiB (or `maxBytes`, if less), at most 8 per model, with 10,000 materials; a name must be a plain path inside the OBJ's folder (no `..`, no leading `/`, no backslash); `mtllib` must come before the `usemtl` that uses it. A `.mtl` that is missing, too large or broken never fails the load: the model comes out in its `Material` color. `os.DirFS` follows symbolic links in its folder, so give it a folder you trust.
 - **Textures:** a triangle takes the color of the picture's nearest pixel at the middle of its three corners' texture coordinates (`vt`), with (0, 0) at the bottom left, the picture repeating beyond (1, 1) and its own transparency ignored. That is one color for a triangle, so a large triangle is flat however fine the picture; models with small triangles, like scans, look textured. Where a corner has no coordinates, or the picture could not be had, the triangle keeps the material's `Kd`, if any; a material with both shows the picture. Only the plain `map_Kd name` form is read, and only JPEG and PNG, found by what is in the file; the picture sits beside the OBJ, under the same name rules as `mtllib`, and is read when the first face that uses it comes. A picture is refused by the size in its header, before it is decoded: 4096 by 4096 pixels (16,777,216) may be decoded for one model in all, 8 pictures are tried, and each file is read up to 64 MiB (or `maxBytes`, if less). A picture that is missing, broken, cut short, of another kind or too big never fails the load: its faces keep their `Kd` or the `Material` color. The `vt` lines and the `mtllib` must come before the faces that use them.
@@ -135,6 +135,28 @@ A mesh with no `Normals` is lit face by face, one brightness for each, so a roun
 - **Cost:** about 12 to 23% more than facets on a scene of spheres, and none for a mesh without normals. Drawing allocates nothing either way.
 - **Shape limits:** segments go from 3 to 512 and rings from 2 to 512, so a careless argument cannot ask for gigabytes, and a size that is negative or not a finite number counts as 0. `Point` lights: `Range` 0 means no fading, and a negative `Range` gives no light.
 - **Your own lights:** `Light.Brightness(point, normal)` is asked about every cell of a mesh with normals, with the place on the surface and the unit normal there, and once for each face of one without.
+
+## Vertex colors
+
+`Mesh.VertexColors` gives each vertex a color, and a face fades from one corner's color to the next.
+
+```go
+tri := mesh.Mesh{
+	Vertices:     []geometry.Vector3{{X: -2, Y: -1}, {X: 2, Y: -1}, {Y: 2}},
+	Faces:        [][3]int{{0, 1, 2}},
+	VertexColors: []engine.Color{engine.RGB(255, 0, 0), engine.RGB(0, 255, 0), engine.RGB(0, 0, 255)},
+	DoubleSided:  true,
+}
+tri.Transform.Position = geometry.Vector3{Z: 6}
+tri.DrawShaded(fb, cam, mesh.Ambient{Level: 1}) // or DrawShadedPixels into a Canvas
+```
+
+- **A blend at every cell.** Each cell is drawn in the blend of its face's three corner colors, worked out like the blend of normals in smooth shading, with perspective, flat or smooth, in cells and in pixels. Brightness is still shown by the character or the shade. The blend is linear in the colors' red, green and blue, with no gamma, and a face cut by the near plane blends as the whole face would.
+- **With face colors.** A face that has its own color (`FaceColors`, from a model's material) is tinted by the vertex colors: each channel is multiplied, so white leaves it as it is and gray darkens it. A face without one is drawn in the vertex colors as they are, and `Material.Color` is only what a corner without a color takes. A corner with the zero `Color` is "none here" and takes what the face would be without vertex colors, and a default color reads as black, as `Shade` reads it. A face none of whose corners has a color is drawn as before.
+- **Limits.** Wireframes (`Draw`, `DrawDepth`) ignore vertex colors. A list that is not one color for each vertex is not used, and `Validate` says so. `Clone` copies it, and `Fit` and `SmoothNormals` keep it.
+- **From OBJ files.** A vertex line of the form `v x y z r g b`, exactly six numbers, gives the vertex a color; `LoadOBJ`, `LoadOBJLimit` and `LoadOBJFS` all read it. The numbers go from 0 to 1 and are clamped, so a tool that writes 0 to 255 gives white. Any other count (a `w` after the coordinates is one), or numbers that are not understood, gives none and never fails the load. A model with colors only on some vertices has the zero `Color` on the rest, and a vertex split for its normals keeps its color. Files that carried colors which `LoadOBJ` used to ignore now load with them.
+- **Cost.** A face with a colored corner asks for a color in every cell, which costs more than a flat color; a mesh without vertex colors draws the same cells and allocates nothing, but the shaded benchmarks take 1 to 4% longer, because `Mesh` is 24 bytes larger and is copied for every draw (the wireframe benchmark, whose code did not change, moved 1 to 2% in the same runs). Reading a six-number vertex line takes about 77 ns longer.
+- **See it:** the viewer's bundled octahedron has a color on each corner (`N` twice); `C` puts its colors aside for the palette and back.
 
 ## Wireframes and depth
 
@@ -297,7 +319,7 @@ Built to work in most terminals. The basics need only the alternate screen, curs
 
 ## Planned
 
-Ideas, not promises: colors for each vertex of a model, drawing images on the canvas.
+Ideas, not promises: drawing images on the canvas.
 
 ## Development
 

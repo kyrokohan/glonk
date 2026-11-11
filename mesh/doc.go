@@ -30,6 +30,12 @@
 // PNG) at the face's texture coordinates, one color for each triangle. [LoadOBJ] skips
 // materials.
 //
+// [Mesh.VertexColors] gives each vertex a color, and a face fades from one corner's color
+// to the next, blended at every cell with the same perspective-correct weights as smooth
+// shading. A vertex color tints the color of a face that has one of its own, each channel
+// multiplied, and is the color as it is where the face has none. [LoadOBJ] reads them from
+// vertex lines of the form "v x y z r g b".
+//
 // Yaw and Pitch turn a model the way they turn a [Camera]: positive Yaw swings the
 // front toward +x and positive Pitch tips it up.
 //
