@@ -36,8 +36,6 @@ func hold(keys ...engine.Key) *engine.Input {
 	return kb.Input()
 }
 
-func levelLines() []string { return strings.Split(strings.Trim(levelText, "\n"), "\n") }
-
 // overlapsSolid reports whether the player's box covers a solid cell, asking every cell it
 // could cover, which is independent of how Move finds the edge.
 func overlapsSolid(g *worldGame, box geometry.Rect) bool {
