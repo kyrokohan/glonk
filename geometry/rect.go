@@ -1,5 +1,7 @@
 package geometry
 
+import "math"
+
 // Rect is an axis-aligned rectangle: the points from Min up to, but not including, Max.
 // It is half-open, like the cells a sprite covers: one that starts at X=2 and is 3 wide
 // covers 2 up to 5, and one that starts at X=5 does not touch it. A Rect whose Max is not
@@ -72,4 +74,47 @@ func (r Rect) Intersect(o Rect) Rect {
 // Translate returns r moved by v.
 func (r Rect) Translate(v Vector2) Rect {
 	return Rect{Min: r.Min.Add(v), Max: r.Max.Add(v)}
+}
+
+// PushOutOf returns the smallest move that takes r out of o, along one axis: the one on
+// which r overlaps o the least, and the way that is shorter. When both ways, or both axes,
+// are equally short, it moves toward larger X, then toward larger Y, and prefers X to Y.
+// It is the zero vector if r and o do not overlap (touching is not overlapping) or if no
+// move that is a finite number would do, as when o is infinite on both axes. Apply it to
+// r's position to stand r against o, as against a wall or a paddle:
+//
+//	player.Position = player.Position.Add(player.Bounds().PushOutOf(wall))
+//
+// The two rectangles touch afterwards to within the rounding of the sums, so Overlaps may
+// still report a hair of overlap for numbers that are not exact, and does not for whole
+// numbers and halves. A mover that goes farther than its own size in one frame can skip
+// over a thin wall before this is asked; it does not look at where r has been.
+func (r Rect) PushOutOf(o Rect) Vector2 {
+	if !r.Overlaps(o) {
+		return Vector2{}
+	}
+
+	// How far r must go to clear o on each axis: back past o's near edge, or on past its
+	// far edge. The first is negative and the second positive, as r overlaps o.
+	left, right := o.Min.X-r.Max.X, o.Max.X-r.Min.X
+	up, down := o.Min.Y-r.Max.Y, o.Max.Y-r.Min.Y
+	dx, dy := right, down
+	if -left < right {
+		dx = left
+	}
+	if -up < down {
+		dy = up
+	}
+
+	move := Vector2{X: dx}
+	if math.Abs(dy) < math.Abs(dx) {
+		move = Vector2{Y: dy}
+	}
+	// Y is taken only when it is shorter than X, so a move that is infinite is along X, and
+	// then both axes are. There is no NaN: the rectangles overlap, so no edge is
+	// subtracted from one of the same infinity.
+	if math.IsInf(move.X, 0) {
+		return Vector2{}
+	}
+	return move
 }

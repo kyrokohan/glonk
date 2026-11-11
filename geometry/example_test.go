@@ -37,3 +37,17 @@ func ExampleRect_Overlaps() {
 	// true {{3 1} {4 3}}
 	// false {{0 0} {0 0}}
 }
+
+// PushOutOf says how far to move a box to stand it against another: the shortest way out.
+func ExampleRect_PushOutOf() {
+	wall := geometry.NewRect(10, 0, 2, 8) // a wall from x=10 to x=12
+	player := geometry.NewRect(8.5, 3, 2, 2)
+
+	push := player.PushOutOf(wall)
+	fmt.Println(push) // back the way it came, by what it went into the wall
+	player = player.Translate(push)
+	fmt.Println(player.Overlaps(wall), player.Max.X)
+	// Output:
+	// {-0.5 0}
+	// false 10
+}
