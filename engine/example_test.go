@@ -84,6 +84,26 @@ func ExampleFrameBuffer_DrawText() {
 	// └──────────────┘
 }
 
+// TextWidth says how many cells a string fills, so that it can be centered.
+func ExampleTextWidth() {
+	fb, err := engine.NewFrameBuffer(16, 3)
+	if err != nil {
+		panic(err)
+	}
+
+	title := "cafe\u0301" // five runes, but the combining accent has no cell: four cells
+	fb.DrawBox(0, 0, fb.Width(), fb.Height(), engine.Color{})
+	fb.DrawText((fb.Width()-engine.TextWidth(title))/2, 1, title, engine.Color{})
+
+	fmt.Println(engine.TextWidth(title))
+	fmt.Println(fb)
+	// Output:
+	// 4
+	// ┌──────────────┐
+	// │     cafe     │
+	// └──────────────┘
+}
+
 // A Keyboard stands in for the terminal's keyboard in a test: hand its Input to Update.
 func ExampleKeyboard() {
 	kb := engine.NewKeyboard()

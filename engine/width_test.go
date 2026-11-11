@@ -74,6 +74,36 @@ func TestRuneWidth(t *testing.T) {
 	}
 }
 
+func TestTextWidth(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		want int
+	}{
+		{"empty", "", 0},
+		{"ascii", "hello", 5},
+		{"spaces count", "a b", 3},
+		{"accent as a combining mark takes no cell", "e\u0301", 1},
+		{"precomposed accent takes one", "é", 1},
+		{"zero width joiner takes none", "a\u200db", 2},
+		{"only combining marks", "\u0301\u200b", 0},
+		{"wide character is one cell, drawn as a question mark", "中a", 2},
+		{"emoji is one cell", "😀", 1},
+		{"control character is one cell", "a\tb\n", 4},
+		{"nul is one cell", "\x00", 1},
+		{"invalid utf-8 is one cell a byte", "\xff\xfe", 2},
+		{"box drawing", "┌─┐", 3},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := TextWidth(tt.text); got != tt.want {
+				t.Errorf("wanted TextWidth(%q) = %d, got %d", tt.text, tt.want, got)
+			}
+		})
+	}
+}
+
 func TestWideRangesAreOrderedAndExact(t *testing.T) {
 	for i, rg := range wideRanges {
 		if rg[0] > rg[1] {

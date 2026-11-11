@@ -149,6 +149,42 @@ func FuzzCSIParams(f *testing.F) {
 	})
 }
 
+// FuzzTextWidth checks that TextWidth is the number of cells DrawText fills: drawn on a
+// frame too wide to clip, the cells before TextWidth are all colored and the rest are blank.
+func FuzzTextWidth(f *testing.F) {
+	for _, s := range []string{"", "hello", "e\u0301", "a\u200db", "中a", "😀", "a\tb", "\x00", "\xff\xfe", "┌─┐", "\u0301"} {
+		f.Add(s)
+	}
+
+	f.Fuzz(func(t *testing.T, text string) {
+		cells := utf8.RuneCountInString(text)
+		if cells > 4096 {
+			t.Skip("longer than a screen")
+		}
+		fb, err := NewFrameBuffer(cells+1, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		color := Palette(9)
+
+		fb.DrawText(0, 0, text, color)
+
+		width := TextWidth(text)
+		if width < 0 || width > cells {
+			t.Fatalf("wanted TextWidth(%q) between 0 and %d, got %d", text, cells, width)
+		}
+		for x := range fb.Width() {
+			got := fb.At(x, 0)
+			if x < width && got.Foreground != color {
+				t.Fatalf("wanted cell %d of %q drawn in the color, got %+v (TextWidth %d)", x, text, got, width)
+			}
+			if x >= width && got != BlankCell {
+				t.Fatalf("wanted cell %d of %q blank, got %+v (TextWidth %d)", x, text, got, width)
+			}
+		}
+	})
+}
+
 func finite(vs ...float64) bool {
 	for _, v := range vs {
 		if math.IsNaN(v) || math.IsInf(v, 0) {

@@ -36,6 +36,23 @@ func runeWidth(r rune) int {
 	return -1
 }
 
+// TextWidth returns how many cells [FrameBuffer.DrawText] fills with text, not counting
+// any it would clip: one for each character except combining marks and joiners, which have
+// no cell of their own. A wide character (CJK, most emoji) is one cell, drawn as '?', and
+// so is a control character, as DrawText draws them. Use it to center or right-align text,
+// or to cut it to a width:
+//
+//	fb.DrawText(x+(w-engine.TextWidth(title))/2, y, title, color)
+func TextWidth(text string) int {
+	n := 0
+	for _, r := range text {
+		if runeWidth(r) != 0 {
+			n++
+		}
+	}
+	return n
+}
+
 // safeRune returns what to send the terminal for a cell holding r: r itself when it
 // is a printable character one column wide, a space for NUL (the zero Cell, so that
 // Cell{Background: c} is a coloured blank), and replacement for everything else.
