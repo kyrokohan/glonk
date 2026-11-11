@@ -47,10 +47,10 @@ func FuzzDraw(f *testing.F) {
 	f.Add(-3, -1, 6, 3, 0.25, "Status", uint8(2), ' ')
 	f.Add(2, 1, 7, 3, 1.0, "abc", uint8(0), '#')
 	f.Add(0, 0, math.MaxInt, math.MaxInt, 0.5, "Title", uint8(1), '.')
-	f.Add(math.MinInt, math.MinInt, math.MaxInt, math.MaxInt, math.NaN(), "é", uint8(2), rune(0))
+	f.Add(math.MinInt, math.MinInt, math.MaxInt, math.MaxInt, math.NaN(), "e\u0301", uint8(2), rune(0))
 	f.Add(math.MaxInt, math.MaxInt, math.MaxInt, math.MaxInt, math.Inf(1), "中", uint8(9), rune(0x1b))
 	f.Add(-1, -1, 2, 2, -1.0, "", uint8(1), '.')
-	f.Add(11, 4, math.MaxInt/2, math.MaxInt/2, 1-1e-16, "\xff‍", uint8(2), '.')
+	f.Add(11, 4, math.MaxInt/2, math.MaxInt/2, 1-1e-16, "\xff\u200d", uint8(2), '.')
 
 	f.Fuzz(func(t *testing.T, x, y, w, h int, value float64, text string, align uint8, fill rune) {
 		where := fmt.Sprintf("x=%d y=%d w=%d h=%d", x, y, w, h)
@@ -96,7 +96,7 @@ func FuzzMenu(f *testing.F) {
 	f.Add("only", -9, 0, 0, 6, 1, uint8(1))
 	f.Add("one\ntwo", math.MaxInt, math.MaxInt, math.MaxInt, math.MaxInt, math.MaxInt, uint8(3))
 	f.Add("one\ntwo", math.MinInt, math.MinInt, math.MinInt, math.MaxInt, math.MaxInt, uint8(6))
-	f.Add("x́\n中\n\xff", 2, 3, 2, 4, 5, uint8(2))
+	f.Add("x\u0301\n中\n\xff", 2, 3, 2, 4, 5, uint8(2))
 
 	f.Fuzz(func(t *testing.T, text string, selected, x, y, w, h int, keys uint8) {
 		var items []string
