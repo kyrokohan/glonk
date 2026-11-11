@@ -206,3 +206,92 @@ func (m *Map) Draw(fb *engine.FrameBuffer, view geometry.Rect) {
 		}
 	}
 }
+
+// Move moves box by delta, stopping at solid tiles, and returns where it ended up and whether
+// it was stopped along X and along Y. It moves along X first, as far as it can, and then
+// along Y from there, so a box that goes into a wall at an angle slides along it instead of
+// sticking. It looks at every tile along the way, so a long move cannot carry the box through
+// a thin wall, and it stops with its edge exactly on the edge of the tile, a whole number,
+// so there is no gap to round away and the box rests against the wall the same at any frame
+// rate. It stops at the edge of the map, which is solid.
+//
+//	moved, hitX, hitY := level.Move(player.Bounds(), geometry.Vector2{X: dx, Y: dy})
+//	player.Position = moved.Min
+//
+// Only tiles the box is moving into stop it. One that it already overlaps does not, so a
+// box that starts inside a solid tile can move on, and one that starts outside the map is
+// outside a wall on every side and cannot move. An empty box or one with a NaN or infinite
+// number, and a delta with one, is not moved.
+func (m *Map) Move(box geometry.Rect, delta geometry.Vector2) (moved geometry.Rect, hitX, hitY bool) {
+	if box.Empty() || !finite(box.Min.X, box.Min.Y, box.Max.X, box.Max.Y, delta.X, delta.Y) {
+		return box, false, false
+	}
+
+	// Along X, the tiles in the rows the box covers, then along Y, the tiles in the columns
+	// it then covers: the same walk with the axes swapped.
+	moved.Min.X, moved.Max.X, hitX = m.slide(box.Min.X, box.Max.X, delta.X, box.Min.Y, box.Max.Y, false)
+	moved.Min.Y, moved.Max.Y, hitY = m.slide(box.Min.Y, box.Max.Y, delta.Y, moved.Min.X, moved.Max.X, true)
+	return moved, hitX, hitY
+}
+
+// finite reports whether none of vs is NaN or infinite.
+func finite(vs ...float64) bool {
+	for _, v := range vs {
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			return false
+		}
+	}
+	return true
+}
+
+// slide moves the span from lo to hi by d along one axis, through the tiles in the span from
+// crossLo to crossHi on the other axis, and stops it at the first solid tile. With down set,
+// the axes are swapped: the span is along Y and the cross span along X. It returns the span
+// where it ends and whether it was stopped. A span that goes nowhere, with d of 0, has no
+// cells ahead and is not stopped.
+func (m *Map) slide(lo, hi, d, crossLo, crossHi float64, down bool) (newLo, newHi float64, stopped bool) {
+	// The tiles across the path: the cross span's first and last cell. Outside the map is
+	// solid, so a span that reaches past it has solid tiles at every step.
+	first, last := math.Floor(crossLo), math.Ceil(crossHi)-1
+	crossOutside := first < 0 || last >= m.size(!down)
+	// The sides of the map along the path, in cells.
+	end := m.size(down)
+
+	// blocked reports whether the cell c along the path is solid somewhere across it.
+	blocked := func(c float64) bool {
+		if c < 0 || c >= end || crossOutside {
+			return true
+		}
+		for x := int(first); x <= int(last); x++ {
+			if down && m.Solid(x, int(c)) || !down && m.Solid(int(c), x) {
+				return true
+			}
+		}
+		return false
+	}
+
+	if d > 0 {
+		// The cells whose near edge the span can reach: from the first at or past its far
+		// edge, to the last that starts before where it would end.
+		for c, stop := math.Ceil(hi), math.Ceil(hi+d)-1; c <= stop; c++ {
+			if blocked(c) {
+				return lo + (c - hi), c, true // its far edge on the cell's near edge
+			}
+		}
+		return lo + d, hi + d, false
+	}
+	for c, stop := math.Floor(lo)-1, math.Floor(lo+d); c >= stop; c-- {
+		if blocked(c) {
+			return c + 1, hi + (c + 1 - lo), true // its near edge on the cell's far edge
+		}
+	}
+	return lo + d, hi + d, false
+}
+
+// size returns the number of columns, or of rows if rows is set, as a float.
+func (m *Map) size(rows bool) float64 {
+	if rows {
+		return float64(m.Height())
+	}
+	return float64(m.Width())
+}
