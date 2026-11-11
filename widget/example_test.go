@@ -44,6 +44,34 @@ func ExamplePanel() {
 	// └──────────────┘
 }
 
+// A menu is moved and chosen from Update, with the keyboard, and drawn from Draw. A Keyboard
+// stands in for the terminal here.
+func ExampleMenu() {
+	menu := widget.Menu{Items: []string{"Resume", "Options", "Quit"}}
+	kb := engine.NewKeyboard()
+
+	kb.Press(engine.KeyDown)
+	menu.Update(kb.Input())
+	kb.EndFrame()
+
+	kb.Press(engine.KeyEnter)
+	choice, chosen := menu.Update(kb.Input())
+	kb.EndFrame()
+	fmt.Println(choice, chosen, menu.Items[choice])
+
+	fb, err := engine.NewFrameBuffer(10, 3)
+	if err != nil {
+		panic(err)
+	}
+	menu.Draw(fb, 1, 0, 8, 3) // the selected row is drawn in reverse, which a String does not show
+	fmt.Println(fb)
+	// Output:
+	// 1 true Options
+	//  Resume
+	//  Options
+	//  Quit
+}
+
 // A bar is filled from the left, by the value, and its cells can be anything.
 func ExampleBar() {
 	fb, err := engine.NewFrameBuffer(10, 3)

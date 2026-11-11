@@ -1,5 +1,5 @@
-// Package widget draws the pieces of a heads-up display in screen space: a label, a panel and
-// a bar.
+// Package widget draws the pieces of a heads-up display and a menu in screen space: a label,
+// a panel, a bar and a menu.
 //
 // A widget is a value with exported fields, drawn into an [engine.FrameBuffer] by its Draw
 // method at a position in cells, with the origin at the top left, as for
@@ -18,6 +18,20 @@
 //
 // A style is an [engine.Cell] whose Foreground, Background and Attrs are used and whose
 // Character is not. The zero Cell is the terminal's default colors and plain text.
+//
+// # Menu
+//
+// A [Menu] is the one widget that reacts to the keyboard. Call [Menu.Update] from the game's
+// Update with its [engine.Input], and [Menu.Draw] from the game's Draw. Up and Down move the
+// selection, wrapping around at the ends, and Enter chooses; Update returns the index of the
+// item chosen. Escape and every other key are left to the game, so a game can open the menu
+// with Escape and close it again. A list longer than its rows scrolls to keep the selected
+// item in view. To test a game that has a menu, drive it with an [engine.Keyboard].
+//
+//	choice, chosen := g.menu.Update(in)
+//	if chosen && choice == quitItem {
+//		return engine.ErrQuit
+//	}
 //
 // # Text
 //
