@@ -51,6 +51,29 @@
 // An animation takes the place of the sprite's Frame, which takes the place of its Cell.
 // One with no frame to show draws nothing; it does not fall back.
 //
+// # Collision
+//
+// [Sprite.Bounds] is the box a sprite covers, a [geometry.Rect] from its Position, as it is
+// and not floored, as wide and tall as what it draws: the animation's current frame, else
+// the frame, else a 1 by 1 cell. The whole frame counts, holes included. [Sprite.Overlaps]
+// asks whether two boxes share area, and [Layer.Hits] lists the sprites in a layer that
+// overlap a box, in draw order, [Layer.All] all of them. Sprites that only touch do not
+// collide, and a sprite with nothing to draw, or at a NaN or infinite position, collides
+// with nothing.
+//
+//	for enemy := range enemies.Hits(player.Bounds()) {
+//		hurt(enemy)
+//	}
+//	player.Position = player.Position.Add(player.Bounds().PushOutOf(wall))
+//
+// Two habits keep a pushed sprite looking right. A push leaves it against the wall to within
+// rounding, which can be a hair short of a whole cell, and a position is drawn in the cell it
+// is floored to, so round the position after pushing (to a millionth, say) or it can rest a
+// cell short. And a push knows how deep a sprite is in a wall, not where it came from, so
+// one that moves farther than its own size in a frame can come out the other side: cap the
+// time one frame moves it. The layer must not change while Hits or All is running; collect
+// what to Remove first.
+//
 // # Layers
 //
 // A [Layer] draws its sprites in the order they were added, so later ones cover earlier

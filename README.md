@@ -40,7 +40,7 @@ go mod tidy
 
 ```
 make run                                      # bounce2d: a ball in a box that fills the window (Esc quits)
-make run EXAMPLE=./examples/sprites          # sprites: a ship you steer, a walking figure and a blinking ghost on a colored floor
+make run EXAMPLE=./examples/sprites          # sprites: a ship you steer around a rock, a walking figure and a blinking ghost on a colored floor
 make run EXAMPLE=./examples/cube3d            # cube3d: walk around a floor with six shaded cubes and a wireframe one
 make run EXAMPLE=./examples/viewer            # viewer: look at the bundled OBJ models and shapes
 make run EXAMPLE=./examples/viewer ARGS=my.obj  # viewer: look at your own model (its .mtl beside it gives it colors)
@@ -210,7 +210,30 @@ layer.Draw(fb)
 - **The position is the top left of the frame**, and a frame that runs off an edge is cut off cell by cell.
 - **Frames are shared by pointer.** Two sprites with one `Frame` see each other's `Set`; `Clone` makes a copy.
 
-`examples/sprites` has a ship, a walking figure and a ghost, on a sea and a beach.
+`examples/sprites` has a ship, a walking figure and a ghost, on a sea and a beach, and a rock the ship cannot sail through.
+
+## Collision
+
+A sprite's box is where it is, as wide and tall as what it draws, and `geometry.Rect` says what two boxes share.
+
+```go
+wall := geometry.NewRect(30, 0, 2, 20)
+
+// in Update, after moving the player:
+if push := player.Bounds().PushOutOf(wall); push != (geometry.Vector2{}) {
+	player.Position = player.Position.Add(push)
+}
+for enemy := range enemies.Hits(player.Bounds()) {
+	hurt(enemy)
+}
+```
+
+- **Boxes.** `Sprite.Bounds()` is a `Rect` from `Position`, as it is and not floored, by the size of the animation's current frame, else the frame, else 1 by 1. The whole frame counts, holes included, so a ghost with empty corners still touches at its corners. A sprite with nothing to draw, or at a NaN or infinite position, has an empty box and touches nothing.
+- **Half-open.** A `Rect` covers `Min` up to but not including `Max`, like the cells a sprite covers: a sprite at X=2 that is 3 wide covers 2 up to 5, and one at X=5 does not touch it.
+- **Asking.** `Rect.Overlaps`, `Rect.Intersect`, `Rect.Contains`, `Sprite.Overlaps` and `Layer.Hits(box)`, which lists the sprites whose boxes overlap one, in draw order and allocating nothing (1,000 sprites take about 4 microseconds). A sprite in the layer hits its own box, so skip it by comparing pointers; `Layer.All()` ranges over the whole layer. The layer must not change while either runs.
+- **Pushing out.** `Rect.PushOutOf(wall)` is the smallest move, along one axis, that takes a box out of another: the axis on which they overlap least and the way that is shorter, so steering into a wall at an angle slides along it. It is the zero vector when they do not overlap.
+- **Two habits.** A push leaves a sprite against the wall to within rounding, which can be a hair short of a whole cell, and drawing floors the position, so round it after pushing (to a millionth) or it can rest a cell short. And a push does not know where the sprite came from, so one that moves farther than its own size in a frame can come out the other side: cap the time of the step. `examples/sprites` does both.
+- **Not included.** No pixel-perfect or swept collision, no collision layers: boxes only, and you keep a separate `Layer` or list for each kind of thing.
 
 ## Quickstart
 
@@ -292,9 +315,9 @@ To test a whole run (start-up, key bytes in, frames out), give `Config.Input` an
 | Package | Purpose |
 |---|---|
 | `engine` | The loop, `FrameBuffer`, pixel `Canvas`, drawing helpers, keyboard `Input` |
-| `geometry` | 2D and 3D vector math |
+| `geometry` | 2D and 3D vector math, and `Rect` for boxes and collision |
 | `mesh` | 3D meshes (wireframe and shaded), shapes, OBJ loading, lights, and the perspective `Camera` |
-| `sprite` | Sprites (a `Cell`, a text-art `Frame` or an `Animation` at a position, optionally see-through) drawn in layers |
+| `sprite` | Sprites (a `Cell`, a text-art `Frame` or an `Animation` at a position, optionally see-through) drawn in layers, with bounds and collision queries |
 
 ## Compatibility and limits
 

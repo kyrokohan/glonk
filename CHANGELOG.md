@@ -4,6 +4,14 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+### Added
+
+- `geometry.Rect`, an axis-aligned rectangle of the points from `Min` up to but not including `Max`, half-open like the cells a sprite covers, so rectangles that only touch do not overlap. `NewRect`, `Width`, `Height`, `Size`, `Empty`, `Contains`, `Overlaps`, `Intersect` and `Translate`. A rectangle with no area, turned inside out or with a NaN in it is empty and overlaps nothing.
+- `Rect.PushOutOf(o)`: the smallest move, along one axis, that takes a rectangle out of another, for walls and paddles. It picks the axis on which they overlap least and the way that is shorter (ties toward larger X, then Y, and X before Y), and is the zero vector when they do not overlap or when no finite move would do. It does not look at where the mover came from, so one that moves farther than its own size in a frame can come out the far side of a thin wall; after a push the boxes touch to within rounding, so round a pushed position (to a millionth, say) or it can be drawn a cell short.
+- `Sprite.Bounds` is the box a sprite covers, from its `Position` as it is (not floored) by the size of the animation's current frame, else the frame, else 1 by 1, holes included; a sprite with nothing to draw, or at a NaN or infinite position, has an empty box. `Sprite.Overlaps` asks whether two boxes share area.
+- `Layer.All` and `Layer.Hits(r)` range over the sprites of a layer, and over those whose boxes overlap a `Rect`, in draw order. They allocate nothing (1,000 sprites take about 4 microseconds to ask), the layer must not change while they run, and `Layer.Draw` is as fast as before.
+- `examples/sprites` has a rock in the sea. The ship is pushed out of it, so steering into it stops the ship against its face and steering in at an angle slides it along; the ghost floats through. The ship's step is capped at 0.05 s so that a long frame cannot carry it through the rock.
+
 ## [0.4.0] - 2026-11-10
 
 On top of 0.3.0 this release colors models: from the pictures their materials name, and from colors on their vertices. Nothing was removed or renamed.
