@@ -4,6 +4,10 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-11
+
+On top of 0.4.0 this release adds 2D collision, a tile map and a camera that follows the player. Nothing was removed, renamed or changed.
+
 ### Added
 
 - A new package, `tilemap`: a grid of tiles for a game to be played on. `Tile` is an `engine.Cell` and whether it is `Solid`. `FromLines(legend, lines...)` makes a `Map` from text art, `New(w, h, fill)` from one tile, and `Width`, `Height`, `Bounds`, `At`, `Set` and `Solid` read and change it, safe outside the map and on a nil one. Outside the map is solid: the edge of the world is a wall. A map holds up to 4,194,304 cells and 65,535 kinds of tile, at two bytes a cell, and a bigger one is empty.
@@ -125,7 +129,8 @@ The first release. The API is pre-1.0 and may still change. The README lists the
 - Three example programs (`bounce2d`, `cube3d` and a model `viewer`), runnable examples in the package documentation, fuzz tests for the parsers, rasterizers and clipping, and a test that keeps the documentation complete.
 - Continuous integration (format, vet and race tests on Linux and macOS for Go 1.26 and 1.27, cross-compilation, 32-bit tests), Dependabot, a security policy and contributing notes.
 
-[Unreleased]: https://github.com/kyrokohan/glonk/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/kyrokohan/glonk/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/kyrokohan/glonk/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/kyrokohan/glonk/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/kyrokohan/glonk/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/kyrokohan/glonk/compare/v0.1.0...v0.2.0

@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-glonk is pre-1.0. Only the latest release (v0.4.x) and the latest commit on `main` are supported. A fix lands on `main` first and ships in a new patch release; older releases are not patched.
+glonk is pre-1.0. Only the latest release (v0.5.x) and the latest commit on `main` are supported. A fix lands on `main` first and ships in a new patch release; older releases are not patched.
 
 ## Reporting a vulnerability
 
