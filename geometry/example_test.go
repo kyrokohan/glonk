@@ -51,3 +51,17 @@ func ExampleRect_PushOutOf() {
 	// {-0.5 0}
 	// false 10
 }
+
+// A camera is the rectangle of the screen, centered on the player and kept inside the level.
+func ExampleRect_Within() {
+	screen := geometry.NewRect(0, 0, 80, 24)
+	level := geometry.NewRect(0, 0, 200, 60)
+
+	for _, player := range []geometry.Vector2{{X: 100, Y: 30}, {X: 5, Y: 5}} {
+		view := screen.CenterOn(player).Within(level)
+		fmt.Println(view.Min)
+	}
+	// Output:
+	// {60 18}
+	// {0 0}
+}

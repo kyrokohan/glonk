@@ -419,3 +419,237 @@ func FuzzPushOutOf(f *testing.F) {
 		}
 	})
 }
+
+func TestCenter(t *testing.T) {
+	tests := []struct {
+		name string
+		r    Rect
+		want Vector2
+	}{
+		{"unit", NewRect(0, 0, 1, 1), Vector2{X: 0.5, Y: 0.5}},
+		{"offset and odd", NewRect(3, -4, 5, 3), Vector2{X: 5.5, Y: -2.5}},
+		{"negative", NewRect(-10, -10, 4, 4), Vector2{X: -8, Y: -8}},
+		{"a rectangle with no points still has its corners' middle", NewRect(2, 2, 0, 0), Vector2{X: 2, Y: 2}},
+		{"turned inside out", Rect{Min: Vector2{X: 4, Y: 4}, Max: Vector2{X: 2, Y: 2}}, Vector2{X: 3, Y: 3}},
+		{"near the largest float", Rect{Min: Vector2{X: 1.7e308, Y: -1.7e308}, Max: Vector2{X: 1.7e308, Y: 1.7e308}}, Vector2{X: 1.7e308}},
+	}
+	for _, tt := range tests {
+		if got := tt.r.Center(); got != tt.want {
+			t.Errorf("%s: wanted %v, got %v", tt.name, tt.want, got)
+		}
+	}
+	if c := (Rect{Min: Vector2{X: math.NaN()}, Max: Vector2{X: 1, Y: 1}}).Center(); !math.IsNaN(c.X) {
+		t.Errorf("wanted a NaN to show in the center, got %v", c)
+	}
+}
+
+func TestCenterOn(t *testing.T) {
+	nan, inf := math.NaN(), math.Inf(1)
+	screen := NewRect(0, 0, 80, 24)
+	tests := []struct {
+		name string
+		r    Rect
+		p    Vector2
+		want Rect
+	}{
+		{"even size", screen, Vector2{X: 100, Y: 50}, NewRect(60, 38, 80, 24)},
+		{"odd size", NewRect(0, 0, 5, 3), Vector2{X: 10, Y: 10}, NewRect(7.5, 8.5, 5, 3)},
+		{"to the origin", NewRect(7, 7, 4, 2), Vector2{}, NewRect(-2, -1, 4, 2)},
+		{"already there", NewRect(8, 9, 4, 2), Vector2{X: 10, Y: 10}, NewRect(8, 9, 4, 2)},
+		{"far away", screen, Vector2{X: -1e9, Y: 1e9}, NewRect(-1e9-40, 1e9-12, 80, 24)},
+		{"no points: a point at p", NewRect(1, 1, 0, 0), Vector2{X: 5, Y: 6}, NewRect(5, 6, 0, 0)},
+		{"p is NaN", screen, Vector2{X: nan}, screen},
+		{"p is infinite", screen, Vector2{Y: inf}, screen},
+		{"the rectangle has a NaN", Rect{Min: Vector2{X: nan}, Max: Vector2{X: 4, Y: 4}}, Vector2{X: 5, Y: 5}, Rect{Min: Vector2{X: nan}, Max: Vector2{X: 4, Y: 4}}},
+	}
+	for _, tt := range tests {
+		got := tt.r.CenterOn(tt.p)
+		if math.IsNaN(tt.r.Min.X) {
+			if !math.IsNaN(got.Min.X) || got.Max != tt.want.Max {
+				t.Errorf("%s: wanted it returned as it was, got %v", tt.name, got)
+			}
+			continue
+		}
+		if got != tt.want {
+			t.Errorf("%s: wanted %v, got %v", tt.name, tt.want, got)
+		}
+	}
+}
+
+func TestWithin(t *testing.T) {
+	nan, inf := math.NaN(), math.Inf(1)
+	level := NewRect(0, 0, 200, 60)
+	view := func(x, y float64) Rect { return NewRect(x, y, 80, 24) }
+	tests := []struct {
+		name         string
+		r, bounds    Rect
+		want         Rect
+		wantUnmoved  bool
+		wantNaNInput bool
+	}{
+		{"inside", view(50, 20), level, view(50, 20), true, false},
+		{"touching the edges", view(120, 36), level, view(120, 36), true, false},
+		{"past the left", view(-30, 20), level, view(0, 20), false, false},
+		{"past the right", view(150, 20), level, view(120, 20), false, false},
+		{"past the top", view(50, -7), level, view(50, 0), false, false},
+		{"past the bottom", view(50, 50), level, view(50, 36), false, false},
+		{"past a corner", view(-5, 99), level, view(0, 36), false, false},
+		{"far past", view(1e9, -1e9), level, view(120, 0), false, false},
+		{"as big as the level", NewRect(30, -5, 200, 60), level, level, false, false},
+		{"wider than the level, centered on that axis only", NewRect(-17, 50, 300, 24), level, NewRect(-50, 36, 300, 24), false, false},
+		{"taller than the level", NewRect(50, 20, 80, 100), level, NewRect(50, -20, 80, 100), false, false},
+		{"a level with an offset", view(3, 3), NewRect(10, 10, 100, 40), view(10, 10), false, false},
+		{"empty rectangle", NewRect(500, 500, 0, 0), level, NewRect(500, 500, 0, 0), true, false},
+		{"empty bounds", view(-30, 20), NewRect(0, 0, 0, 10), view(-30, 20), true, false},
+		{"unbounded bounds", view(-30, 20), Rect{Min: Vector2{X: -inf, Y: -inf}, Max: Vector2{X: inf, Y: inf}}, view(-30, 20), true, false},
+		{"bounds with a NaN", view(-30, 20), Rect{Min: Vector2{X: nan}, Max: Vector2{X: 5, Y: 5}}, view(-30, 20), true, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.r.Within(tt.bounds)
+			if got != tt.want {
+				t.Errorf("%v.Within(%v): wanted %v, got %v", tt.r, tt.bounds, tt.want, got)
+			}
+			if tt.wantUnmoved && got != tt.r {
+				t.Errorf("wanted the rectangle returned as it was, got %v", got)
+			}
+		})
+	}
+}
+
+// referenceWithin moves r inside bounds by trying every shift in steps of a quarter, nearest
+// first, on each axis in turn. Where r is larger it takes the shift that lines up the middles.
+// It uses no formula of Within's.
+func referenceWithin(r, bounds Rect) Rect {
+	shiftAxis := func(lo, hi, blo, bhi float64) float64 {
+		inside := func(d float64) bool { return lo+d >= blo && hi+d <= bhi }
+		if hi-lo > bhi-blo {
+			for n := 0.0; n < 100; n += 0.25 {
+				for _, d := range []float64{n, -n} {
+					if lo+d+(hi-lo)/2 == blo+(bhi-blo)/2 {
+						return d
+					}
+				}
+			}
+			return 0
+		}
+		for n := 0.0; n < 100; n += 0.25 {
+			for _, d := range []float64{n, -n} {
+				if inside(d) {
+					return d
+				}
+			}
+		}
+		return 0
+	}
+	return r.Translate(Vector2{X: shiftAxis(r.Min.X, r.Max.X, bounds.Min.X, bounds.Max.X), Y: shiftAxis(r.Min.Y, r.Max.Y, bounds.Min.Y, bounds.Max.Y)})
+}
+
+func TestWithinMatchesTryingEveryShift(t *testing.T) {
+	rng := rand.New(rand.NewPCG(61, 62))
+	var moved, centered, unmoved int
+	for range 20_000 {
+		bounds := NewRect(float64(rng.IntN(9)-4)/2, float64(rng.IntN(9)-4)/2, float64(3+rng.IntN(14))/2, float64(3+rng.IntN(14))/2)
+		r := NewRect(float64(rng.IntN(25)-12)/2, float64(rng.IntN(25)-12)/2, float64(1+rng.IntN(8))/2, float64(1+rng.IntN(8))/2)
+
+		want, got := referenceWithin(r, bounds), r.Within(bounds)
+		if got != want {
+			t.Fatalf("%v.Within(%v): trying every shift says %v, got %v", r, bounds, want, got)
+		}
+		if got.Size() != r.Size() {
+			t.Fatalf("wanted the size kept, %v became %v", r.Size(), got.Size())
+		}
+		switch {
+		case r.Width() > bounds.Width() || r.Height() > bounds.Height():
+			centered++
+		case got == r:
+			unmoved++
+		default:
+			moved++
+			if got.Min.X < bounds.Min.X || got.Max.X > bounds.Max.X || got.Min.Y < bounds.Min.Y || got.Max.Y > bounds.Max.Y {
+				t.Fatalf("wanted %v inside %v", got, bounds)
+			}
+		}
+	}
+	// Guard: moved, centered and unmoved cases all turn up often.
+	if moved < 2_000 || centered < 2_000 || unmoved < 500 {
+		t.Errorf("wanted at least 2000 moved, 2000 centered and 500 unmoved, got %d, %d and %d", moved, centered, unmoved)
+	}
+}
+
+func TestCenterOnThenWithinIsACamera(t *testing.T) {
+	screen := NewRect(0, 0, 80, 24)
+	level := NewRect(0, 0, 200, 60)
+	for _, tt := range []struct {
+		player Vector2
+		want   Rect
+	}{
+		{Vector2{X: 100, Y: 30}, NewRect(60, 18, 80, 24)},   // in the middle: centered on the player
+		{Vector2{X: 5, Y: 5}, NewRect(0, 0, 80, 24)},        // in a corner: held at the level's corner
+		{Vector2{X: 199, Y: 59}, NewRect(120, 36, 80, 24)},  // in the far corner
+		{Vector2{X: 100, Y: 3}, NewRect(60, 0, 80, 24)},     // by the top edge: only that axis held
+		{Vector2{X: 1e6, Y: 1e6}, NewRect(120, 36, 80, 24)}, // outside the level
+		{Vector2{X: -1e6, Y: -1e6}, NewRect(0, 0, 80, 24)},
+	} {
+		if got := screen.CenterOn(tt.player).Within(level); got != tt.want {
+			t.Errorf("player at %v: wanted the view %v, got %v", tt.player, tt.want, got)
+		}
+	}
+}
+
+func FuzzCenterOnAndWithin(f *testing.F) {
+	nan, inf := math.NaN(), math.Inf(1)
+	f.Add(0.0, 0.0, 80.0, 24.0, 40.0, 12.0, 0.0, 0.0, 200.0, 60.0)
+	f.Add(-30.0, 20.0, 50.0, 44.0, 0.0, 0.0, 0.0, 0.0, 200.0, 60.0)
+	f.Add(0.0, 0.0, 300.0, 100.0, 5.0, 5.0, 0.0, 0.0, 200.0, 60.0)
+	f.Add(nan, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0)
+	f.Add(0.0, 0.0, 1.0, 1.0, inf, 0.0, 0.0, 0.0, 1.0, 1.0)
+	f.Add(-inf, -inf, inf, inf, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0)
+	f.Add(1e308, 1e308, 1.7e308, 1.7e308, 0.0, 0.0, -1.7e308, -1.7e308, 1.7e308, 1.7e308)
+	f.Add(3.0, 3.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 5.0, 5.0)
+
+	f.Fuzz(func(t *testing.T, ax0, ay0, ax1, ay1, px, py, bx0, by0, bx1, by1 float64) {
+		r := Rect{Min: Vector2{X: ax0, Y: ay0}, Max: Vector2{X: ax1, Y: ay1}}
+		bounds := Rect{Min: Vector2{X: bx0, Y: by0}, Max: Vector2{X: bx1, Y: by1}}
+		p := Vector2{X: px, Y: py}
+
+		_ = r.Center()
+		c := r.CenterOn(p)
+		w := r.Within(bounds)
+
+		if r.Empty() || bounds.Empty() {
+			if !sameBits(w, r) {
+				t.Fatalf("wanted %v returned as it was for bounds %v, got %v", r, bounds, w)
+			}
+			return
+		}
+		// Finite, sensible numbers: the size is kept, and it fits inside when it can.
+		scale := max(1, math.Abs(r.Min.X), math.Abs(r.Max.X), math.Abs(r.Min.Y), math.Abs(r.Max.Y),
+			math.Abs(bounds.Min.X), math.Abs(bounds.Max.X), math.Abs(bounds.Min.Y), math.Abs(bounds.Max.Y))
+		if scale > 1e300 || math.IsInf(scale, 0) {
+			return
+		}
+		tol := 1e-9 * scale
+		if math.Abs(w.Width()-r.Width()) > tol || math.Abs(w.Height()-r.Height()) > tol {
+			t.Fatalf("wanted the size of %v kept by Within(%v), got %v", r, bounds, w)
+		}
+		if r.Width() <= bounds.Width() && (w.Min.X < bounds.Min.X-tol || w.Max.X > bounds.Max.X+tol) {
+			t.Fatalf("wanted %v inside %v on X, got %v", r, bounds, w)
+		}
+		if r.Height() <= bounds.Height() && (w.Min.Y < bounds.Min.Y-tol || w.Max.Y > bounds.Max.Y+tol) {
+			t.Fatalf("wanted %v inside %v on Y, got %v", r, bounds, w)
+		}
+		if finite2(p) && math.Abs(p.X) < 1e300 && math.Abs(p.Y) < 1e300 {
+			ctr := c.Center()
+			if math.Abs(ctr.X-p.X) > tol+1e-9*math.Abs(p.X) || math.Abs(ctr.Y-p.Y) > tol+1e-9*math.Abs(p.Y) {
+				t.Fatalf("wanted %v centered on %v, its center is %v", c, p, ctr)
+			}
+		}
+	})
+}
+
+// sameBits reports whether two rectangles are the same numbers, a NaN being the same as a NaN.
+func sameBits(a, b Rect) bool {
+	same := func(x, y float64) bool { return math.Float64bits(x) == math.Float64bits(y) }
+	return same(a.Min.X, b.Min.X) && same(a.Min.Y, b.Min.Y) && same(a.Max.X, b.Max.X) && same(a.Max.Y, b.Max.Y)
+}

@@ -118,3 +118,59 @@ func (r Rect) PushOutOf(o Rect) Vector2 {
 	}
 	return move
 }
+
+// Center returns the middle of r's corners. For a rectangle with no points that is still the
+// middle of its corners.
+func (r Rect) Center() Vector2 {
+	// Halved before adding, so that corners near the largest float do not overflow.
+	return Vector2{X: r.Min.X/2 + r.Max.X/2, Y: r.Min.Y/2 + r.Max.Y/2}
+}
+
+// CenterOn returns r moved so that its center is p, with the same size. A rectangle with a
+// NaN in it, or a p that is NaN or infinite, is returned as it is. Together with Within it
+// makes a camera: the rectangle of the screen, centered on a player and kept inside the level.
+//
+//	view := screen.CenterOn(player.Bounds().Center()).Within(level.Bounds())
+func (r Rect) CenterOn(p Vector2) Rect {
+	if !finite2(p) || math.IsNaN(r.Min.X+r.Min.Y+r.Max.X+r.Max.Y) {
+		return r
+	}
+	halfW, halfH := r.Width()/2, r.Height()/2
+	return Rect{
+		Min: Vector2{X: p.X - halfW, Y: p.Y - halfH},
+		Max: Vector2{X: p.X + halfW, Y: p.Y + halfH},
+	}
+}
+
+// Within returns r moved, not resized, to lie inside bounds, by the shortest move on each
+// axis. On an axis where r is larger than bounds it cannot, and is centered on bounds
+// instead. An empty r or empty bounds, or one with a NaN in it, gives r as it is.
+func (r Rect) Within(bounds Rect) Rect {
+	if r.Empty() || bounds.Empty() {
+		return r
+	}
+	r.Min.X, r.Max.X = fitWithin(r.Min.X, r.Max.X, bounds.Min.X, bounds.Max.X)
+	r.Min.Y, r.Max.Y = fitWithin(r.Min.Y, r.Max.Y, bounds.Min.Y, bounds.Max.Y)
+	return r
+}
+
+// fitWithin moves the span from lo to hi inside the span from blo to bhi, as Rect.Within
+// says. A span that is moved to an edge is put exactly on it.
+func fitWithin(lo, hi, blo, bhi float64) (float64, float64) {
+	width := hi - lo
+	switch {
+	case width > bhi-blo: // too big to fit: line up the middles
+		mid := blo/2 + bhi/2
+		return mid - width/2, mid + width/2
+	case lo < blo:
+		return blo, blo + width
+	case hi > bhi:
+		return bhi - width, bhi
+	}
+	return lo, hi
+}
+
+// finite2 reports whether neither coordinate of p is NaN or infinite.
+func finite2(p Vector2) bool {
+	return !math.IsNaN(p.X+p.Y) && !math.IsInf(p.X, 0) && !math.IsInf(p.Y, 0)
+}
