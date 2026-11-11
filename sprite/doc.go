@@ -71,8 +71,16 @@
 // is floored to, so round the position after pushing (to a millionth, say) or it can rest a
 // cell short. And a push knows how deep a sprite is in a wall, not where it came from, so
 // one that moves farther than its own size in a frame can come out the other side: cap the
-// time one frame moves it. The layer must not change while Hits or All is running; collect
-// what to Remove first.
+// time one frame moves it (package tilemap's Map.Move does both for a box moving through
+// tiles). The layer must not change while Hits or All is running; collect what to Remove first.
+//
+// # Views
+//
+// [Layer.DrawView] draws a layer as seen through a [geometry.Rect], the part of a world on
+// screen, so a level can be bigger than the window. Each sprite is drawn in the cell its
+// Position is floored to, minus the cell the view's corner is floored to. Both are floored in
+// the world first, so sprites and tiles never slip against each other as the view moves, and
+// the picture moves a whole cell at a time. Draw is DrawView at the origin.
 //
 // # Layers
 //

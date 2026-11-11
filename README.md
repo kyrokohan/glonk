@@ -41,6 +41,7 @@ go mod tidy
 ```
 make run                                      # bounce2d: a ball in a box that fills the window (Esc quits)
 make run EXAMPLE=./examples/sprites          # sprites: a ship you steer around a rock, a walking figure and a blinking ghost on a colored floor
+make run EXAMPLE=./examples/world            # world: a level bigger than the screen to walk around, with walls to slide along and coins to collect
 make run EXAMPLE=./examples/cube3d            # cube3d: walk around a floor with six shaded cubes and a wireframe one
 make run EXAMPLE=./examples/viewer            # viewer: look at the bundled OBJ models and shapes
 make run EXAMPLE=./examples/viewer ARGS=my.obj  # viewer: look at your own model (its .mtl beside it gives it colors)
@@ -210,7 +211,7 @@ layer.Draw(fb)
 - **The position is the top left of the frame**, and a frame that runs off an edge is cut off cell by cell.
 - **Frames are shared by pointer.** Two sprites with one `Frame` see each other's `Set`; `Clone` makes a copy.
 
-`examples/sprites` has a ship, a walking figure and a ghost, on a sea and a beach, and a rock the ship cannot sail through.
+`examples/sprites` has a ship, a walking figure and a ghost, on a sea and a beach, and a rock the ship cannot sail through. Against a grid of tiles, `tilemap.Map.Move` does the pushing for you; see Tile maps and a camera.
 
 ## Collision
 
@@ -234,6 +235,44 @@ for enemy := range enemies.Hits(player.Bounds()) {
 - **Pushing out.** `Rect.PushOutOf(wall)` is the smallest move, along one axis, that takes a box out of another: the axis on which they overlap least and the way that is shorter, so steering into a wall at an angle slides along it. It is the zero vector when they do not overlap.
 - **Two habits.** A push leaves a sprite against the wall to within rounding, which can be a hair short of a whole cell, and drawing floors the position, so round it after pushing (to a millionth) or it can rest a cell short. And a push does not know where the sprite came from, so one that moves farther than its own size in a frame can come out the other side: cap the time of the step. `examples/sprites` does both.
 - **Not included.** No pixel-perfect or swept collision, no collision layers: boxes only, and you keep a separate `Layer` or list for each kind of thing.
+
+## Tile maps and a camera
+
+A `tilemap.Map` is a level bigger than the screen: a grid of tiles, written as text art, drawn through a camera that is just a `Rect`, with walls that stop a moving box.
+
+```go
+level := tilemap.FromLines(map[rune]tilemap.Tile{
+	'#': {Cell: engine.Cell{Character: '#'}, Solid: true},
+	'.': {Cell: engine.Cell{Character: '.'}},
+},
+	"##########",
+	"#........#",
+	"##########",
+)
+
+// in Update, after reading the keys:
+moved, hitX, hitY := level.Move(player.Bounds(), geometry.Vector2{X: dx, Y: dy})
+player.Position = moved.Min
+
+// the camera: the screen's rectangle, centered on the player, kept inside the level
+screen := geometry.NewRect(0, 0, float64(fb.Width()), float64(fb.Height()))
+view := screen.CenterOn(player.Bounds().Center()).Within(level.Bounds())
+
+// in Draw:
+level.Draw(fb, view)
+sprites.DrawView(fb, view)
+// a score or a hint is text for the screen, drawn after, with no view
+```
+
+- **A level as text art.** `FromLines(legend, lines...)` makes a map from a legend of what each rune is; a rune that is not in it, a space included, is the empty tile. `New(w, h, fill)` makes a map of one tile, and `Set` changes a cell. A `Tile` is an `engine.Cell` and whether it is `Solid`. A map holds up to 4,194,304 cells and 65,535 kinds of tile (two bytes a cell); a bigger one is empty.
+- **Holes and layers.** A tile whose cell is a hole (blank, no background, no attributes) is not drawn and shows what is under it, as a see-through sprite does, so one map can be laid over another. Any other tile replaces the cell under it.
+- **The edge of the world is a wall.** `Solid` is true outside the map, and a map is empty and solid on a nil pointer.
+- **The camera is a `Rect`.** `Rect.CenterOn(p)` centers it on a point and `Rect.Within(level)` keeps it inside, or centers it where the level is smaller than the screen. `Map.Draw(fb, view)` and `Layer.DrawView(fb, view)` use only its top left corner, floored in the world, so a sprite stands on its tile however the view moves and the picture moves a whole cell at a time. For a smooth follow, ease the view toward the player yourself with `Vector2.Lerp`.
+- **Moving through the map.** `Map.Move(box, delta)` moves a box along X, stopping at the first solid tile, then along Y, so a box that goes into a wall at an angle slides along it. It looks at every tile on the way, so a long frame cannot carry the box through a thin wall, and it stops with the box's edge exactly on the tile's edge, so there is no rounding gap and the box rests against a wall the same at any frame rate: neither habit of the Collision section is needed. It reports whether it was stopped on each axis. Only the tiles a box moves into stop it, so one that starts inside a wall can move on, and one outside the map cannot move.
+- **Cost.** Drawing 200 by 60 cells takes about 20 microseconds and a move about 24 nanoseconds, neither allocating. `Layer.Draw` is as fast as before: `DrawView` has a loop of its own.
+- **Not included.** Tiles of other sizes than one cell (write a tile twice across for a squarer look), tile animation (`Set` the cell in your own `Update`), loading maps from files, parallax and camera shake.
+
+`examples/world` is a level a screen and a half either way: walk it, slide along the walls, and collect the coins.
 
 ## Quickstart
 
@@ -315,9 +354,10 @@ To test a whole run (start-up, key bytes in, frames out), give `Config.Input` an
 | Package | Purpose |
 |---|---|
 | `engine` | The loop, `FrameBuffer`, pixel `Canvas`, drawing helpers, keyboard `Input` |
-| `geometry` | 2D and 3D vector math, and `Rect` for boxes and collision |
+| `geometry` | 2D and 3D vector math, and `Rect` for boxes, collision and cameras |
 | `mesh` | 3D meshes (wireframe and shaded), shapes, OBJ loading, lights, and the perspective `Camera` |
-| `sprite` | Sprites (a `Cell`, a text-art `Frame` or an `Animation` at a position, optionally see-through) drawn in layers, with bounds and collision queries |
+| `sprite` | Sprites (a `Cell`, a text-art `Frame` or an `Animation` at a position, optionally see-through) drawn in layers, through a view, with bounds and collision queries |
+| `tilemap` | Tile maps written as text art, drawn through a camera, with solid tiles that stop a moving box |
 
 ## Compatibility and limits
 
