@@ -13,6 +13,7 @@ Website: [glonk.dev](https://glonk.dev)
 - **Shapes and models:** a cube, sphere, cylinder, cone, plane and grid, or OBJ files from any `io.Reader` (a file, `//go:embed`, a download), centered and scaled and drawn wireframe or shaded, in the colors and texture pictures of their materials when loaded from an `fs.FS`, and with a color on each vertex.
 - **Half blocks:** a pixel `Canvas` with two square-ish pixels per cell, drawn with `▀` and a background color, for twice the vertical detail and shading by color instead of by character. Lines and wireframes can be drawn into the pixels too.
 - **Mixed:** draw a 3D scene first, then a 2D HUD on top, into the same frame.
+- **Widgets:** a label, a panel, a bar and a menu for a HUD or a pause screen, drawn in screen space. See [Widgets](#widgets).
 - **Input:** held keys and one-shot presses, including arrows. Terminals with the [kitty keyboard protocol](https://sw.kovidgoyal.net/kitty/keyboard-protocol/) (Ghostty, kitty, WezTerm, foot, iTerm2, Alacritty) report real key releases, so you can hold several keys at once.
 - **Resizing:** the frame follows the terminal window, and a game with a `Resize(width, height int)` method is told its size.
 - **Testing:** `engine.Keyboard` presses keys for a game's `Update`, a `FrameBuffer` prints as text, and `Config.Input` and `Config.Output` let a whole `Run` be driven without a terminal. See [Testing a game](#testing-a-game).
@@ -41,7 +42,7 @@ go mod tidy
 ```
 make run                                      # bounce2d: a ball in a box that fills the window (Esc quits)
 make run EXAMPLE=./examples/sprites          # sprites: a ship you steer around a rock, a walking figure and a blinking ghost on a colored floor
-make run EXAMPLE=./examples/world            # world: a level bigger than the screen to walk around, with walls to slide along and coins to collect
+make run EXAMPLE=./examples/world            # world: a level bigger than the screen to walk around, with walls to slide along, coins to collect, a coin panel and a pause menu (Esc)
 make run EXAMPLE=./examples/cube3d            # cube3d: walk around a floor with six shaded cubes and a wireframe one
 make run EXAMPLE=./examples/viewer            # viewer: look at the bundled OBJ models and shapes
 make run EXAMPLE=./examples/viewer ARGS=my.obj  # viewer: look at your own model (its .mtl beside it gives it colors)
@@ -274,6 +275,37 @@ sprites.DrawView(fb, view)
 
 `examples/world` is a level a screen and a half either way: walk it, slide along the walls, and collect the coins.
 
+## Widgets
+
+The `widget` package draws the pieces of a HUD and a menu in screen space: a `Label`, a `Panel`, a `Bar` and a `Menu`. Each is a value with exported fields and a `Draw` method that takes a position in cells, like `DrawBox`.
+
+```go
+// in Draw, after the world:
+widget.Panel{Title: "Status"}.Draw(fb, 0, 0, 20, 4)
+widget.Label{Text: "coins 3/12"}.Draw(fb, 2, 1, 16)
+widget.Bar{Value: float64(coins) / float64(total)}.Draw(fb, 2, 2, 16)
+
+// a menu keeps its selection, so keep it in the game:
+menu := widget.Menu{Items: []string{"Resume", "Quit"}}
+
+// in Update:
+if choice, chosen := menu.Update(in); chosen && choice == 1 {
+	return engine.ErrQuit
+}
+
+// in Draw:
+menu.Draw(fb, 2, 5, 16, 2)
+```
+
+- **Style.** A style is an `engine.Cell`: its colors and attributes are used and its `Character` is not. A `Bar` is made of the cells `Full` and `Empty`, which are `█` and `░` by default.
+- **Text.** Labels, titles and menu items are counted in cells as `DrawText` counts them (`engine.TextWidth` returns that number), cut off at their width, and aligned `Left`, `Center` or `Right` for a `Label`.
+- **A panel's fill.** A `Fill` that is blank, with no background and no attributes, as the zero value is, is a hole: the panel leaves its inside alone and shows what is under it, as tiles and sprites do. A title is shown from 7 cells wide.
+- **The menu.** Up and Down move the selection and wrap around, Enter chooses, and `Update` returns the index of the item. Escape and every other key are left to the game, which can use Escape to open and close the menu. The selected row is drawn reversed, and a list longer than its rows scrolls to keep the selected item in the middle row. Test it with `engine.Keyboard`.
+- **Always safe.** What runs off the frame is cut off, a size that is not positive draws nothing, and numbers as large as an `int` cannot wrap around onto the frame. Nothing allocates.
+- **Not included.** Mouse input, text entry, layouts, and focus or nesting: a widget is drawn where you say.
+
+`examples/world` has a coin panel with a bar and a pause menu.
+
 ## Quickstart
 
 ```go
@@ -358,6 +390,7 @@ To test a whole run (start-up, key bytes in, frames out), give `Config.Input` an
 | `mesh` | 3D meshes (wireframe and shaded), shapes, OBJ loading, lights, and the perspective `Camera` |
 | `sprite` | Sprites (a `Cell`, a text-art `Frame` or an `Animation` at a position, optionally see-through) drawn in layers, through a view, with bounds and collision queries |
 | `tilemap` | Tile maps written as text art, drawn through a camera, with solid tiles that stop a moving box |
+| `widget` | A label, a panel, a bar and a menu for a HUD or a pause screen, drawn in screen space |
 
 ## Compatibility and limits
 

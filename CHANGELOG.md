@@ -4,6 +4,19 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+### Added
+
+- A new package, `widget`, draws the pieces of a heads-up display and a menu in screen space. Each widget is a value with exported fields and a `Draw` method that takes a position and a size in whole cells, as `DrawBox` does. What runs off the frame is cut off, a size that is not positive draws nothing, and numbers as large as an `int` cannot wrap around onto the frame. Drawing allocates nothing. A style is an `engine.Cell` whose colors and attributes are used and whose character is not.
+- `widget.Label` writes a line of text aligned `Left`, `Center` or `Right` in a width, counted in cells as `TextWidth` counts them and cut off where the width ends, with a combining mark kept with its character. Only the cells of the text are drawn.
+- `widget.Panel` draws a border with a title on the top edge, cut to fit and shown from 7 cells wide, and fills the inside with `Fill`. A blank `Fill` with no background and no attributes, which the zero value is, is a hole that leaves the inside alone. A panel smaller than 2 by 2 draws nothing, as `DrawBox` does.
+- `widget.Bar` draws a value from 0 to 1 as a run of cells filled from the left, rounded to the nearest cell. A smaller value is 0, a larger one is 1 and NaN is 0. `Full` and `Empty` are the cells, `█` and `░` where they are the zero `Cell`, and are drawn as they are.
+- `widget.Menu` is a list of items with one selected. `Update(in)` moves the selection on Up and Down, wrapping around at the ends, and on Enter returns the index of the item and true; Escape and every other key are left to the game. `Draw` puts an item on each row, cut to the width, with `Reverse` toggled across the selected row, and scrolls a list longer than its rows to keep the selected item in the middle row. A `Selected` that is not an item is taken as 0, and `Draw` does not change the menu, which keeps no state of its own beyond `Selected`.
+- `engine.TextWidth(text)` returns the number of cells `FrameBuffer.DrawText` fills with a string, not counting any it would clip: one for each character except combining marks and joiners, which have none. A wide or control character is one cell, drawn as `?`. It is for centering, right-aligning or cutting text where `DrawText` would put it.
+
+### Changed
+
+- `examples/world` has a coin panel at the top left, with the count and a bar that fills as coins are collected, and a pause menu: Esc now opens a menu to resume or quit, with the world standing still, instead of quitting at once.
+
 ## [0.5.0] - 2026-11-11
 
 On top of 0.4.0 this release adds 2D collision, a tile map and a camera that follows the player. Nothing was removed, renamed or changed.
