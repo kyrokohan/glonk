@@ -1,6 +1,7 @@
 // Command sprites shows sprites that are more than one character: a ship drawn from text
 // art that you steer, a figure with a walk cycle, and a see-through ghost that blinks and
-// floats over everything.
+// floats over everything. A rock in the sea is solid to the ship, which is pushed out of it,
+// and not to the ghost, which floats through.
 //
 //	go run ./examples/sprites
 //
@@ -24,15 +25,20 @@ const hint = " arrows steer the ship  Esc quits "
 const (
 	shipSpeed   = 24.0 // cells a second
 	walkerSpeed = 9.0
+
+	// maxStep is the longest time one frame moves the ship. A push only knows how deep the ship
+	// is in the rock, not where it came from, so a frame that took long, a hiccup or a stopped
+	// terminal, would move the ship far enough to come out the other side.
+	maxStep = 0.05
 )
 
 type spriteGame struct {
 	width, height int     // the frame's size, from Resize
 	t             float64 // seconds since the start, for the ghost's path
 
-	ship, walker, ghost *sprite.Sprite
-	walk, blink         *sprite.Animation
-	layer               *sprite.Layer
+	ship, walker, ghost, rock *sprite.Sprite
+	walk, blink               *sprite.Animation
+	layer                     *sprite.Layer
 }
 
 // newSpriteGame returns the game main runs. It has no size until Run calls Resize.
@@ -74,6 +80,13 @@ func newSpriteGame() *spriteGame {
 	}
 	g.walker = &sprite.Sprite{Position: geometry.Vector2{X: 2}, Animation: walk, Overlay: true}
 	g.ghost = &sprite.Sprite{Animation: blink, Overlay: true}
+	// Solid all through, so that what you see is the box the ship runs into.
+	g.rock = &sprite.Sprite{Frame: sprite.FromLines(engine.Cell{Foreground: engine.Palette(250), Background: engine.Palette(238)},
+		`########`,
+		`########`,
+		`########`,
+	)}
+	g.layer.Add(g.rock) // first, so the others are drawn over it
 	g.layer.Add(g.ship)
 	g.layer.Add(g.walker)
 	g.layer.Add(g.ghost)
@@ -109,7 +122,12 @@ func (g *spriteGame) Update(dt float64, in *engine.Input) error {
 	}
 	// Normalized, so that steering diagonally is no faster. The ship stays on the sea, inside
 	// the border and above the sand.
-	g.ship.Position = g.ship.Position.Add(steer.Normalize().Scale(shipSpeed * dt))
+	g.ship.Position = g.ship.Position.Add(steer.Normalize().Scale(shipSpeed * min(dt, maxStep)))
+	// The rock is solid to the ship: steering into it pushes the ship back out by the shorter
+	// way, so a ship that goes in at an angle slides along it.
+	if push := g.ship.Bounds().PushOutOf(g.rock.Bounds()); push != (geometry.Vector2{}) {
+		g.ship.Position = snap(g.ship.Position.Add(push))
+	}
 	shipW, shipH := g.ship.Frame.Width(), g.ship.Frame.Height()
 	g.ship.Position.X = max(1, min(g.ship.Position.X, float64(g.width-shipW-1)))
 	g.ship.Position.Y = max(1, min(g.ship.Position.Y, float64(g.height-shipH-sandRows-1)))
@@ -127,9 +145,17 @@ func (g *spriteGame) Update(dt float64, in *engine.Input) error {
 	return nil
 }
 
-// place puts the walker on the sand and the ghost on its slow loop over the sea, for the
-// current size and time.
+// snap rounds a position to a millionth of a cell. A push leaves the ship against the rock to
+// within rounding, which can be a hair short of a whole column, and a position is drawn in
+// the column it is floored to: the ship would then rest a cell short of the rock.
+func snap(v geometry.Vector2) geometry.Vector2 {
+	return geometry.Vector2{X: math.Round(v.X*1e6) / 1e6, Y: math.Round(v.Y*1e6) / 1e6}
+}
+
+// place puts the rock in the middle of the sea, the walker on the sand and the ghost on its
+// slow loop over the sea, for the current size and time.
 func (g *spriteGame) place() {
+	g.rock.Position = geometry.Vector2{X: float64(g.width/2 - 4), Y: float64((g.height-sandRows)/2 - 1)}
 	g.walker.Position.Y = float64(g.height - sandRows - 1)
 	g.ghost.Position = geometry.Vector2{
 		X: float64(g.width)/2 + float64(g.width)/3*math.Cos(0.4*g.t) - 2,

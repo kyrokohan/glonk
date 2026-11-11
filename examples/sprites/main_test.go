@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"glonk.dev/engine"
+	"glonk.dev/geometry"
 )
 
 func newFrame(t *testing.T, w, h int) *engine.FrameBuffer {
@@ -52,11 +53,11 @@ func TestArrowsSteerTheShipAtTheSameSpeedInEveryDirection(t *testing.T) {
 		keys           []engine.Key
 		wantDX, wantDY float64
 	}{
-		{"left", []engine.Key{engine.KeyLeft}, -2.4, 0},
-		{"right", []engine.Key{engine.KeyRight}, 2.4, 0},
-		{"up", []engine.Key{engine.KeyUp}, 0, -2.4},
-		{"down", []engine.Key{engine.KeyDown}, 0, 2.4},
-		{"diagonal is no faster", []engine.Key{engine.KeyRight, engine.KeyDown}, 2.4 / math.Sqrt2, 2.4 / math.Sqrt2},
+		{"left", []engine.Key{engine.KeyLeft}, -1.2, 0},
+		{"right", []engine.Key{engine.KeyRight}, 1.2, 0},
+		{"up", []engine.Key{engine.KeyUp}, 0, -1.2},
+		{"down", []engine.Key{engine.KeyDown}, 0, 1.2},
+		{"diagonal is no faster", []engine.Key{engine.KeyRight, engine.KeyDown}, 1.2 / math.Sqrt2, 1.2 / math.Sqrt2},
 		{"opposite keys cancel", []engine.Key{engine.KeyLeft, engine.KeyRight}, 0, 0},
 		{"other keys do nothing", []engine.Key{'w', engine.KeyEnter}, 0, 0},
 	}
@@ -64,11 +65,11 @@ func TestArrowsSteerTheShipAtTheSameSpeedInEveryDirection(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			g := newSizedGame(80, 40)
-			g.ship.Position.X, g.ship.Position.Y = 30, 12
-			if err := g.Update(0.1, hold(tt.keys...)); err != nil {
+			g.ship.Position.X, g.ship.Position.Y = 10, 12 // well away from the rock
+			if err := g.Update(0.05, hold(tt.keys...)); err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			dx, dy := g.ship.Position.X-30, g.ship.Position.Y-12
+			dx, dy := g.ship.Position.X-10, g.ship.Position.Y-12
 			if math.Abs(dx-tt.wantDX) > 1e-9 || math.Abs(dy-tt.wantDY) > 1e-9 {
 				t.Errorf("wanted the ship to move by (%v, %v), got (%v, %v)", tt.wantDX, tt.wantDY, dx, dy)
 			}
@@ -298,5 +299,175 @@ func TestFirstFrameIsLaidOutBeforeAnyUpdate(t *testing.T) {
 	}
 	if x := g.ghost.Position.X; x < 1 || x >= 79 {
 		t.Errorf("wanted the ghost inside the frame, got column %v", x)
+	}
+}
+
+// The rock sits in the middle of the sea at 80 by 24: columns 36 to 43, rows 9 to 11.
+func newRockGame(t *testing.T) *spriteGame {
+	t.Helper()
+	g := newSizedGame(80, 24)
+	if r := g.rock.Bounds(); r != geometry.NewRect(36, 9, 8, 3) {
+		t.Fatalf("wanted the rock at columns 36 to 43 and rows 9 to 11, got %v", r)
+	}
+	return g
+}
+
+// hairOf is how far two boxes overlap in the narrower direction, which rounding in a push
+// leaves at nothing worth drawing.
+func hairOf(a, b geometry.Rect) float64 {
+	i := a.Intersect(b)
+	return min(i.Width(), i.Height())
+}
+
+func TestShipIsPushedOutOfTheRockAndStopsAgainstIt(t *testing.T) {
+	g := newRockGame(t)
+	g.ship.Position = geometry.Vector2{X: 20, Y: 8.5} // level with the rock, to its left
+	rock := g.rock.Bounds()
+
+	for i := range 60 {
+		if err := g.Update(0.05, hold(engine.KeyRight)); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if hair := hairOf(g.ship.Bounds(), rock); hair > 1e-9 {
+			t.Fatalf("frame %d: wanted the ship out of the rock, overlapping by %v at %v", i, hair, g.ship.Position)
+		}
+		if g.ship.Position.Y != 8.5 {
+			t.Fatalf("frame %d: wanted the ship to go straight at the rock's face, got Y %v", i, g.ship.Position.Y)
+		}
+	}
+	// Stopped with its right edge against the rock's left edge, and drawn in the column
+	// next to it, whichever way the sum was rounded.
+	if got := g.ship.Position.X; math.Abs(got-28) > 1e-9 {
+		t.Errorf("wanted the ship stopped at column 28, got %v", got)
+	}
+	fb := newFrame(t, 80, 24)
+	g.Draw(fb)
+	if got := fb.At(35, 10).Character; got != '\\' && got != '_' && got != '/' && got != '|' {
+		t.Errorf("wanted the ship's side drawn in the column just before the rock, got %q", got)
+	}
+	if got := fb.At(36, 10).Character; got != '#' {
+		t.Errorf("wanted the rock's first column right after the ship, got %q", got)
+	}
+}
+
+// A push leaves the ship against the rock to within rounding, and the ship is drawn in the
+// column its position is floored to, so a position a hair short of 28 would rest a column
+// short, for some frame rates and not others.
+func TestShipRestsExactlyAgainstTheRockAtAnyFrameRate(t *testing.T) {
+	for _, dt := range []float64{0.05, 1.0 / 30, 0.033, 0.0167, 0.02, 0.01} {
+		for _, y := range []float64{8, 8.5, 9.3, 10.123} {
+			g := newRockGame(t)
+			g.ship.Position = geometry.Vector2{X: 20.37, Y: y}
+			for range 150 {
+				if err := g.Update(dt, hold(engine.KeyRight)); err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+			}
+			if g.ship.Position.X != 28 {
+				t.Errorf("dt %v, Y %v: wanted the ship to rest at exactly column 28, got %v", dt, y, g.ship.Position.X)
+			}
+		}
+	}
+}
+
+// A push does not know where the ship came from, so a frame long enough to carry it deep into
+// the rock could push it out the far side. The step is capped, and it stays in front.
+func TestALongFrameCannotCarryTheShipThroughTheRock(t *testing.T) {
+	for _, dt := range []float64{0.1, 0.5, 2, 60, math.Inf(1)} {
+		g := newRockGame(t)
+		g.ship.Position = geometry.Vector2{X: 27, Y: 9.3}
+		if err := g.Update(dt, hold(engine.KeyRight)); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := g.ship.Position; got.X > 28 {
+			t.Errorf("dt %v: wanted the ship held in front of the rock, got %v", dt, got)
+		}
+	}
+}
+
+func TestShipSlidesAlongTheRockWhenSteeredIntoItAtAnAngle(t *testing.T) {
+	g := newRockGame(t)
+	g.ship.Position = geometry.Vector2{X: 20, Y: 5}
+	rock := g.rock.Bounds()
+	var slid float64
+
+	for i := range 40 {
+		before := g.ship.Position
+		if err := g.Update(0.05, hold(engine.KeyRight, engine.KeyDown)); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if hair := hairOf(g.ship.Bounds(), rock); hair > 1e-9 {
+			t.Fatalf("frame %d: wanted the ship out of the rock, overlapping by %v", i, hair)
+		}
+		if g.ship.Position.X >= 27.5 && g.ship.Position.Y > before.Y {
+			slid += g.ship.Position.Y - before.Y // moved down while against the face
+		}
+	}
+	if slid < 2 {
+		t.Errorf("wanted the ship to slide down the rock's face, slid %v", slid)
+	}
+}
+
+func TestGhostFloatsThroughTheRock(t *testing.T) {
+	g := newRockGame(t)
+	rock := g.rock.Bounds()
+
+	var through int
+	for step := range 400 {
+		g.t = float64(step) * 0.1
+		g.place()
+		if g.ghost.Bounds().Overlaps(rock) {
+			through++
+		}
+	}
+	if through == 0 {
+		t.Errorf("wanted the ghost's path to cross the rock")
+	}
+	// It is drawn over the rock, not behind it: the rock was added first.
+	g.ghost.Position = geometry.Vector2{X: 37, Y: 9}
+	fb := newFrame(t, 80, 24)
+	g.Draw(fb)
+	if got := fb.At(37, 10).Character; got != '(' {
+		t.Errorf("wanted the ghost's face drawn over the rock, got %q", got)
+	}
+	// Nothing about the ghost moves the rock or is pushed by it, whatever the frame count.
+	for range 100 {
+		if err := g.Update(0.1, hold()); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	}
+	if g.rock.Bounds() != rock {
+		t.Errorf("wanted the rock to stay where it was, got %v", g.rock.Bounds())
+	}
+}
+
+// What you see is what the ship runs into: every cell of the rock's box is drawn as the rock.
+func TestRockIsDrawnAsAWholeBlockOfItsBox(t *testing.T) {
+	g := newRockGame(t)
+	g.ghost.Position = geometry.Vector2{X: 60, Y: 2} // out of the way
+	fb := newFrame(t, 80, 24)
+	g.Draw(fb)
+	for y := 9; y < 12; y++ {
+		for x := 36; x < 44; x++ {
+			if got := fb.At(x, y).Character; got != '#' {
+				t.Fatalf("(%d, %d): wanted the rock, got %q", x, y, got)
+			}
+		}
+	}
+	if fb.At(35, 10).Character == '#' || fb.At(44, 10).Character == '#' || fb.At(40, 8).Character == '#' || fb.At(40, 12).Character == '#' {
+		t.Errorf("wanted the rock to stop at its box")
+	}
+}
+
+func TestRockStaysInTheSeaAtEverySizeItFits(t *testing.T) {
+	for _, size := range [][2]int{{20, 12}, {40, 12}, {80, 24}, {200, 60}} {
+		g := newSizedGame(size[0], size[1])
+		r := g.rock.Bounds()
+		if r.Min.X < 1 || r.Max.X > float64(size[0]-1) || r.Min.Y < 1 || r.Max.Y > float64(size[1]-sandRows-1) {
+			t.Errorf("%v: wanted the rock inside the border and above the sand, got %v", size, r)
+		}
+		if r.Min.X != math.Floor(r.Min.X) || r.Min.Y != math.Floor(r.Min.Y) {
+			t.Errorf("%v: wanted the rock on whole cells, got %v", size, r)
+		}
 	}
 }
