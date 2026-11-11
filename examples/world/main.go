@@ -4,7 +4,8 @@
 //
 //	go run ./examples/world
 //
-// The arrow keys walk, and Esc quits.
+// The arrow keys walk, and Esc pauses with a menu to resume or quit. The coin count is a panel
+// of the widget package, drawn over the world.
 package main
 
 import (
@@ -17,12 +18,29 @@ import (
 	"glonk.dev/geometry"
 	"glonk.dev/sprite"
 	"glonk.dev/tilemap"
+	"glonk.dev/widget"
 )
 
 const (
 	speedX = 24.0 // cells a second sideways
 	speedY = 12.0 // and up and down: cells are about twice as tall as wide
 )
+
+// The pause menu's items, in order.
+const (
+	resumeItem = iota
+	quitItem
+)
+
+// The heads-up display: the count of coins, as text and as a bar, in a panel at the top left.
+const (
+	barWidth = 16
+	hudRows  = 3 // the panel's border and the one row inside it
+)
+
+// hudStyle is the colors of the panel, its text and the pause menu: light on dark, so that
+// the world does not show through.
+var hudStyle = engine.Cell{Foreground: engine.Palette(252), Background: engine.Palette(235)}
 
 // legend is what each rune of levelText is. A coin and the start are floor under the sprite
 // that is put there.
@@ -46,6 +64,9 @@ type worldGame struct {
 	score  int
 	total  int
 
+	paused bool
+	menu   widget.Menu // the pause menu, which Update runs while paused
+
 	// view is the part of the world on screen: the screen's rectangle, centered on the
 	// player and kept inside the level.
 	view geometry.Rect
@@ -59,6 +80,7 @@ func newWorldGame() *worldGame {
 		level: tilemap.FromLines(legend, lines...),
 		hero:  sprite.NewLayer(),
 		coins: sprite.NewLayer(),
+		menu:  widget.Menu{Items: []string{"Resume", "Quit"}, Style: hudStyle},
 	}
 
 	yellow := engine.Cell{Foreground: engine.Palette(226)}
@@ -110,8 +132,12 @@ func (g *worldGame) follow() {
 }
 
 func (g *worldGame) Update(dt float64, in *engine.Input) error {
+	if g.paused {
+		return g.updatePaused(in)
+	}
 	if in.Pressed(engine.KeyEscape) {
-		return engine.ErrQuit
+		g.paused, g.menu.Selected = true, resumeItem
+		return nil
 	}
 
 	var d geometry.Vector2
@@ -149,20 +175,65 @@ func (g *worldGame) Update(dt float64, in *engine.Input) error {
 	return nil
 }
 
+// updatePaused runs the pause menu while the world stands still: Resume or Esc goes back to
+// the game, and Quit ends it.
+func (g *worldGame) updatePaused(in *engine.Input) error {
+	choice, chosen := g.menu.Update(in)
+	switch {
+	case in.Pressed(engine.KeyEscape), chosen && choice == resumeItem:
+		g.paused = false
+	case chosen && choice == quitItem:
+		return engine.ErrQuit
+	}
+	return nil
+}
+
 func (g *worldGame) Draw(fb *engine.FrameBuffer) {
 	g.level.Draw(fb, g.view)
 	g.coins.DrawView(fb, g.view)
 	g.hero.DrawView(fb, g.view)
 
-	// The text goes on the screen, not in the world, so it is drawn without the view.
-	status := fmt.Sprintf(" coins %d/%d ", g.score, g.total)
-	if g.score == g.total {
-		status = fmt.Sprintf(" all %d coins found! ", g.total)
+	// What follows goes on the screen, not in the world, so it is drawn without the view.
+	g.drawHUD(fb)
+	hint := " arrows walk  Esc pauses "
+	if g.paused {
+		hint = " arrows choose  Enter picks  Esc resumes "
 	}
-	fb.DrawText(1, 0, status, engine.Color{})
-	if hint := " arrows walk  Esc quits "; fb.Width() >= len(hint)+2 {
+	if fb.Width() >= len(hint)+2 {
 		fb.DrawText(1, fb.Height()-1, hint, engine.Color{})
 	}
+	if g.paused {
+		g.drawPause(fb)
+	}
+}
+
+// drawHUD draws the panel at the top left: the coins collected, as a count and as a bar, and
+// in the title once there are no more.
+func (g *worldGame) drawHUD(fb *engine.FrameBuffer) {
+	title := "coins"
+	if g.score == g.total {
+		title = fmt.Sprintf("all %d coins found!", g.total)
+	}
+	// The count has as many cells as the last count will, so the bar does not move as it grows.
+	count := fmt.Sprintf("%d/%d", g.score, g.total)
+	countWidth := len(fmt.Sprintf("%d/%d", g.total, g.total))
+
+	widget.Panel{Title: title, Style: hudStyle, Fill: engine.Cell{Background: hudStyle.Background}}.
+		Draw(fb, 0, 0, countWidth+barWidth+5, hudRows)
+	widget.Label{Text: count, Align: widget.Right, Style: hudStyle}.Draw(fb, 2, 1, countWidth)
+	widget.Bar{
+		Value: float64(g.score) / float64(g.total), // NaN with no coins at all, which is an empty bar
+		Full:  engine.Cell{Character: '█', Foreground: engine.Palette(226), Background: hudStyle.Background},
+		Empty: engine.Cell{Character: '░', Foreground: engine.Palette(240), Background: hudStyle.Background},
+	}.Draw(fb, countWidth+3, 1, barWidth)
+}
+
+// drawPause draws the pause menu in a panel in the middle of the screen.
+func (g *worldGame) drawPause(fb *engine.FrameBuffer) {
+	const w, h = 16, 4 // the border and a row for each of the two items
+	x, y := (fb.Width()-w)/2, (fb.Height()-h)/2
+	widget.Panel{Title: "paused", Style: hudStyle, Fill: engine.Cell{Background: hudStyle.Background}}.Draw(fb, x, y, w, h)
+	g.menu.Draw(fb, x+2, y+1, w-4, h-2)
 }
 
 func main() {

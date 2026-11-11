@@ -310,8 +310,8 @@ func TestDrawShowsThePlayerAndCoinsOnTheTilesTheyStandOn(t *testing.T) {
 	if got := fb.At(px+1, py).Character; got != '@' {
 		t.Errorf("wanted the player's middle at column %d, got %q", px+1, got)
 	}
-	// Every other cell of the screen is the tile of the level under it.
-	for y := 1; y < 23; y++ {
+	// Every other cell of the screen below the panel is the tile of the level under it.
+	for y := hudRows; y < 23; y++ {
 		for x := range 80 {
 			if y == py && x >= px && x < px+3 {
 				continue
@@ -340,6 +340,8 @@ func TestDrawAtEverySize(t *testing.T) {
 			}
 			g.Draw(fb)
 		}
+		g.paused = true
+		g.Draw(fb)
 	}
 }
 
@@ -348,8 +350,11 @@ func TestTheHUDShowsTheCoinsAndTheKeys(t *testing.T) {
 	fb := newFrame(t, 80, 24)
 	g.Draw(fb)
 	lines := strings.Split(fb.String(), "\n")
-	if !strings.Contains(lines[0], "coins 0/36") || !strings.Contains(lines[23], "arrows walk  Esc quits") {
-		t.Errorf("wanted the coins on top and the keys at the bottom, got %q and %q", lines[0], lines[23])
+	if !strings.Contains(lines[0], "┌─ coins ─") || !strings.Contains(lines[1], "│  0/36 ░░░░░░░░░░░░░░░░ │") || !strings.HasPrefix(lines[2], "└──") {
+		t.Errorf("wanted the panel with the count and an empty bar on top, got\n%s\n%s\n%s", lines[0], lines[1], lines[2])
+	}
+	if !strings.Contains(lines[23], "arrows walk  Esc pauses") {
+		t.Errorf("wanted the keys at the bottom, got %q", lines[23])
 	}
 	small := newFrame(t, 12, 4)
 	newSizedGame(12, 4).Draw(small)
@@ -358,17 +363,128 @@ func TestTheHUDShowsTheCoinsAndTheKeys(t *testing.T) {
 	}
 }
 
-func TestEscapeQuitsAndOtherKeysDoNot(t *testing.T) {
+func TestTheBarFillsAsCoinsAreCollected(t *testing.T) {
+	g := newSizedGame(80, 24)
+	spots := make([]geometry.Vector2, 0, g.total)
+	for c := range g.coins.All() {
+		spots = append(spots, c.Position)
+	}
+	for _, p := range spots[:18] { // half of them
+		g.player.Position = geometry.Vector2{X: p.X - 1, Y: p.Y}
+		g.Update(0, hold())
+	}
+	fb := newFrame(t, 80, 24)
+	g.Draw(fb)
+	if got := strings.Split(fb.String(), "\n")[1]; !strings.Contains(got, "│ 18/36 ████████░░░░░░░░ │") {
+		t.Errorf("wanted half the bar filled at 18 of 36, got %q", got)
+	}
+	if got := fb.At(8, 1); got.Character != '█' || got.Foreground != engine.Palette(226) || got.Background != hudStyle.Background {
+		t.Errorf("wanted the bar's first cell yellow on the panel's background, got %+v", got)
+	}
+}
+
+func TestEscapeOpensThePauseMenuAndOtherKeysDoNot(t *testing.T) {
 	g := newSizedGame(80, 24)
 	kb := engine.NewKeyboard()
 	kb.Press('q', engine.KeyEnter)
-	if err := g.Update(0.1, kb.Input()); err != nil {
-		t.Fatalf("wanted other keys to be ignored, got %v", err)
+	if err := g.Update(0.1, kb.Input()); err != nil || g.paused {
+		t.Fatalf("wanted other keys to be ignored, got %v and paused %v", err, g.paused)
 	}
 	kb.EndFrame()
 	kb.Press(engine.KeyEscape)
-	if err := g.Update(0.1, kb.Input()); !errors.Is(err, engine.ErrQuit) {
-		t.Errorf("wanted ErrQuit on Escape, got %v", err)
+	if err := g.Update(0.1, kb.Input()); err != nil || !g.paused {
+		t.Errorf("wanted Escape to pause without quitting, got %v and paused %v", err, g.paused)
+	}
+}
+
+func TestTheWorldStandsStillWhilePaused(t *testing.T) {
+	g := newSizedGame(80, 24)
+	g.Update(0, hold(engine.KeyEscape))
+	before, view := g.player.Position, g.view
+	for range 30 {
+		g.Update(0.1, hold(engine.KeyRight, engine.KeyDown))
+	}
+	if g.player.Position != before || g.view != view || !g.paused {
+		t.Errorf("wanted the player to stay at %v while paused, got %v (paused %v)", before, g.player.Position, g.paused)
+	}
+}
+
+func TestThePauseMenuResumesAndQuits(t *testing.T) {
+	pause := func() *worldGame {
+		g := newSizedGame(80, 24)
+		g.Update(0, hold(engine.KeyEscape))
+		return g
+	}
+
+	// Enter on Resume, the first item, goes back to the game.
+	g := pause()
+	if err := g.Update(0, hold(engine.KeyEnter)); err != nil || g.paused {
+		t.Errorf("wanted Resume to unpause, got %v and paused %v", err, g.paused)
+	}
+	// And the player walks again.
+	before := g.player.Position
+	g.Update(0.1, hold(engine.KeyRight))
+	if g.player.Position == before {
+		t.Errorf("wanted the player to walk after resuming, still at %v", before)
+	}
+
+	// Escape again does the same.
+	g = pause()
+	if err := g.Update(0, hold(engine.KeyEscape)); err != nil || g.paused {
+		t.Errorf("wanted Escape to unpause, got %v and paused %v", err, g.paused)
+	}
+
+	// Down to Quit and Enter ends the game.
+	g = pause()
+	if err := g.Update(0, hold(engine.KeyDown)); err != nil || !g.paused {
+		t.Fatalf("wanted Down to stay in the menu, got %v and paused %v", err, g.paused)
+	}
+	if err := g.Update(0, hold(engine.KeyEnter)); !errors.Is(err, engine.ErrQuit) {
+		t.Errorf("wanted ErrQuit from Quit, got %v", err)
+	}
+
+	// The menu opens on Resume every time, not where it was left.
+	g = pause()
+	g.Update(0, hold(engine.KeyDown))
+	g.Update(0, hold(engine.KeyEscape))
+	g.Update(0, hold(engine.KeyEscape))
+	if !g.paused || g.menu.Selected != resumeItem {
+		t.Errorf("wanted the menu reopened on Resume, got paused %v and item %d", g.paused, g.menu.Selected)
+	}
+}
+
+func TestThePauseMenuIsDrawnOverTheWorldInTheMiddle(t *testing.T) {
+	g := newSizedGame(80, 24)
+	g.Update(0, hold(engine.KeyEscape))
+	fb := newFrame(t, 80, 24)
+	g.Draw(fb)
+
+	lines := strings.Split(fb.String(), "\n")
+	row := func(text string) int {
+		for y, l := range lines {
+			if strings.Contains(l, text) {
+				return y
+			}
+		}
+		t.Fatalf("wanted %q on the screen, got\n%s", text, fb)
+		return -1
+	}
+	title, resume, quit := row("paused"), row("Resume"), row("Quit")
+	if resume != title+1 || quit != title+2 || title != 10 {
+		t.Errorf("wanted the panel in the middle, title row 10 and the items under it, got rows %d, %d and %d", title, resume, quit)
+	}
+	if !strings.Contains(lines[23], "Esc resumes") {
+		t.Errorf("wanted the keys for the menu at the bottom, got %q", lines[23])
+	}
+
+	// The selected item is reversed, the other is not, and the world is still around the panel.
+	x := strings.Index(lines[resume], "Resume")
+	x = len([]rune(lines[resume][:x]))
+	if !fb.At(x, resume).Attrs.Has(engine.Reverse) || fb.At(x, quit).Attrs.Has(engine.Reverse) {
+		t.Errorf("wanted Resume reversed and Quit not, got %+v and %+v", fb.At(x, resume), fb.At(x, quit))
+	}
+	if fb.At(0, 12).Character != g.level.At(int(g.view.Min.X), 12+int(g.view.Min.Y)).Cell.Character {
+		t.Errorf("wanted the world to show to the left of the panel")
 	}
 }
 
