@@ -1,10 +1,12 @@
 package sprite
 
 import (
+	"iter"
 	"math"
 	"slices"
 
 	"glonk.dev/engine"
+	"glonk.dev/geometry"
 )
 
 // Layer is an ordered set of sprites drawn together; later sprites draw over earlier ones.
@@ -43,6 +45,31 @@ func (l *Layer) Clear() {
 // Len returns how many sprites are in the layer. A sprite added twice counts twice.
 func (l *Layer) Len() int {
 	return len(l.sprites)
+}
+
+// All returns the sprites in the order they are drawn, a sprite that was added twice
+// twice. The layer must not change while the loop runs: to remove sprites, collect them
+// first and Remove them afterwards.
+func (l *Layer) All() iter.Seq[*Sprite] {
+	return slices.Values(l.sprites)
+}
+
+// Hits returns the sprites whose Bounds overlap r, in the order they are drawn: the ones
+// a box at r would collide with. A sprite in the layer hits its own box, so skip it by
+// comparing pointers when asking about its own Bounds. Like All, it must not run while the
+// layer changes. An empty r, or one with a NaN, hits nothing.
+//
+//	for enemy := range enemies.Hits(player.Bounds()) {
+//		hurt(enemy)
+//	}
+func (l *Layer) Hits(r geometry.Rect) iter.Seq[*Sprite] {
+	return func(yield func(*Sprite) bool) {
+		for _, sp := range l.sprites {
+			if sp.Bounds().Overlaps(r) && !yield(sp) {
+				return
+			}
+		}
+	}
 }
 
 // Draw sets each sprite's Cell, or the cells of its Frame, in fb, clipping anything off

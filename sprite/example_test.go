@@ -160,3 +160,39 @@ func ExampleAnimation() {
 	// frame 0:" o\n |"
 	// done: false
 }
+
+// A sprite's box is where it is, as wide and tall as what it draws, from its Position as it
+// is, not floored to the cell it is drawn in.
+func ExampleSprite_Bounds() {
+	ship := &sprite.Sprite{
+		Position: geometry.Vector2{X: 2.5, Y: 1},
+		Frame:    sprite.FromLines(engine.Cell{}, " /\\ ", "/__\\"),
+	}
+	fmt.Println(ship.Bounds())
+	fmt.Println(ship.Bounds().Size())
+	// Output:
+	// {{2.5 1} {6.5 3}}
+	// {4 2}
+}
+
+// Hits asks a layer which sprites touch a box, in the order they are drawn. A sprite hits its
+// own box, and one that only touches along an edge does not hit.
+func ExampleLayer_Hits() {
+	player := &sprite.Sprite{
+		Position: geometry.Vector2{X: 5, Y: 2},
+		Frame:    sprite.FromLines(engine.Cell{}, "##", "##"), // covers 5 up to 7, 2 up to 4
+	}
+	layer := sprite.NewLayer()
+	layer.Add(player)
+	layer.Add(sprite.New(geometry.Vector2{X: 6, Y: 3}, 'a'))  // inside the player
+	layer.Add(sprite.New(geometry.Vector2{X: 7, Y: 2}, 'b'))  // starts where the player ends
+	layer.Add(sprite.New(geometry.Vector2{X: 20, Y: 2}, 'c')) // far away
+
+	for other := range layer.Hits(player.Bounds()) {
+		if other != player {
+			fmt.Printf("%c at %v\n", other.Cell.Character, other.Position)
+		}
+	}
+	// Output:
+	// a at {6 3}
+}
