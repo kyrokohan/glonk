@@ -97,6 +97,34 @@ func (l *Layer) Draw(fb *engine.FrameBuffer) {
 	}
 }
 
+// DrawView draws the layer as seen through view, the part of the world on screen: a sprite
+// is drawn in the cell that its Position is floored to, minus the cell that view.Min is
+// floored to. Only view.Min is used, because the frame is the size of the view. Both are
+// floored in world space before one is taken from the other, so that sprites and tiles never
+// slip against each other as the view moves: a sprite standing on a tile stays on it, and
+// the picture moves a whole cell at a time. A view whose Min is NaN or infinite draws
+// nothing. Everything else is as for Draw.
+func (l *Layer) DrawView(fb *engine.FrameBuffer, view geometry.Rect) {
+	// A NaN or infinite corner makes every sprite's cell NaN or infinite, which the checks
+	// below refuse before any conversion to int, so nothing is drawn.
+	ox, oy := math.Floor(view.Min.X), math.Floor(view.Min.Y)
+	w, h := float64(fb.Width()), float64(fb.Height())
+
+	// The loop of Draw again, with the view taken off. It is written out here rather than
+	// shared so that Draw, which most games call, costs what it did before views.
+	for _, sp := range l.sprites {
+		x, y := math.Floor(sp.Position.X)-ox, math.Floor(sp.Position.Y)-oy
+
+		if sp.Frame != nil || sp.Animation != nil || sp.Overlay {
+			drawSprite(fb, sp, x, y, w, h)
+			continue
+		}
+		if x >= 0 && x < w && y >= 0 && y < h {
+			fb.Set(int(x), int(y), sp.Cell)
+		}
+	}
+}
+
 // drawSprite draws a sprite that has an Animation or a Frame or is an Overlay, with its
 // position already floored, on a buffer w by h in float64. An Animation takes the place
 // of a Frame, and a Frame that of the Cell.
