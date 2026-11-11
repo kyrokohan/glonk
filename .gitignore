@@ -7,9 +7,6 @@
 /cube3d
 /viewer
 
-# private planning notes; kept out of the history on purpose
-/ROADMAP.md
-
 # test and coverage output
 *.test
 *.out

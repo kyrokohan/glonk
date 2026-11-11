@@ -6,6 +6,7 @@ Issues and pull requests are welcome. glonk is a one-person project, so replies 
 
 - For a bug, a typo or a small improvement, go ahead and open a pull request.
 - For anything larger, open an issue first. The API is pre-1.0 and may still change, so a big change is best agreed before you write it.
+- Planned work and ideas are [issues](https://github.com/kyrokohan/glonk/issues). `help wanted` and `good first issue` mark places to start; comment on an issue before starting a large one.
 - To report a security problem, do not use an issue. See [SECURITY.md](SECURITY.md).
 
 ## Setting up
