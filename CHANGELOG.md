@@ -4,6 +4,10 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-10
+
+On top of 0.3.0 this release colors models: from the pictures their materials name, and from colors on their vertices. Nothing was removed or renamed.
+
 ### Added
 
 - `Mesh.VertexColors`: a color for each vertex, drawn as the blend of a face's three corner colors at every cell, with the perspective-correct weights smooth shading uses for normals, flat or smooth, in cells (`DrawShaded`) and in pixels (`DrawShadedPixels`). A face cut by the near plane blends as the whole face would. A vertex color multiplies the color of a face that has one (`FaceColors`: a material's `Kd` or texture), so white leaves it as it is; a face without one is drawn in the vertex colors as they are. A corner with the zero `Color` takes what the face would be without vertex colors, and a default color there reads as black. A face none of whose corners has a color is drawn as before. A list of any other length is not used and `Validate` reports it; `Clone` copies it, `Fit` and `SmoothNormals` keep it, and wireframes ignore it.
@@ -15,6 +19,7 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ### Changed
 
+- `mesh.Mesh` has a new field, `VertexColors`. Code that sets fields by name is unaffected, and a mesh without it draws as before. A `Mesh{...}` literal that lists its values without field names no longer compiles, and `go vet` already warns about those: name the fields.
 - `LoadOBJ` and `LoadOBJLimit` now read the colors of six-number vertex lines, which they used to ignore, so a model that carried colors loads with them. Reading such a line takes about 77 ns longer (a file of 60,000 colored vertices loads 27% slower); a file without colors loads in the same time and with the same allocations.
 - `Mesh` is 24 bytes larger and is copied for every draw, so the shaded draw benchmarks take 1 to 4% longer (the largest on a scene of 200 small meshes; the wireframe benchmark, whose code did not change, moved 1 to 2% in the same runs). Drawing a mesh without vertex colors gives the same cells and allocates nothing, as before.
 - A model that used to load with no colors, or some, may now load with all: the pirate ship test model went from 1,552 colored faces of 29,860 to all of them, and a model of 800,000 faces from none to all. Loading takes longer by the time to decode the picture (23 to 61 ms, and 615 to 844 ms for the two), and `LoadOBJFS` of a file with many `vt` lines and no texture takes about 17% longer to read them. `LoadOBJ` and `LoadOBJLimit` are unchanged and read no `vt`.
@@ -106,7 +111,8 @@ The first release. The API is pre-1.0 and may still change. The README lists the
 - Three example programs (`bounce2d`, `cube3d` and a model `viewer`), runnable examples in the package documentation, fuzz tests for the parsers, rasterizers and clipping, and a test that keeps the documentation complete.
 - Continuous integration (format, vet and race tests on Linux and macOS for Go 1.26 and 1.27, cross-compilation, 32-bit tests), Dependabot, a security policy and contributing notes.
 
-[Unreleased]: https://github.com/kyrokohan/glonk/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/kyrokohan/glonk/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/kyrokohan/glonk/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/kyrokohan/glonk/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/kyrokohan/glonk/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/kyrokohan/glonk/releases/tag/v0.1.0
