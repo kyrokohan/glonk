@@ -197,6 +197,41 @@ func ExampleCanvas_FillRect() {
 	// ......######
 }
 
+// FillCircle and DrawCircle draw a disc and a ring one pixel thick, around the center
+// pixel, exactly and the same on every platform. The pixels of a Canvas are square, so a
+// circle comes out round.
+func ExampleCanvas_FillCircle() {
+	fb, err := engine.NewFrameBuffer(16, 4)
+	if err != nil {
+		panic(err)
+	}
+
+	canvas := fb.Canvas()
+	canvas.FillCircle(3, 3, 3, engine.Palette(196))
+	canvas.DrawCircle(11, 3, 3, engine.Palette(45))
+
+	for y := range canvas.Height() {
+		var row strings.Builder
+		for x := range canvas.Width() {
+			if canvas.At(x, y).IsDefault() {
+				row.WriteByte('.')
+			} else {
+				row.WriteByte('#')
+			}
+		}
+		fmt.Println(row.String())
+	}
+	// Output:
+	// ...#.......#....
+	// .#####...##.##..
+	// .#####...#...#..
+	// #######.#.....#.
+	// .#####...#...#..
+	// .#####...##.##..
+	// ...#.......#....
+	// ................
+}
+
 // A shade is an exact RGB color, so brightness runs smoothly on a terminal with true
 // color and is rounded to the palette on one without.
 func ExampleShade() {

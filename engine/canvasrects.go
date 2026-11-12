@@ -42,10 +42,16 @@ func (c *Canvas) FillRect(x, y, w, h int, color Color) {
 	x0, x1 := span(x, w, c.width)
 	y0, y1 := span(y, h, c.height)
 	for py := y0; py < y1; py++ {
-		row := c.pixels[py*c.width+x0 : py*c.width+x1]
-		for i := range row {
-			row[i] = color
-		}
+		c.fillRow(py, x0, x1, color)
+	}
+}
+
+// fillRow sets the pixels of row y from x0 up to but not including x1, which must be inside
+// the canvas.
+func (c *Canvas) fillRow(y, x0, x1 int, color Color) {
+	row := c.pixels[y*c.width+x0 : y*c.width+x1]
+	for i := range row {
+		row[i] = color
 	}
 }
 
