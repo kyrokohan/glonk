@@ -349,13 +349,26 @@ func TestDecodeLimitPixelLimitIsExactAndIsCheckedBeforeDecoding(t *testing.T) {
 
 	// These headers claim pictures of up to 40 GB and have no pixels after them, so they
 	// could only be refused from the header: decoding one would fail, not be refused.
-	for name, data := range map[string][]byte{
-		"100,000 by 100,000": pngHeader(100_000, 100_000),
-		"2^31-1 by 1":        pngHeader(1<<31-1, 1),
-		"1 by 2^31-1":        pngHeader(1, 1<<31-1),
-		"2,049 by 2,048":     pngHeader(2049, 2048),
+	//
+	// Where an int has 32 bits the standard library refuses a header of 2^28 pixels or more
+	// itself, before this package sees a size, and Decode reports that as ErrFormat. There
+	// those are only checked to be refused, and not for which error.
+	wide := math.MaxInt > math.MaxInt32
+	for name, c := range map[string]struct {
+		data        []byte
+		sizeIsKnown bool // whether ErrTooLarge is wanted, which is where the size can be read
+	}{
+		"16,000 by 16,000":   {pngHeader(16_000, 16_000), true},
+		"2,049 by 2,048":     {pngHeader(2049, 2048), true},
+		"100,000 by 100,000": {pngHeader(100_000, 100_000), wide},
+		"2^31-1 by 1":        {pngHeader(1<<31-1, 1), wide},
+		"1 by 2^31-1":        {pngHeader(1, 1<<31-1), wide},
 	} {
-		if pic, err := Decode(bytes.NewReader(data)); !errors.Is(err, ErrTooLarge) || pic != nil {
+		pic, err := Decode(bytes.NewReader(c.data))
+		if pic != nil || err == nil {
+			t.Errorf("%s: wanted the picture refused, got %v and %v", name, pic, err)
+		}
+		if c.sizeIsKnown && !errors.Is(err, ErrTooLarge) {
 			t.Errorf("%s: wanted ErrTooLarge from the header, got %v", name, err)
 		}
 	}

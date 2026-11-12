@@ -38,7 +38,8 @@ type Bitmap struct {
 // 32 MiB, or whose header says it has more than 4,194,304 pixels (2,048 by 2,048), as
 // DecodeLimit does with those limits. The error is ErrFormat when the data is not a picture,
 // ErrTooLarge when it is over a limit, and otherwise says why the picture could not be read:
-// a failure of r, or a picture that is cut short or damaged.
+// a failure of r, or a picture that is cut short or damaged. Where an int has 32 bits, the
+// standard library itself refuses a PNG header of 2^28 pixels or more, and that is ErrFormat.
 func Decode(r io.Reader) (*Bitmap, error) {
 	return DecodeLimit(r, defaultMaxBytes, defaultMaxPixels)
 }

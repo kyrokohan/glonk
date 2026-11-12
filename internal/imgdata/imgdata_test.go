@@ -8,6 +8,7 @@ import (
 	"image/color"
 	"image/jpeg"
 	"image/png"
+	"math"
 	"runtime"
 	"testing"
 )
@@ -143,21 +144,32 @@ func TestOpenRefusesWhatIsNotAPicture(t *testing.T) {
 
 // The size comes from the header alone, so a file can say how big it is without being
 // decoded, and a caller can refuse it before a byte of it is spent.
+//
+// Where an int has 32 bits the standard library refuses a PNG header of 2^28 pixels or more
+// itself ("dimension overflow"), so there Open says nothing of those, and they are only
+// tried where an int has 64.
 func TestOpenReadsTheSizeWithoutDecoding(t *testing.T) {
-	var before, after runtime.MemStats
-	runtime.ReadMemStats(&before)
-	w, h, decode, ok := Open(pngHeader(100_000, 100_000)) // 40 GB, as pixels
-	runtime.ReadMemStats(&after)
+	sizes := [][2]uint32{{16_000, 16_000}} // 256 million pixels, 1 GB as 8-bit RGBA
+	if math.MaxInt > math.MaxInt32 {
+		sizes = append(sizes, [2]uint32{100_000, 100_000}, [2]uint32{1<<31 - 1, 1}) // 40 GB, 2 GB
+	}
 
-	if !ok || w != 100_000 || h != 100_000 {
-		t.Fatalf("wanted (100000, 100000, true), got (%d, %d, %v)", w, h, ok)
-	}
-	if spent := after.TotalAlloc - before.TotalAlloc; spent > 1<<20 {
-		t.Errorf("wanted opening to allocate nothing like the size of the picture, got %d bytes", spent)
-	}
-	// The header is all there is, so the picture itself does not decode.
-	if _, err := decode(); err == nil {
-		t.Errorf("wanted a header with no picture after it not to decode")
+	for _, size := range sizes {
+		var before, after runtime.MemStats
+		runtime.ReadMemStats(&before)
+		w, h, decode, ok := Open(pngHeader(size[0], size[1]))
+		runtime.ReadMemStats(&after)
+
+		if !ok || uint32(w) != size[0] || uint32(h) != size[1] {
+			t.Fatalf("wanted (%d, %d, true), got (%d, %d, %v)", size[0], size[1], w, h, ok)
+		}
+		if spent := after.TotalAlloc - before.TotalAlloc; spent > 1<<20 {
+			t.Errorf("%d by %d: wanted opening to allocate nothing like the size of the picture, got %d bytes", size[0], size[1], spent)
+		}
+		// The header is all there is, so the picture itself does not decode.
+		if _, err := decode(); err == nil {
+			t.Errorf("%d by %d: wanted a header with no picture after it not to decode", size[0], size[1])
+		}
 	}
 }
 
