@@ -223,7 +223,7 @@ func parseDir(t *testing.T, fset *token.FileSet, dir string, keep func(name stri
 // The documentation of every package must describe each exported name and must not
 // point at names a reader cannot see.
 func TestDocumentation(t *testing.T) {
-	for _, dir := range []string{".", "../geometry", "../mesh", "../sprite", "../tilemap", "../widget"} {
+	for _, dir := range []string{".", "../geometry", "../mesh", "../sprite", "../tilemap", "../widget", "../bitmap"} {
 		t.Run(dir, func(t *testing.T) {
 			fset := token.NewFileSet()
 			pkgs := parseDir(t, fset, dir, func(name string) bool {
@@ -307,7 +307,7 @@ func uncheckedExamples(files []*ast.File) []string {
 }
 
 func TestExamplesAreRun(t *testing.T) {
-	for _, dir := range []string{".", "../geometry", "../mesh", "../sprite", "../tilemap", "../widget"} {
+	for _, dir := range []string{".", "../geometry", "../mesh", "../sprite", "../tilemap", "../widget", "../bitmap"} {
 		t.Run(dir, func(t *testing.T) {
 			fset := token.NewFileSet()
 			pkgs := parseDir(t, fset, dir, func(name string) bool {
