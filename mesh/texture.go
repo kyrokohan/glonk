@@ -1,15 +1,12 @@
 package mesh
 
 import (
-	"bytes"
 	"image"
 	"image/color"
-	"image/jpeg"
-	"image/png"
-	"io"
 	"math"
 
 	"glonk.dev/engine"
+	"glonk.dev/internal/imgdata"
 )
 
 // The most an OBJ can ask of the images its materials name. They come from the same
@@ -53,31 +50,18 @@ func (l *materialLibrary) loadTexture(name string) *texture {
 		return nil
 	}
 
-	var (
-		config func(io.Reader) (image.Config, error)
-		decode func(io.Reader) (image.Image, error)
-	)
-	switch {
-	case bytes.HasPrefix(data, []byte("\xff\xd8")):
-		config, decode = jpeg.DecodeConfig, jpeg.Decode
-	case bytes.HasPrefix(data, []byte("\x89PNG\r\n\x1a\n")):
-		config, decode = png.DecodeConfig, png.Decode
-	default:
-		return nil
-	}
-
-	cfg, err := config(bytes.NewReader(data))
-	if err != nil || cfg.Width <= 0 || cfg.Height <= 0 {
+	width, height, decode, ok := imgdata.Open(data)
+	if !ok {
 		return nil
 	}
 	// In 64 bits, where two sizes of up to 2^31 cannot overflow.
-	pixels := int64(cfg.Width) * int64(cfg.Height)
+	pixels := int64(width) * int64(height)
 	if pixels > maxTexturePixels-l.pixels {
 		return nil
 	}
 	l.pixels += pixels
 
-	img, err := decode(bytes.NewReader(data))
+	img, err := decode()
 	if err != nil {
 		return nil
 	}
