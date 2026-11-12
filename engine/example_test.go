@@ -165,6 +165,38 @@ func ExampleCanvas() {
 	//   ▀▄  ▀▄
 }
 
+// FillRect and DrawRect draw rectangles of pixels, filled or as a border one pixel thick. What
+// runs off the canvas is cut off. Here every pixel is printed, # for a pixel and . for none.
+func ExampleCanvas_FillRect() {
+	fb, err := engine.NewFrameBuffer(12, 3)
+	if err != nil {
+		panic(err)
+	}
+
+	canvas := fb.Canvas()
+	canvas.FillRect(0, 0, 5, 4, engine.Palette(196))
+	canvas.DrawRect(6, 1, 6, 5, engine.Palette(45))
+
+	for y := range canvas.Height() {
+		var row strings.Builder
+		for x := range canvas.Width() {
+			if canvas.At(x, y).IsDefault() {
+				row.WriteByte('.')
+			} else {
+				row.WriteByte('#')
+			}
+		}
+		fmt.Println(row.String())
+	}
+	// Output:
+	// #####.......
+	// #####.######
+	// #####.#....#
+	// #####.#....#
+	// ......#....#
+	// ......######
+}
+
 // A shade is an exact RGB color, so brightness runs smoothly on a terminal with true
 // color and is rounded to the palette on one without.
 func ExampleShade() {
