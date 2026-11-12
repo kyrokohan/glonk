@@ -11,7 +11,7 @@ Website: [glonk.dev](https://glonk.dev)
 - **2D:** cells with foreground and background colors (the 256-color palette, or exact RGB on terminals with true color) and text attributes (bold, dim, underline, reverse), lines, boxes, text, and sprites (several cells, see-through, animated).
 - **3D:** wireframe or solid meshes through a perspective camera, with near-plane clipping. Solid meshes are shaded by any number of lights (directional, ambient, point, or your own) into an ASCII brightness ramp, face by face or, with normals, smoothly across each face. They hide each other by depth and skip faces turned away. A wireframe drawn with depth is hidden by nearer solids too.
 - **Shapes and models:** a cube, sphere, cylinder, cone, plane and grid, or OBJ files from any `io.Reader` (a file, `//go:embed`, a download), centered and scaled and drawn wireframe or shaded, in the colors and texture pictures of their materials when loaded from an `fs.FS`, and with a color on each vertex.
-- **Half blocks:** a pixel `Canvas` with two square-ish pixels per cell, drawn with `▀` and a background color, for twice the vertical detail and shading by color instead of by character. Lines and wireframes can be drawn into the pixels too.
+- **Half blocks:** a pixel `Canvas` with two square-ish pixels per cell, drawn with `▀` and a background color, for twice the vertical detail and shading by color instead of by character. Lines, rectangles, circles, wireframes and pictures (JPEG or PNG) can be drawn into the pixels too. See [Pixel shapes and pictures](#pixel-shapes-and-pictures).
 - **Mixed:** draw a 3D scene first, then a 2D HUD on top, into the same frame.
 - **Widgets:** a label, a panel, a bar and a menu for a HUD or a pause screen, drawn in screen space. See [Widgets](#widgets).
 - **Input:** held keys and one-shot presses, including arrows. Terminals with the [kitty keyboard protocol](https://sw.kovidgoyal.net/kitty/keyboard-protocol/) (Ghostty, kitty, WezTerm, foot, iTerm2, Alacritty) report real key releases, so you can hold several keys at once.
@@ -183,6 +183,34 @@ canvas.Compose()
 - **Ties keep what is there.** A line lying exactly on a surface, a grid on a floor, flickers between the two: lift it a little. There is no bias, because depth changes too fast across a floor seen at a shallow angle for any constant to cover.
 - **Not for a mesh's own faces.** To draw a mesh's edges over its own shaded faces, use `Draw`, which does not depend on how those cells compare.
 - **Off-screen meshes are skipped.** Drawing starts by asking whether any of a mesh can be on screen, so a scene of many meshes costs little for those out of view. No picture changes.
+
+## Pixel shapes and pictures
+
+The pixel `Canvas` draws rectangles and circles next to lines and triangles, and the `bitmap` package draws a JPEG or PNG on it:
+
+```go
+canvas := fb.Canvas()
+canvas.FillRect(2, 1, 20, 6, engine.RGB(40, 60, 220))
+canvas.DrawRect(0, 0, canvas.Width(), canvas.Height(), engine.RGB(255, 255, 255)) // a border
+canvas.FillCircle(40, 10, 8, engine.RGB(230, 210, 40))
+canvas.DrawCircle(40, 10, 12, engine.RGB(230, 210, 40)) // a ring around it
+
+// once, at start-up: a //go:embed []byte, a file, a download
+logo, err := bitmap.Decode(bytes.NewReader(logoPNG))
+if err != nil {
+	return err
+}
+logo.Draw(canvas, 2, 2)                // at its own size
+logo.DrawScaled(canvas, 60, 2, 32, 16) // or stretched
+canvas.Compose()
+```
+
+- **Rectangles.** `FillRect(x, y, w, h, color)` fills the pixels from `(x, y)`, and `DrawRect` draws a border one pixel thick inside the same rectangle: one under 3 pixels wide or tall is all border. A width or height that is not positive draws nothing.
+- **Circles.** `FillCircle(cx, cy, r, color)` is the pixels with (x-cx)² + (y-cy)² <= r², so it is `2r+1` across and round, since the pixels of a canvas are square. `DrawCircle` is its outline, a ring one pixel thick. A radius of 0 is one pixel and a negative one draws nothing. The rows come from integer arithmetic, so the same pixels are drawn on every platform.
+- **As lines are.** Shapes and pictures clip, replace the pixels under them whatever their depth (they never read or write it), and erase with the zero `Color`. Only the pixels on the canvas are visited, so a shape far off screen costs nothing and no number is too large. None allocates: a rectangle over a whole 200 by 120 canvas takes about 9 microseconds, a disc of radius 50 about 4, its ring about 1.
+- **Pictures.** `bitmap.Decode` reads a JPEG or PNG, found by what it holds and not by its name, once, into the colors of the canvas. `Draw` and `DrawScaled` then copy pixels and allocate nothing: 64 by 64 pixels take about 4 microseconds, or about 29 stretched to 128 by 96. A PNG pixel with an alpha of 128 or more is drawn as an opaque color and a lighter one is left alone, so what is under it shows. There is no blending, since a canvas pixel has no alpha and the terminal's own background is not known. Black is a color and is drawn. `DrawScaled` takes the pixel of the picture under the middle of each pixel it draws, with no smoothing, so a picture at its own size comes out exactly.
+- **Files that cannot be trusted.** A small file can claim a picture of billions of pixels, so `Decode` reads the size from the header and refuses a picture over 32 MiB, or of more than 4,194,304 pixels (2,048 by 2,048), before decoding it. `DecodeLimit` takes limits of your own, and a source that never ends is read only up to the limit. The decoders are linked only into programs that import `bitmap`, which adds about 220 KB to a stripped program.
+- **Not included.** Smooth scaling and anti-aliasing, animated formats, ellipses, rounded rectangles, lines thicker than a pixel, and blending partial alpha.
 
 ## Sprites
 
@@ -385,12 +413,13 @@ To test a whole run (start-up, key bytes in, frames out), give `Config.Input` an
 
 | Package | Purpose |
 |---|---|
-| `engine` | The loop, `FrameBuffer`, pixel `Canvas`, drawing helpers, keyboard `Input` |
+| `engine` | The loop, `FrameBuffer`, pixel `Canvas` (lines, rectangles, circles, triangles), drawing helpers, keyboard `Input` |
 | `geometry` | 2D and 3D vector math, and `Rect` for boxes, collision and cameras |
 | `mesh` | 3D meshes (wireframe and shaded), shapes, OBJ loading, lights, and the perspective `Camera` |
 | `sprite` | Sprites (a `Cell`, a text-art `Frame` or an `Animation` at a position, optionally see-through) drawn in layers, through a view, with bounds and collision queries |
 | `tilemap` | Tile maps written as text art, drawn through a camera, with solid tiles that stop a moving box |
 | `widget` | A label, a panel, a bar and a menu for a HUD or a pause screen, drawn in screen space |
+| `bitmap` | JPEG and PNG pictures drawn on the pixel `Canvas` at their own size or stretched, with limits for files that cannot be trusted |
 
 ## Compatibility and limits
 

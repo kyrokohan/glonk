@@ -14,6 +14,6 @@
 // palette colors, or RGB) and text attributes such as [Bold]. RGB is shown exactly on
 // terminals with true color and as the nearest palette color on the rest, so output
 // works in nearly any terminal. A [Canvas] gives the same frame a second
-// layer of pixels, two to a cell, drawn with half-block characters; triangles and
-// lines can be drawn into it.
+// layer of pixels, two to a cell, drawn with half-block characters; triangles, lines,
+// rectangles and circles can be drawn into it, and the bitmap package draws pictures.
 package engine
