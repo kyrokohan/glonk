@@ -135,7 +135,8 @@ func (g *worldGame) Update(dt float64, in *engine.Input) error {
 	if g.paused {
 		return g.updatePaused(in)
 	}
-	if in.Pressed(engine.KeyEscape) {
+	// Started, not Pressed: Esc opens and closes the menu, so a held one must not do both.
+	if in.Started(engine.KeyEscape) {
 		g.paused, g.menu.Selected = true, resumeItem
 		return nil
 	}
@@ -180,7 +181,7 @@ func (g *worldGame) Update(dt float64, in *engine.Input) error {
 func (g *worldGame) updatePaused(in *engine.Input) error {
 	choice, chosen := g.menu.Update(in)
 	switch {
-	case in.Pressed(engine.KeyEscape), chosen && choice == resumeItem:
+	case in.Started(engine.KeyEscape), chosen && choice == resumeItem:
 		g.paused = false
 	case chosen && choice == quitItem:
 		return engine.ErrQuit

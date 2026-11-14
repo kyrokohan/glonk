@@ -492,6 +492,19 @@ func edgeKeyFlipsTheEdgeStyleOncePerPress(t *testing.T, wire bool) {
 	if got := frame(true); !strings.Contains(got, "exact edges") {
 		t.Errorf("wanted a second press to switch back, got %q", got)
 	}
+
+	// Held down, the key repeats in every frame, and only the first press flips the style.
+	for i := range 4 {
+		kb.Press('b')
+		if err := step(v, kb, 1.0/30); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		fb.Clear()
+		v.Draw(fb)
+		if got := hudText(fb, 2); !strings.Contains(got, "solid edges") {
+			t.Fatalf("frame %d of a held key: wanted solid edges from one flip, got %q", i, got)
+		}
+	}
 }
 
 // step runs one Update of dt seconds with the keyboard as it is, then ends the frame
@@ -551,6 +564,13 @@ func TestToggleKeysSwitchOncePerPressInEitherCase(t *testing.T) {
 				}
 				if tt.get(v) == start {
 					t.Errorf("wanted holding the key to change nothing")
+				}
+				for range 5 { // held down: the terminal sends a repeat in every frame
+					kb.Press(key)
+					step(v, kb, 0.1)
+					if tt.get(v) == start {
+						t.Fatalf("wanted a repeat to change nothing")
+					}
 				}
 				kb.Release(key)
 				kb.Press(key)
@@ -844,6 +864,13 @@ func TestShadingKeyTogglesTheCurrentModelOncePerPressInEitherCase(t *testing.T) 
 			}
 			if !v.models[0].smooth {
 				t.Errorf("wanted holding the key to change nothing")
+			}
+			for range 5 { // held down: the terminal sends a repeat in every frame
+				kb.Press(key)
+				step(v, kb, 0.1)
+				if !v.models[0].smooth {
+					t.Fatalf("wanted a repeat to change nothing")
+				}
 			}
 			kb.Release(key)
 			kb.Press(key)

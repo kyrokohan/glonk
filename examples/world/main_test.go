@@ -397,6 +397,36 @@ func TestEscapeOpensThePauseMenuAndOtherKeysDoNot(t *testing.T) {
 	}
 }
 
+// Esc opens the menu and Esc closes it, so a held Esc must not do both: only the first press
+// counts, and the repeats of the key leave the menu open.
+func TestAHeldEscapeOpensThePauseMenuOnce(t *testing.T) {
+	g := newSizedGame(80, 24)
+	kb := engine.NewKeyboard()
+
+	for i := range 4 { // the key stays down, and every frame after the first brings a repeat
+		kb.Press(engine.KeyEscape)
+		if err := g.Update(0.1, kb.Input()); err != nil || !g.paused {
+			t.Fatalf("frame %d of a held Escape: wanted the menu open, got %v and paused %v", i, err, g.paused)
+		}
+		kb.EndFrame()
+	}
+
+	kb.Release(engine.KeyEscape)
+	kb.Press(engine.KeyEscape)
+	if err := g.Update(0.1, kb.Input()); err != nil || g.paused {
+		t.Fatalf("wanted a new press of Escape to close the menu, got %v and paused %v", err, g.paused)
+	}
+	kb.EndFrame()
+
+	for i := range 4 { // still held: the repeats must not open the menu again
+		kb.Press(engine.KeyEscape)
+		if err := g.Update(0.1, kb.Input()); err != nil || g.paused {
+			t.Fatalf("frame %d of the same hold: wanted the menu to stay closed, got %v and paused %v", i, err, g.paused)
+		}
+		kb.EndFrame()
+	}
+}
+
 func TestTheWorldStandsStillWhilePaused(t *testing.T) {
 	g := newSizedGame(80, 24)
 	g.Update(0, hold(engine.KeyEscape))

@@ -55,7 +55,7 @@ type cubeGame struct {
 
 // keyDown reports whether a letter key counts as down or pressed, in either case.
 // Terminals that cannot report keys exactly send a capital for Shift or Caps Lock.
-// held is Input.IsDown or Input.Pressed.
+// held is Input.IsDown or Input.Started.
 func keyDown(held func(engine.Key) bool, letter rune) bool {
 	return held(engine.Key(letter)) || held(engine.Key(unicode.ToUpper(letter)))
 }
@@ -72,10 +72,11 @@ func (g *cubeGame) Update(dt float64, in *engine.Input) error {
 	if in.Pressed(engine.KeyEscape) {
 		return engine.ErrQuit
 	}
-	if keyDown(in.Pressed, 'm') {
+	// Started, not Pressed: these switch something, and a held key must switch it once.
+	if keyDown(in.Started, 'm') {
 		g.halfBlocks = !g.halfBlocks
 	}
-	if g.halfBlocks && keyDown(in.Pressed, 'b') {
+	if g.halfBlocks && keyDown(in.Started, 'b') {
 		g.flipEdges = true
 	}
 

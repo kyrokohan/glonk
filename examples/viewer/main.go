@@ -194,8 +194,9 @@ func (v *viewer) Update(dt float64, in *engine.Input) error {
 		return engine.ErrQuit
 	}
 
-	// Shift changes the letter in terminals that cannot report keys exactly.
-	pressed := func(lower, upper rune) bool { return in.Pressed(engine.Key(lower)) || in.Pressed(engine.Key(upper)) }
+	// Shift changes the letter in terminals that cannot report keys exactly. Started, not
+	// Pressed: these keys switch something, and a held key must switch it once.
+	pressed := func(lower, upper rune) bool { return in.Started(engine.Key(lower)) || in.Started(engine.Key(upper)) }
 	if pressed('n', 'N') {
 		v.current = (v.current + 1) % len(v.models)
 	}
