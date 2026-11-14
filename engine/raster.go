@@ -29,8 +29,8 @@ func (fb *FrameBuffer) DrawLine(x0, y0, x1, y1 int, cell Cell) {
 }
 
 // DrawLineDepth draws the same line as DrawLine, but each cell is stored with SetDepth,
-// so a nearer surface hides it and it hides a farther one. z0 and z1 are the distances
-// from the camera of the two ends, as for FillTriangle, and must be positive. A line
+// so a nearer surface hides it and it hides a farther one. z0 and z1 are the depths of
+// the two ends (see Canvas.SetDepth), as for FillTriangle, and must be positive. A line
 // is drawn where it is nearer than what is there, and where it ties, what is there
 // stays.
 //
@@ -219,7 +219,7 @@ const triangleEps = 1e-9
 
 // FillTriangle fills the triangle with corners (x0, y0), (x1, y1), (x2, y2) in
 // cell coordinates, drawing cell into every cell whose centre lies inside it.
-// z0, z1 and z2 are the corners' distances from the camera and must be positive;
+// z0, z1 and z2 are the corners' depths (see Canvas.SetDepth) and must be positive;
 // each cell is drawn with SetDepth, so nearer surfaces win. Either winding works.
 // A triangle with no area, or with a non-positive or NaN corner depth, draws nothing.
 func (fb *FrameBuffer) FillTriangle(x0, y0, z0, x1, y1, z1, x2, y2, z2 float64, cell Cell) {

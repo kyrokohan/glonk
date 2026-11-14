@@ -78,7 +78,8 @@ func (fb *FrameBuffer) Set(x, y int, cell Cell) {
 // SetDepth stores cell at (x, y) only if z is nearer than what is already there,
 // and reports whether it did. Smaller z is nearer; a tie keeps the existing cell.
 // Writes outside the buffer, and a NaN z, are ignored. Set never reads or writes
-// depth, so 2D drawing and HUDs are unaffected.
+// depth, so 2D drawing and HUDs are unaffected. See Canvas.SetDepth for what a depth is
+// in a scene drawn through a mesh.Camera.
 func (fb *FrameBuffer) SetDepth(x, y int, z float64, cell Cell) bool {
 	if !fb.inBounds(x, y) {
 		return false

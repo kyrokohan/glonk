@@ -126,6 +126,36 @@ func ExampleCamera_Project() {
 	// false
 }
 
+// A marker, a billboard or a particle drawn into the canvas of the solids takes its pixel and
+// its depth from ProjectPixels, so that a solid in front of it hides it and it hides one
+// behind it. Floor the pixel with math.Floor.
+func ExampleCamera_ProjectPixels() {
+	fb, err := engine.NewFrameBuffer(40, 12)
+	if err != nil {
+		panic(err)
+	}
+	canvas := fb.Canvas()
+	cam := mesh.Camera{} // at the origin, looking down +z
+
+	cube := mesh.Cube(2)
+	cube.Transform.Position = geometry.Vector3{Z: 5} // its near face is 4 away
+	cube.Material.Color = engine.RGB(200, 100, 50)
+	cube.DrawShadedPixels(canvas, cam, mesh.Ambient{Level: 1})
+
+	marker := engine.RGB(0, 255, 0)
+	for _, z := range []float64{3, 7} { // in front of the cube, and behind it
+		x, y, depth, ok := cam.ProjectPixels(geometry.Vector3{Z: z}, canvas)
+		if !ok {
+			continue
+		}
+		drawn := canvas.SetDepth(int(math.Floor(x)), int(math.Floor(y)), depth, marker)
+		fmt.Printf("z=%.0f: pixel (%.0f, %.0f), depth %.0f, drawn: %v\n", z, x, y, depth, drawn)
+	}
+	// Output:
+	// z=3: pixel (20, 12), depth 3, drawn: true
+	// z=7: pixel (20, 12), depth 7, drawn: false
+}
+
 // A Transform scales a model, turns it by Roll, Pitch and Yaw in that order, and moves
 // it to Position. Apply says where a point of the model ends up.
 func ExampleTransform() {
