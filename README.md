@@ -136,7 +136,7 @@ A mesh with no `Normals` is lit face by face, one brightness for each, so a roun
 - **Back to facets:** draw a copy with `Normals` set to nil. A zero normal means none here: that corner takes the face's own. Normals turn with the `Transform`, whatever its scale.
 - **Cost:** about 12 to 23% more than facets on a scene of spheres, and none for a mesh without normals. Drawing allocates nothing either way.
 - **Shape limits:** segments go from 3 to 512 and rings from 2 to 512, so a careless argument cannot ask for gigabytes, and a size that is negative or not a finite number counts as 0. `Point` lights: `Range` 0 means no fading, and a negative `Range` gives no light.
-- **Your own lights:** `Light.Brightness(point, normal)` is asked about every cell of a mesh with normals, with the place on the surface and the unit normal there, and once for each face of one without.
+- **Your own lights:** `Light.Brightness(point, normal)` is asked about every cell of a mesh with normals, with the place on the surface and the unit normal there, and once for each face of one without. `mesh.Brightness(lights, point, normal)` adds lights up the way the drawing does, so that a marker, a billboard or anything else you draw into the scene is lit as the meshes around it are, whatever the rule becomes.
 
 ## Vertex colors
 

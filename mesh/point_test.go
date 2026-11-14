@@ -66,7 +66,7 @@ func TestPointBrightness(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := brightness([]Light{tt.lamp}, tt.point, tt.normal)
+			got := Brightness([]Light{tt.lamp}, tt.point, tt.normal)
 			// The light itself also stays from 0 to 1 (or NaN, which counts as 0), so that
 			// code which calls it directly need not clamp.
 			direct := tt.lamp.Brightness(tt.point, tt.normal)
@@ -86,8 +86,8 @@ func TestPointAddsUpWithOtherLights(t *testing.T) {
 	lamp := Point{Position: v3(0, 5, 0), Range: 10} // 0.25 at the origin
 	ambient := Ambient{Level: 0.2}
 
-	got := brightness([]Light{lamp, ambient}, v3(0, 0, 0), v3(0, 1, 0))
-	other := brightness([]Light{ambient, lamp}, v3(0, 0, 0), v3(0, 1, 0))
+	got := Brightness([]Light{lamp, ambient}, v3(0, 0, 0), v3(0, 1, 0))
+	other := Brightness([]Light{ambient, lamp}, v3(0, 0, 0), v3(0, 1, 0))
 
 	if want := 0.25 + (1-0.25)*0.2; math.Abs(got-want) > 1e-12 || got != other {
 		t.Errorf("wanted %v whichever way round, got %v and %v", want, got, other)
@@ -245,7 +245,7 @@ func FuzzPointBrightness(f *testing.F) {
 		if !math.IsNaN(b) && (b < 0 || b > 1) {
 			t.Fatalf("wanted NaN or a number from 0 to 1, got %v", b)
 		}
-		if got := brightness([]Light{lamp}, v3(px, py, pz), v3(nx, ny, nz)); !(got >= 0 && got <= 1) {
+		if got := Brightness([]Light{lamp}, v3(px, py, pz), v3(nx, ny, nz)); !(got >= 0 && got <= 1) {
 			t.Fatalf("wanted the clamped brightness from 0 to 1, got %v", got)
 		}
 	})

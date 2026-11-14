@@ -100,7 +100,7 @@ func TestLightsAddUpWithoutPassingFull(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := brightness(tt.lights, geometry.Vector3{}, up); !floatEquals(got, tt.want) {
+			if got := Brightness(tt.lights, geometry.Vector3{}, up); !floatEquals(got, tt.want) {
 				t.Errorf("wanted %v, got %v", tt.want, got)
 			}
 		})
@@ -123,9 +123,9 @@ func TestLightOrderDoesNotMatterAndBrightnessStaysInRange(t *testing.T) {
 		}
 		normal := geometry.Vector3{X: rng.NormFloat64(), Y: rng.NormFloat64(), Z: rng.NormFloat64()}.Normalize()
 
-		got := brightness(lights, geometry.Vector3{}, normal)
+		got := Brightness(lights, geometry.Vector3{}, normal)
 		rng.Shuffle(len(lights), func(i, j int) { lights[i], lights[j] = lights[j], lights[i] })
-		shuffled := brightness(lights, geometry.Vector3{}, normal)
+		shuffled := Brightness(lights, geometry.Vector3{}, normal)
 
 		if got < 0 || got > 1 {
 			t.Fatalf("wanted brightness in 0 to 1, got %v", got)
@@ -148,7 +148,7 @@ func TestAmbientAndDirectionalMatchTheOldCombinedLight(t *testing.T) {
 		facing := max(0, normal.Dot(dir.Normalize().Neg()))
 		want := ambient + (1-ambient)*facing
 
-		got := brightness([]Light{Ambient{Level: ambient}, Directional{Direction: dir}}, geometry.Vector3{}, normal)
+		got := Brightness([]Light{Ambient{Level: ambient}, Directional{Direction: dir}}, geometry.Vector3{}, normal)
 
 		// Equal to within rounding: where the compiler fuses multiply and add differs.
 		if math.Abs(got-want) > 1e-12 {
@@ -297,5 +297,56 @@ func TestDrawShadedPixelsTakesSeveralLights(t *testing.T) {
 	}
 	if same || len(pixelsDrawn(lit)) == 0 {
 		t.Errorf("wanted the second light to change the pixels (drawn: %d)", len(pixelsDrawn(lit)))
+	}
+}
+
+// A flat face is lit once, at its middle, by Brightness: the character DrawShaded draws and the
+// shade DrawShadedPixels draws are what Brightness gives for the middle of the face and its
+// normal. So a program that lights its own things with Brightness matches the meshes.
+func TestBrightnessIsWhatAFlatFaceIsDrawnWith(t *testing.T) {
+	verts := []geometry.Vector3{{X: -1, Y: -1, Z: 5}, {X: 1, Y: -1, Z: 5}, {X: 0, Y: 1, Z: 5}}
+	face := [3]int{0, 2, 1} // wound toward the camera at the origin
+	middle := verts[0].Add(verts[1]).Add(verts[2]).Scale(1.0 / 3)
+	normal := geometry.Vector3{Z: -1} // out of the face, toward the camera
+	lights := []Light{
+		Ambient{Level: 0.2},
+		Directional{Direction: geometry.Vector3{X: 0.4, Y: -1, Z: 0.6}},
+		Point{Position: geometry.Vector3{X: 2, Z: 2}, Range: 20},
+	}
+	color := engine.Palette(208)
+
+	want := Brightness(lights, middle, normal)
+	if want < 0.3 || want > 0.9 {
+		t.Fatalf("wanted a brightness in the middle of the range, so that the check means something, got %v", want)
+	}
+	if want <= Brightness(lights[:2], middle, normal) {
+		t.Fatalf("wanted the third light to count, got %v with it and %v without", want, Brightness(lights[:2], middle, normal))
+	}
+	m := Mesh{Vertices: verts, Faces: [][3]int{face}}.withColor(color)
+
+	fb := newShadeBuffer(t)
+	m.DrawShaded(fb, shadeCam(), lights...)
+	cells := drawn(fb)
+	if len(cells) == 0 {
+		t.Fatalf("wanted the face to be drawn, got nothing")
+	}
+	wantChar := shadeChar(defaultRampRunes, want)
+	for _, c := range cells {
+		if got := fb.At(c[0], c[1]).Character; got != wantChar {
+			t.Fatalf("wanted every cell of the face to be %q, from a brightness of %v, got %q at %v", wantChar, want, got, c)
+		}
+	}
+
+	canvas := newShadeBuffer(t).Canvas()
+	m.DrawShadedPixels(canvas, shadeCam(), lights...)
+	pixels := pixelsDrawn(canvas)
+	if len(pixels) == 0 {
+		t.Fatalf("wanted the face to be drawn in pixels, got nothing")
+	}
+	wantColor := engine.Shade(color, want)
+	for _, p := range pixels {
+		if got := canvas.At(p[0], p[1]); got != wantColor {
+			t.Fatalf("wanted every pixel of the face to be %v, from a brightness of %v, got %v at %v", wantColor, want, got, p)
+		}
 	}
 }

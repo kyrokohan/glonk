@@ -13,7 +13,8 @@ import (
 // number. They add up without passing full brightness: each light fills part of what
 // the ones before it left dark, so an ambient light of 0.2 and a directional light
 // that meets a face squarely at 1 give 1, and two lights of 0.5 give 0.75. The order
-// does not matter. With no lights, every face is as dark as can be shown.
+// does not matter. With no lights, every face is as dark as can be shown. [Brightness]
+// adds lights up this way for a program that lights things of its own.
 type Light interface {
 	// Brightness returns how bright this light makes a surface, from 0 (dark) to 1
 	// (fully lit). point and normal are in world space, and normal is a unit vector
@@ -127,9 +128,17 @@ func clamp01(v float64) float64 {
 	return v
 }
 
-// brightness adds up what lights give a surface; see Light. A nil entry gives
-// nothing.
-func brightness(lights []Light, point, normal geometry.Vector3) float64 {
+// Brightness returns how bright lights make a surface at point, from 0 (dark) to 1 (fully
+// lit): the rule DrawShaded and DrawShadedPixels light a face with. normal is a unit vector
+// pointing out of the surface toward the viewer, and point and normal are in world space,
+// as for [Light]. Each light fills part of what the ones before it left dark, so they add
+// up without passing 1 and the order does not matter; a light's own result outside 0 to 1
+// is clamped, and NaN counts as 0. A nil light gives nothing, and with no lights the result
+// is 0.
+//
+// A program that draws things of its own into a lit scene can call it to light them the
+// way the meshes are lit, and keep doing so if the rule changes.
+func Brightness(lights []Light, point, normal geometry.Vector3) float64 {
 	total := 0.0
 	for _, l := range lights {
 		if l == nil {
@@ -233,7 +242,7 @@ func (m Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(t
 			c.normal = cornerNormal(normals[f[2]], normal, front)
 		} else {
 			center := w0.Add(w1).Add(w2).Scale(1.0 / 3)
-			tri.intensity = brightness(lights, center, normal)
+			tri.intensity = Brightness(lights, center, normal)
 		}
 
 		n := clipTriangleNear(a, b, c, cam.Near, smooth, &tris)
