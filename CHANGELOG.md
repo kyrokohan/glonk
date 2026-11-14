@@ -11,6 +11,7 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 ### Changed
 
 - `widget.Menu.Update` chooses on a new press of Enter, with `Input.Started`, and not on the repeats of a held one, so a held Enter chooses once and a menu that opens another does not choose in it at once. Up and Down still move on repeats, so holding one scrolls.
+- The keys of the examples that switch something use `Input.Started`, so holding one no longer flickers it: M and B in `cube3d`, N, R, V, M, D, C, F, L and B in the viewer, and Esc in `world`, which opened the pause menu and closed it again for as long as it was held. Esc in the other examples only quits, so it still uses `Pressed`.
 
 ## [0.6.0] - 2026-11-13
 

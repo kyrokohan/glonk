@@ -63,6 +63,20 @@ func TestEdgeKeyFlipsTheEdgeStyleOncePerPress(t *testing.T) {
 	if got := frame(true); !strings.Contains(got, "exact edges") {
 		t.Errorf("wanted a second press to switch back, got %q", got)
 	}
+
+	// Held down, the key repeats in every frame, and only the first press flips the style.
+	for i := range 4 {
+		kb.Press('b')
+		if err := g.Update(1.0/30, kb.Input()); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		kb.EndFrame()
+		fb.Clear()
+		g.Draw(fb)
+		if got := row(fb, 1); !strings.Contains(got, "solid edges") {
+			t.Fatalf("frame %d of a held key: wanted solid edges from one flip, got %q", i, got)
+		}
+	}
 }
 
 func TestSceneDrawsAndStartsWithGlyphs(t *testing.T) {
@@ -339,6 +353,13 @@ func TestModeKeySwitchesOncePerPress(t *testing.T) {
 		}
 		if !g.halfBlocks {
 			t.Errorf("key %q: wanted holding the key to change nothing", key)
+		}
+		for range 5 { // held down: the terminal sends a repeat in every frame
+			kb.Press(key)
+			frame(t, g, kb, 0.1)
+			if !g.halfBlocks {
+				t.Fatalf("key %q: wanted a repeat to change nothing", key)
+			}
 		}
 		kb.Release(key)
 		kb.Press(key)
