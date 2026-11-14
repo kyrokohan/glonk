@@ -8,6 +8,10 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 - `Input.Started(k)` is true in the frame a key goes down and false for the auto-repeats of a key that is already down, where `Input.Pressed` is true for both. It is for a key that switches something, which `Pressed` switches again and again while the key is held. Where the terminal reports key releases it is exact. Elsewhere a key not seen for about 150 ms counts as new, and the OS waits longer than that before it repeats, so a key held past that delay starts twice, once when it is pressed and once when its first repeat arrives; the repeats after that do not start. `Keyboard.Press` of a key that is already down is a repeat: pressed again, not started. The docs of `Pressed` say that it fires on repeats.
 
+### Changed
+
+- `widget.Menu.Update` chooses on a new press of Enter, with `Input.Started`, and not on the repeats of a held one, so a held Enter chooses once and a menu that opens another does not choose in it at once. Up and Down still move on repeats, so holding one scrolls.
+
 ## [0.6.0] - 2026-11-13
 
 On top of 0.5.0 this release adds widgets for a heads-up display and menus, rectangles and circles on the canvas, and pictures from JPEG and PNG files, and reads the terminal size from the output so that the examples start on Windows. Nothing was removed, renamed or changed.

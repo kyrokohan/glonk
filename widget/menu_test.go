@@ -90,6 +90,42 @@ func TestMenuAKeyHeldDownMovesOnce(t *testing.T) {
 	}
 }
 
+// A held Enter repeats. The repeats must not choose again, or a menu that opens another
+// would choose in the new one at once; Up and Down keep moving on repeats, so a hold scrolls.
+func TestMenuAHeldEnterChoosesOnce(t *testing.T) {
+	m := Menu{Items: []string{"a", "b", "c"}, Selected: 1}
+	kb := engine.NewKeyboard()
+
+	kb.Press(engine.KeyEnter)
+	if choice, chosen := m.Update(kb.Input()); choice != 1 || !chosen {
+		t.Fatalf("wanted the first press to choose (1, true), got (%d, %v)", choice, chosen)
+	}
+	kb.EndFrame()
+
+	kb.Press(engine.KeyEnter) // the key is down, so this is a repeat
+	if choice, chosen := m.Update(kb.Input()); chosen {
+		t.Errorf("wanted a repeat not to choose, got (%d, %v)", choice, chosen)
+	}
+	kb.EndFrame()
+
+	kb.Release(engine.KeyEnter)
+	kb.Press(engine.KeyEnter)
+	if _, chosen := m.Update(kb.Input()); !chosen {
+		t.Errorf("wanted a new press to choose")
+	}
+	kb.EndFrame()
+
+	m.Selected = 0
+	kb.Press(engine.KeyDown)
+	m.Update(kb.Input())
+	kb.EndFrame()
+	kb.Press(engine.KeyDown) // a repeat of Down
+	m.Update(kb.Input())
+	if m.Selected != 2 {
+		t.Errorf("wanted a repeat of Down to move the selection on to 2, got %d", m.Selected)
+	}
+}
+
 func TestMenuLeavesOtherKeysToTheGame(t *testing.T) {
 	m := Menu{Items: []string{"a", "b", "c"}, Selected: 1}
 	keys := []engine.Key{engine.KeyLeft, engine.KeyRight, engine.KeyEscape, engine.KeyTab, engine.KeyBackspace, 'w', 's', ' ', 'k', 'j'}
