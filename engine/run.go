@@ -26,8 +26,9 @@ const maxFPS = 1000
 
 // Config sets up Run. A Width or Height of 0 fills the terminal on that axis
 // and follows resizes; a nonzero value fixes that axis, and where the terminal is
-// smaller than the frame only the part that fits is shown, from the top left. FPS
-// must be between 1 and 1000.
+// smaller than the frame only the part that fits is shown, from the top left. A
+// terminal that reports no size, as a pseudo-terminal nobody gave one does, counts as
+// 80 columns by 24 rows until it reports one. FPS must be between 1 and 1000.
 //
 // Where the terminal supports the kitty keyboard protocol, Run uses it so Input
 // can tell exactly which keys are down. LegacyKeys turns that off and uses the
@@ -131,17 +132,31 @@ func frameDT(now, last time.Time) float64 {
 	return dt
 }
 
-// resolveSize picks the frame size: a nonzero config value wins on its axis,
-// otherwise the terminal's. Negatives pass through so NewFrameBuffer rejects them.
+// A terminal that reports no size is taken to be this big until it reports one. A
+// pseudo-terminal that nobody gave a size reports 0 by 0, as under script started from
+// a CI step or in some container consoles, and 80 by 24 is what such a terminal is
+// conventionally assumed to be.
+const (
+	fallbackWidth  = 80
+	fallbackHeight = 24
+)
+
+// resolveSize picks the frame size: a nonzero config value wins on its axis, otherwise
+// the terminal's, or the fallback where the terminal reports 0. Negatives pass through
+// so NewFrameBuffer rejects them.
 func resolveSize(cfgW, cfgH, termW, termH int) (int, int) {
 	resW := termW
 	if cfgW != 0 {
 		resW = cfgW
+	} else if termW == 0 {
+		resW = fallbackWidth
 	}
 
 	resH := termH
 	if cfgH != 0 {
 		resH = cfgH
+	} else if termH == 0 {
+		resH = fallbackHeight
 	}
 
 	return resW, resH

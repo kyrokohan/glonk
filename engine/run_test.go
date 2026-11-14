@@ -21,7 +21,13 @@ func TestResolveSize(t *testing.T) {
 		{"both fill", 0, 0, 80, 40, 80, 40},
 		{"width fixed only", 64, 0, 80, 40, 64, 40},
 		{"height fixed only", 0, 24, 80, 40, 80, 24},
-		{"terminal reports zero", 0, 0, 0, 0, 0, 0},
+		// A pseudo-terminal nobody gave a size reports 0 by 0, and Run must not fail on it.
+		{"terminal reports no size", 0, 0, 0, 0, 80, 24},
+		{"terminal reports no width", 0, 0, 0, 40, 80, 40},
+		{"terminal reports no height", 0, 0, 80, 0, 80, 24},
+		{"fixed width with a terminal of no size", 64, 0, 0, 0, 64, 24},
+		{"fixed height with a terminal of no size", 0, 12, 0, 0, 80, 12},
+		{"both fixed with a terminal of no size", 64, 12, 0, 0, 64, 12},
 		// NewFrameBuffer rejects negatives; they must reach it, not be replaced by the terminal's size.
 		{"negative passes through", -5, 0, 80, 40, -5, 40},
 		{"negative height passes through", 0, -5, 80, 40, 80, -5},
