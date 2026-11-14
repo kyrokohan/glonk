@@ -6,7 +6,8 @@
 // arrows turn, and the up and down arrows look up and down. M switches between
 // character shading and half-block pixels (the wireframe cube becomes pixel lines too,
 // and the floor stays dotted), B switches between exact and solid pixel edges, and Esc
-// quits. Letters work in either case.
+// quits. Letters work in either case. Where the terminal reports no key releases only one
+// key stays held, so walking and turning together does not work, and the game says so.
 package main
 
 import (
@@ -51,6 +52,11 @@ type cubeGame struct {
 	// terminal and keeps the setting from frame to frame and across resizes. The
 	// viewer has the same few lines.
 	flipEdges bool
+
+	// noReleases is set once Update has seen that the terminal reports no key releases, where
+	// only one key stays held, so that walking and turning together does not work. The HUD
+	// then says so. It is false until the first Update has asked.
+	noReleases bool
 }
 
 // keyDown reports whether a letter key counts as down or pressed, in either case.
@@ -69,6 +75,7 @@ func newCube(size, x, z float64, color engine.Color) mesh.Mesh {
 }
 
 func (g *cubeGame) Update(dt float64, in *engine.Input) error {
+	g.noReleases = !in.Exact()
 	if in.Pressed(engine.KeyEscape) {
 		return engine.ErrQuit
 	}
@@ -156,6 +163,9 @@ func (g *cubeGame) Draw(fb *engine.FrameBuffer) {
 
 	fb.DrawBox(0, 0, fb.Width(), fb.Height(), engine.Color{})
 	fb.DrawText(1, 1, fmt.Sprintf("%.0f fps  %s", g.fps, mode), engine.Color{})
+	if g.noReleases {
+		fb.DrawText(1, 2, "no key releases here: one key at a time", engine.Color{})
+	}
 	fb.DrawText(1, fb.Height()-3, "WASD move  Q/E turn  arrows look", engine.Color{})
 	fb.DrawText(1, fb.Height()-2, "M mode  B edges  Esc quit", engine.Color{})
 }

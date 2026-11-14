@@ -100,6 +100,36 @@ func TestSceneDrawsAndStartsWithGlyphs(t *testing.T) {
 	}
 }
 
+// Without key releases only one key stays held, so the HUD says so, once Update has seen it.
+func TestHintSaysWhenKeysAreAGuess(t *testing.T) {
+	tests := []struct {
+		name string
+		kb   *engine.Keyboard // nil: no Update has run
+		want bool
+	}{
+		{"before any Update", nil, false},
+		{"with key releases", engine.NewKeyboard(), false},
+		{"without key releases", engine.NewLegacyKeyboard(), true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := newCubeGame()
+			if tt.kb != nil {
+				if err := g.Update(0.1, tt.kb.Input()); err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+			}
+			fb := newFrame(t, 80, 24)
+			g.Draw(fb)
+
+			if got := strings.Contains(row(fb, 2), "no key releases"); got != tt.want {
+				t.Errorf("wanted the hint shown=%v, got %v in %q", tt.want, got, row(fb, 2))
+			}
+		})
+	}
+}
+
 func TestKeyDownTakesEitherCase(t *testing.T) {
 	tests := []struct {
 		name   string
