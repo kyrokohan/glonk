@@ -19,11 +19,12 @@ type Menu struct {
 }
 
 // Update moves the selection from the keys pressed since the last frame: Up and Down move it
-// to the item before or after, wrapping around at the ends, and Enter chooses the selected
-// item. The moves are made before Enter is read, so Down and Enter in one frame choose the
-// next item. It returns the index of the chosen item and true on Enter, and -1 and false
-// otherwise, and always when there are no items. Other keys, Escape included, are left to
-// the game.
+// to the item before or after, wrapping around at the ends, and keep moving it while the key
+// repeats, and Enter chooses the selected item once for each press, so a held Enter does not
+// choose again (see [engine.Input.Started] for where it still can). The moves are made before
+// Enter is read, so Down and Enter in one frame choose the next item. It returns the index
+// of the chosen item and true on Enter, and -1 and false otherwise, and always when there
+// are no items. Other keys, Escape included, are left to the game.
 func (m *Menu) Update(in *engine.Input) (choice int, chosen bool) {
 	n := len(m.Items)
 	if n == 0 {
@@ -39,7 +40,9 @@ func (m *Menu) Update(in *engine.Input) (choice int, chosen bool) {
 	if in.Pressed(engine.KeyDown) {
 		m.Selected = (m.Selected + 1) % n
 	}
-	if in.Pressed(engine.KeyEnter) {
+	// Started, not Pressed: a menu that opens another must not choose in it at once, from
+	// the repeats of the Enter that chose here.
+	if in.Started(engine.KeyEnter) {
 		return m.Selected, true
 	}
 	return -1, false
