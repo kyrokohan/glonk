@@ -114,7 +114,7 @@ func shadeCam() Camera {
 type lightSet []Light
 
 func (s lightSet) Brightness(point, normal geometry.Vector3) float64 {
-	return brightness(s, point, normal)
+	return Brightness(s, point, normal)
 }
 
 // sunAndFill is a Directional light with some Ambient fill under it, the pair most

@@ -124,7 +124,7 @@ func (t *shadedTriangle) brightnessAt(lights []Light, b0, b1, b2 float64) float6
 	point := t.world[0].Scale(b0).Add(t.world[1].Scale(b1)).Add(t.world[2].Scale(b2))
 	// Blending unit vectors gives a shorter one; lights are promised a unit normal.
 	normal := t.normal[0].Scale(b0).Add(t.normal[1].Scale(b1)).Add(t.normal[2].Scale(b2)).Normalize()
-	return brightness(lights, point, normal)
+	return Brightness(lights, point, normal)
 }
 
 // colorAt is the color of the cell at weights b0, b1 and b2 of the three corners: their
