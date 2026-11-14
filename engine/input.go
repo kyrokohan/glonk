@@ -18,7 +18,8 @@ const holdTimeout = 150 * time.Millisecond
 // repeats only the last key pressed, so holding two keys at once does not work
 // there. Terminals that implement the kitty keyboard protocol report releases;
 // there Input tracks exactly which keys are down. Letters keep their case in
-// the first kind of terminal (shift+w arrives as 'W'), not in the second.
+// the first kind of terminal (shift+w arrives as 'W'), not in the second. [Input.Exact]
+// says which kind this is.
 //
 // IsDown is for keys held to keep something going, Started for keys that switch something
 // once, and Pressed for keys whose auto-repeat should act again.
@@ -107,6 +108,16 @@ func (in *Input) IsDown(k Key) bool {
 	}
 	t, ok := in.lastSeen[k]
 	return ok && in.now.Sub(t) < holdTimeout
+}
+
+// Exact reports whether the terminal reports key releases, so that IsDown and Started are
+// exact. It is true on a terminal with the kitty keyboard protocol, and in a headless Run
+// unless [Config.LegacyKeys] is set. Elsewhere it is false: a held key is a timing guess and
+// only one key stays held at a time. A game that needs two at once, to walk and turn, can
+// use this to warn the player, or to change to controls that work one key at a time. It is
+// settled before the first Update and does not change while Run runs.
+func (in *Input) Exact() bool {
+	return in.exact
 }
 
 // Pressed reports whether k was pressed or repeated since the previous frame. It is true

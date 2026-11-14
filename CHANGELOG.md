@@ -6,6 +6,8 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ### Added
 
+- `Input.Exact()` says whether the terminal reports key releases, so that `IsDown` and `Started` are exact, or whether held keys are the timing guess and only one key stays held at a time. A game that needs two keys at once can use it to warn the player, or to change to controls that work one at a time. It is true on a terminal with the kitty keyboard protocol and in a headless `Run`, unless `Config.LegacyKeys` is set, and it is settled before the first `Update`.
+- `NewLegacyKeyboard()` is a `Keyboard` that acts like a terminal that reports no releases, so that a game can test both kinds: its `Input.Exact` is false, a key counts as held for about 150 ms after its last `Press`, and `Release` does nothing, since no release ever arrives. `Keyboard.Advance(d)` moves the clock of the keyboard on, to let a key go or to put the OS's repeat delay between two presses; it changes nothing on a `NewKeyboard`, which needs no clock.
 - `Input.Started(k)` is true in the frame a key goes down and false for the auto-repeats of a key that is already down, where `Input.Pressed` is true for both. It is for a key that switches something, which `Pressed` switches again and again while the key is held. Where the terminal reports key releases it is exact. Elsewhere a key not seen for about 150 ms counts as new, and the OS waits longer than that before it repeats, so a key held past that delay starts twice, once when it is pressed and once when its first repeat arrives; the repeats after that do not start. `Keyboard.Press` of a key that is already down is a repeat: pressed again, not started. The docs of `Pressed` say that it fires on repeats.
 
 ### Changed
