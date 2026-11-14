@@ -44,6 +44,7 @@ type Config struct {
 
 	// LegacyKeys turns off the kitty keyboard protocol even where the terminal has
 	// it, and uses the timing-based key handling that every terminal supports.
+	// Input.Exact is then false.
 	LegacyKeys bool
 
 	// Colors says whether an RGB color is sent exactly or as the nearest palette

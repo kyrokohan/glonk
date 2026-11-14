@@ -239,6 +239,35 @@ func TestRunHeadlessReadsExactKeys(t *testing.T) {
 	finished(t, done)
 }
 
+// A headless run reads keys as the protocol reports them, so its Input is exact, unless
+// LegacyKeys asks for the timing guess.
+func TestRunHeadlessSaysWhetherKeysAreExact(t *testing.T) {
+	tests := []struct {
+		name       string
+		legacyKeys bool
+		want       bool
+	}{
+		{"by default", false, true},
+		{"with LegacyKeys", true, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got bool
+			game := scriptedGame{update: func(_ float64, in *Input) error {
+				got = in.Exact()
+				return ErrQuit
+			}}
+
+			err := runHeadless(t, game, Config{LegacyKeys: tt.legacyKeys, Input: strings.NewReader(""), Output: io.Discard})
+
+			if err != nil || got != tt.want {
+				t.Errorf("wanted Exact()=%v and no error, got %v and %v", tt.want, got, err)
+			}
+		})
+	}
+}
+
 func TestRunHeadlessLegacyKeysTimeOut(t *testing.T) {
 	seen := false
 	game := scriptedGame{update: func(_ float64, in *Input) error {

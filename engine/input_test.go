@@ -189,6 +189,15 @@ func TestInputStartedWithoutReleases(t *testing.T) {
 	}
 }
 
+func TestInputSaysWhetherItIsExact(t *testing.T) {
+	if !newInput(true).Exact() {
+		t.Errorf("wanted Exact()=true where releases are reported, got false")
+	}
+	if newInput(false).Exact() {
+		t.Errorf("wanted Exact()=false where releases are not reported, got true")
+	}
+}
+
 func TestInputExactHoldsTwoKeys(t *testing.T) {
 	t0 := time.Unix(0, 0)
 	in := newInput(true)
