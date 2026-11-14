@@ -84,12 +84,26 @@ func TestKeyboardPressingSeveralKeysAtOnce(t *testing.T) {
 func TestKeyboardRepeatIsPressedAgain(t *testing.T) {
 	kb := NewKeyboard()
 	kb.Press('w')
+	if !kb.Input().Started('w') {
+		t.Errorf("wanted the first press to start the key")
+	}
 	kb.EndFrame()
 
 	kb.Press('w')
 
 	if !kb.Input().Pressed('w') || !kb.Input().IsDown('w') {
 		t.Errorf("wanted a repeat to count as pressed again")
+	}
+	if kb.Input().Started('w') {
+		t.Errorf("wanted a repeat not to start the key again")
+	}
+
+	kb.EndFrame()
+	kb.Release('w')
+	kb.Press('w')
+
+	if !kb.Input().Started('w') {
+		t.Errorf("wanted a press after a release to start the key")
 	}
 }
 
@@ -127,6 +141,7 @@ func TestKeyboardMatchesTheInputOfARealRun(t *testing.T) {
 		"+Esc | |",
 		"-w | +w -w +w | -w |",
 		"+w | +e | -w -e |",
+		"+w | +w | +w | -w | +w |",
 	}
 	keyOf := map[string]Key{"w": 'w', "e": 'e', "Esc": KeyEscape}
 
@@ -146,6 +161,9 @@ func TestKeyboardMatchesTheInputOfARealRun(t *testing.T) {
 						}
 						if got, want := kb.Input().Pressed(k), real.Pressed(k); got != want {
 							t.Fatalf("step %d: Pressed(%v): keyboard %v, real %v", step, k, got, want)
+						}
+						if got, want := kb.Input().Started(k), real.Started(k); got != want {
+							t.Fatalf("step %d: Started(%v): keyboard %v, real %v", step, k, got, want)
 						}
 					}
 					kb.EndFrame()

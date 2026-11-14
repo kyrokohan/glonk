@@ -3,6 +3,7 @@ package engine
 import (
 	"bytes"
 	"io"
+	"slices"
 	"strings"
 	"testing"
 	"testing/iotest"
@@ -101,6 +102,90 @@ func TestInputPressed(t *testing.T) {
 	// Pressed is per frame, IsDown is time based; clearing one must not touch the other.
 	if !in.IsDown('q') {
 		t.Errorf("wanted IsDown('q')=true after endFrame, got false")
+	}
+}
+
+// Where releases are reported only a key that was not down starts a hold: a repeat does not,
+// and neither does a press of a key that is down, which is what Keyboard.Press of a held key is.
+func TestInputStartedWhereReleasesAreReported(t *testing.T) {
+	press, repeat, release := keyEvent{'m', kindPress}, keyEvent{'m', kindRepeat}, keyEvent{'m', kindRelease}
+	frames := []struct {
+		name   string
+		events []keyEvent
+		want   bool
+	}{
+		{"a press starts", []keyEvent{press}, true},
+		{"a repeat does not", []keyEvent{repeat}, false},
+		{"a press of a key that is down is a repeat", []keyEvent{press}, false},
+		{"a quiet frame starts nothing", nil, false},
+		{"a press after a release starts", []keyEvent{release, press}, true},
+		{"a tap inside one frame starts", []keyEvent{release, press, release}, true},
+		{"a repeat of a key that is not down does not", []keyEvent{repeat}, false},
+	}
+
+	in := newInput(true)
+	at := time.Unix(0, 0)
+	for _, f := range frames {
+		t.Run(f.name, func(t *testing.T) {
+			for _, e := range f.events {
+				in.event(e, at)
+			}
+			in.beginFrame(at)
+
+			if got := in.Started('m'); got != f.want {
+				t.Errorf("wanted Started('m')=%v, got %v", f.want, got)
+			}
+			if in.Started('m') && !in.Pressed('m') {
+				t.Errorf("wanted a started key to be pressed too")
+			}
+			if in.Started('x') {
+				t.Errorf("wanted Started('x')=false, got true")
+			}
+			in.endFrame()
+			if in.Started('m') {
+				t.Errorf("wanted Started('m')=false after endFrame, got true")
+			}
+			at = at.Add(time.Second)
+		})
+	}
+}
+
+// Without release events a key unseen for the hold timeout is new. The OS waits longer than
+// that before it repeats, so the first repeat of a long hold starts a second time: the docs of
+// Started say so, and this keeps the two the same.
+func TestInputStartedWithoutReleases(t *testing.T) {
+	t0 := time.Unix(0, 0)
+	ms := time.Millisecond
+
+	tests := []struct {
+		name    string
+		presses []time.Duration
+		want    bool
+	}{
+		{"the first press", []time.Duration{0}, true},
+		{"a repeat soon after", []time.Duration{0, 30 * ms}, false},
+		{"a repeat inside the window", []time.Duration{0, 149 * ms}, false},
+		{"a repeat at the timeout", []time.Duration{0, holdTimeout}, true},
+		{"the first repeat after the OS delay", []time.Duration{0, 500 * ms}, true},
+		{"the repeats after that", []time.Duration{0, 500 * ms, 530 * ms, 560 * ms}, false},
+		{"a press after a long gap", []time.Duration{0, 10 * time.Second}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := newInput(false)
+			for i, at := range tt.presses {
+				in.event(keyEvent{'m', kindPress}, t0.Add(at))
+				in.beginFrame(t0.Add(at))
+				if i < len(tt.presses)-1 {
+					in.endFrame()
+				}
+			}
+
+			if got := in.Started('m'); got != tt.want {
+				t.Errorf("wanted Started('m')=%v for the last press, got %v", tt.want, got)
+			}
+		})
 	}
 }
 
@@ -377,6 +462,29 @@ func TestInputFeedSplitKitlyReleaseIsNotStuck(t *testing.T) {
 	in.beginFrame(t0.Add(time.Second))
 	if in.IsDown('w') {
 		t.Errorf("wanted w released by the release that arrived in two reads")
+	}
+}
+
+// The kitty protocol says a press from a repeat, so a held key starts once however long it is held.
+func TestInputFeedHeldKittyKeyStartsOnce(t *testing.T) {
+	f, in := newTestFeed(true)
+	t0 := time.Unix(0, 0)
+
+	var started []bool
+	frame := func(chunk string, at time.Duration) {
+		f.feed([]byte(chunk), t0.Add(at))
+		in.beginFrame(t0.Add(at))
+		started = append(started, in.Started('m'))
+		in.endFrame()
+	}
+	frame("\x1b[109u", 0)
+	frame("\x1b[109;1:2u", 500*time.Millisecond)
+	frame("\x1b[109;1:2u", 530*time.Millisecond)
+	frame("\x1b[109;1:3u", 600*time.Millisecond)
+	frame("\x1b[109u", 700*time.Millisecond)
+
+	if want := []bool{true, false, false, false, true}; !slices.Equal(started, want) {
+		t.Errorf("wanted Started per frame %v, got %v", want, started)
 	}
 }
 

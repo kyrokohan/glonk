@@ -14,7 +14,7 @@ Website: [glonk.dev](https://glonk.dev)
 - **Half blocks:** a pixel `Canvas` with two square-ish pixels per cell, drawn with `▀` and a background color, for twice the vertical detail and shading by color instead of by character. Lines, rectangles, circles, wireframes and pictures (JPEG or PNG) can be drawn into the pixels too. See [Pixel shapes and pictures](#pixel-shapes-and-pictures).
 - **Mixed:** draw a 3D scene first, then a 2D HUD on top, into the same frame.
 - **Widgets:** a label, a panel, a bar and a menu for a HUD or a pause screen, drawn in screen space. See [Widgets](#widgets).
-- **Input:** held keys and one-shot presses, including arrows. Terminals with the [kitty keyboard protocol](https://sw.kovidgoyal.net/kitty/keyboard-protocol/) (Ghostty, kitty, WezTerm, foot, iTerm2, Alacritty) report real key releases, so you can hold several keys at once.
+- **Input:** held keys, one-shot presses (`Input.Started`, which a repeat does not set off again) and key repeats (`Input.Pressed`), including arrows. Terminals with the [kitty keyboard protocol](https://sw.kovidgoyal.net/kitty/keyboard-protocol/) (Ghostty, kitty, WezTerm, foot, iTerm2, Alacritty) report real key releases, so you can hold several keys at once.
 - **Resizing:** the frame follows the terminal window, and a game with a `Resize(width, height int)` method is told its size.
 - **Testing:** `engine.Keyboard` presses keys for a game's `Update`, a `FrameBuffer` prints as text, and `Config.Input` and `Config.Output` let a whole `Run` be driven without a terminal. See [Testing a game](#testing-a-game).
 
@@ -405,7 +405,7 @@ func TestTheDotMovesAcrossTheScreen(t *testing.T) {
 }
 ```
 
-A `Keyboard` acts like a terminal that reports key releases: a key is down from `Press` until `Release`, `Input.Pressed` is true for one frame, and `EndFrame` ends that frame the way `Run` does. Tests are exact and need no clock. `String` leaves off the trailing spaces of each line and shows characters only, not colors.
+A `Keyboard` acts like a terminal that reports key releases: a key is down from `Press` until `Release`, `Input.Pressed` and `Input.Started` are true for one frame, and `EndFrame` ends that frame the way `Run` does. A `Press` of a key that is already down is a key repeat: `Pressed` is true again, `Started` is not, so a test can hold a key. Tests are exact and need no clock. `String` leaves off the trailing spaces of each line and shows characters only, not colors.
 
 To test a whole run (start-up, key bytes in, frames out), give `Config.Input` and `Config.Output` a reader and a writer that are not a terminal: `Run` then runs headless at the `Width` and `Height` you set. See `ExampleRun_headless`.
 
@@ -425,7 +425,7 @@ To test a whole run (start-up, key bytes in, frames out), give `Config.Input` an
 
 Built to work in most terminals. The basics need only the alternate screen, cursor movement, and 256-color escape codes (24-bit colors are used on top of that where the terminal says it has them); line wrapping is turned off while a program runs, and the kitty keyboard protocol and focus reporting are used where the terminal has them. All of it is undone when `Run` returns. It is developed on macOS and tested mainly in Ghostty.
 
-- **Without key releases, held keys are a timing guess.** Most terminals report presses and repeats but never releases, so a key counts as held until about 150 ms pass without a repeat, with a short pause when you first hold one. glonk detects the kitty keyboard protocol at startup and uses it where it exists; everywhere else this is what you get.
+- **Without key releases, held keys are a timing guess.** Most terminals report presses and repeats but never releases, so a key counts as held until about 150 ms pass without a repeat, with a short pause when you first hold one. `Input.Started` has the same limit: it is true once when a key goes down and not for the repeats, but the OS waits longer than 150 ms before it repeats, so a key held past that delay starts twice. glonk detects the kitty keyboard protocol at startup and uses it where it exists; everywhere else this is what you get.
 - **Without key releases, only one key stays held at a time.** The OS repeats just the most recently pressed key, so holding W and then pressing E stops W and you cannot walk and turn together (Terminal.app, for one). Set `Config.LegacyKeys` to force this behavior if a terminal misbehaves with the protocol.
 - **Escape waits 50 ms, and Alt chords are ignored.** An Escape press and the start of an arrow key are the same byte, so the Escape key counts only after 50 ms with nothing following it. Alt+key arrives as Escape plus the key and is dropped rather than read as Escape.
 - **Ctrl-Z suspends, and some endings cannot be cleaned up.** Ctrl-Z restores the terminal, stops the program, and takes the terminal over again on `fg`; Windows has no suspend. `os.Exit`, `log.Fatal`, a panic in a goroutine you started, `kill -9` and `kill -QUIT` skip the cleanup and leave the terminal raw; type `reset` to repair it. After the first quit signal a second one kills a game that is stuck, unless your program catches those signals itself.
