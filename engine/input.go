@@ -20,6 +20,9 @@ const holdTimeout = 150 * time.Millisecond
 // there Input tracks exactly which keys are down. Letters keep their case in
 // the first kind of terminal (shift+w arrives as 'W'), not in the second.
 //
+// IsDown is for keys held to keep something going, Started for keys that switch something
+// once, and Pressed for keys whose auto-repeat should act again.
+//
 // To test a game's Update, build an Input with a [Keyboard].
 type Input struct {
 	now      time.Time
@@ -27,6 +30,7 @@ type Input struct {
 	lastSeen map[Key]time.Time
 	held     map[Key]bool
 	pressed  map[Key]bool
+	started  map[Key]bool // the pressed keys that were not already down
 }
 
 // newInput returns an Input with no keys held. exact says whether the terminal
@@ -37,6 +41,7 @@ func newInput(exact bool) *Input {
 		lastSeen: make(map[Key]time.Time),
 		held:     make(map[Key]bool),
 		pressed:  make(map[Key]bool),
+		started:  make(map[Key]bool),
 	}
 }
 
@@ -50,10 +55,27 @@ func (in *Input) event(e keyEvent, at time.Time) {
 	case kindFocusGained:
 		// Nothing to do: keys held across a focus change send fresh repeats.
 	default:
+		if in.beginsHold(e, at) {
+			in.started[e.key] = true
+		}
 		in.lastSeen[e.key] = at
 		in.held[e.key] = true
 		in.pressed[e.key] = true
 	}
+}
+
+// beginsHold reports whether e puts its key down, as opposed to repeating a key that is
+// already down. It must be asked before the event is recorded.
+//
+// shortcut: without release events a key unseen for holdTimeout counts as new, and the OS
+// waits longer than that before it repeats, so a longer hold starts twice. Only a terminal
+// that reports releases can be exact.
+func (in *Input) beginsHold(e keyEvent, at time.Time) bool {
+	if in.exact {
+		return e.kind == kindPress && !in.held[e.key]
+	}
+	t, ok := in.lastSeen[e.key]
+	return !ok || at.Sub(t) >= holdTimeout
 }
 
 // releaseAll marks every key as released, for when the terminal loses focus
@@ -68,9 +90,11 @@ func (in *Input) beginFrame(now time.Time) {
 	in.now = now
 }
 
-// endFrame forgets this frame's presses so Pressed fires once per press.
+// endFrame forgets this frame's presses, so Pressed and Started are false again until the
+// next key event.
 func (in *Input) endFrame() {
 	clear(in.pressed)
+	clear(in.started)
 }
 
 // IsDown reports whether k is held. Where the terminal reports releases this is
@@ -85,9 +109,23 @@ func (in *Input) IsDown(k Key) bool {
 	return ok && in.now.Sub(t) < holdTimeout
 }
 
-// Pressed reports whether k was pressed or repeated since the previous frame.
+// Pressed reports whether k was pressed or repeated since the previous frame. It is true
+// again for every auto-repeat of a held key, which is right for moving through a menu and
+// wrong for a key that switches something: use [Input.Started] for that.
 func (in *Input) Pressed(k Key) bool {
 	return in.pressed[k]
+}
+
+// Started reports whether k went down since the previous frame. Unlike [Input.Pressed] it is
+// false for the auto-repeats of a key that is already down, so a key that switches something
+// switches it once however long it is held.
+//
+// Where the terminal reports releases this is exact. Elsewhere a key not seen for about 150 ms
+// counts as new, and the OS waits longer than that before it starts repeating, so a key held
+// past that delay starts twice: when it is pressed, and when its first repeat arrives. The
+// repeats after that come close enough together not to start again.
+func (in *Input) Started(k Key) bool {
+	return in.started[k]
 }
 
 // escapeTimeout is how long an unfinished escape sequence is waited for. The Escape

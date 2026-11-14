@@ -30,7 +30,7 @@ func (k *Keyboard) Input() *Input {
 
 // Press puts keys down. They count as pressed (Input.Pressed) until EndFrame, and
 // stay down (Input.IsDown) until Release. Pressing a key that is already down is
-// a key repeat.
+// a key repeat: it is pressed again, but it has not started (Input.Started).
 func (k *Keyboard) Press(keys ...Key) {
 	for _, key := range keys {
 		k.in.event(keyEvent{key, kindPress}, time.Time{})
