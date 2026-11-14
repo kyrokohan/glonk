@@ -13,6 +13,10 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 - `widget.Menu.Update` chooses on a new press of Enter, with `Input.Started`, and not on the repeats of a held one, so a held Enter chooses once and a menu that opens another does not choose in it at once. Up and Down still move on repeats, so holding one scrolls.
 - The keys of the examples that switch something use `Input.Started`, so holding one no longer flickers it: M and B in `cube3d`, N, R, V, M, D, C, F, L and B in the viewer, and Esc in `world`, which opened the pause menu and closed it again for as long as it was held. Esc in the other examples only quits, so it still uses `Pressed`.
 
+### Fixed
+
+- `Run` no longer ends at once with "width and height must be positive integers" on a terminal that reports 0 columns by 0 rows, which a pseudo-terminal that nobody gave a size does, as under `script` started from a CI step or in some container consoles. An axis you left at 0 is taken as 80 columns or 24 rows until the terminal reports a size, and `Run` follows the size from then on.
+
 ## [0.6.0] - 2026-11-13
 
 On top of 0.5.0 this release adds widgets for a heads-up display and menus, rectangles and circles on the canvas, and pictures from JPEG and PNG files, and reads the terminal size from the output so that the examples start on Windows. Nothing was removed, renamed or changed.
