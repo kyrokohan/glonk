@@ -230,3 +230,24 @@ func TestSequenceBuilderFlushIsOneWriteAndLeavesTheBuilderAlone(t *testing.T) {
 		t.Errorf("wanted one write of 5 bytes and the builder unchanged, got %d writes of %d bytes and %q", out.writes, out.bytes, sb.String())
 	}
 }
+
+// tempFile returns an open temporary file, closed when the test ends.
+func tempFile(t *testing.T) *os.File {
+	t.Helper()
+	f, err := os.CreateTemp(t.TempDir(), "fd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { f.Close() })
+	return f
+}
+
+func TestSizeAsksTheOutputWhenItIsAFile(t *testing.T) {
+	in, out := tempFile(t), tempFile(t)
+	if got := newTerminal(in, out).sizeFd; got != int(out.Fd()) {
+		t.Errorf("wanted fd %d, got %d", out.Fd(), got)
+	}
+	if got := newTerminal(in, &bytes.Buffer{}).sizeFd; got != int(in.Fd()) {
+		t.Errorf("wanted the input's fd, got %d", got)
+	}
+}

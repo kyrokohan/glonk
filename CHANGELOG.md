@@ -22,6 +22,10 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 - Model textures find the kind of their picture and read its size from the header through the same internal code as `bitmap`. What a texture accepts and refuses, and the pixel budget, are as they were.
 - `examples/world` has a coin panel at the top left, with the count and a bar that fills as coins are collected, and a pause menu: Esc now opens a menu to resume or quit, with the world standing still, instead of quitting at once.
 
+### Fixed
+
+- The terminal size is read from the output handle, so the examples run on Windows, where asking the input handle fails with "The handle is invalid".
+
 ## [0.5.0] - 2026-11-11
 
 On top of 0.4.0 this release adds 2D collision, a tile map and a camera that follows the player. Nothing was removed, renamed or changed.

@@ -15,6 +15,7 @@ const keyboardFlags = 1 | 2 | 8
 
 type terminal struct {
 	fd       int
+	sizeFd   int // where Size asks
 	state    *term.State
 	out      io.Writer
 	keyboard bool // whether we pushed protocol flags that Teardown must pop
@@ -26,10 +27,15 @@ type terminal struct {
 }
 
 func newTerminal(in *os.File, out io.Writer) *terminal {
-	return &terminal{
+	t := &terminal{
 		fd:  int(in.Fd()),
 		out: out,
 	}
+	t.sizeFd = t.fd
+	if f, ok := out.(*os.File); ok {
+		t.sizeFd = int(f.Fd())
+	}
+	return t
 }
 
 // newHeadless returns a terminal that is a w x h window onto out, with no raw mode,
@@ -125,5 +131,5 @@ func (t *terminal) Size() (int, int, error) {
 	if t.headless {
 		return t.w, t.h, nil
 	}
-	return term.GetSize(t.fd)
+	return term.GetSize(t.sizeFd)
 }
