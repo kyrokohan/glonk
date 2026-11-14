@@ -148,8 +148,8 @@ func frontFacing(normal, v0 geometry.Vector3) bool {
 	return normal.Dot(v0) < 0
 }
 
-// screenPoint is a mesh corner on screen: x and y in cell coordinates, z the
-// distance from the camera.
+// screenPoint is a mesh corner on screen: x and y in cell coordinates, z its depth, the
+// distance from the camera along the view direction.
 type screenPoint struct {
 	x, y, z float64
 }

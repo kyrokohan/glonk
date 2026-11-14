@@ -109,6 +109,11 @@ func (c *Canvas) At(x, y int) Color {
 // there, and reports whether it did. Smaller z is nearer; a tie keeps the existing
 // pixel. Writes outside the canvas, and a NaN z, are ignored. Set never reads or
 // writes depth.
+//
+// z is a depth. In a scene drawn through a mesh.Camera it is the distance from the camera
+// along its view direction (mesh.Camera.Look), not the straight-line distance, and
+// mesh.Camera.ProjectPixels gives it with the pixel. A marker drawn here with that depth is
+// hidden by the solids drawn in front of it and hides those behind it.
 func (c *Canvas) SetDepth(x, y int, z float64, color Color) bool {
 	if !c.inBounds(x, y) {
 		return false
@@ -143,7 +148,7 @@ func (c *Canvas) DrawLine(x0, y0, x1, y1 int, color Color) {
 // DrawLineDepth draws the same line as DrawLine, but each pixel is stored with
 // SetDepth, so a nearer surface hides it and it hides a farther one: a pixel is drawn
 // where the line is nearer than what is there, and where it ties, what is there stays.
-// z0 and z1 are the distances from the camera of the two ends, as for FillTriangle, and
+// z0 and z1 are the depths of the two ends (see SetDepth), as for FillTriangle, and
 // must be positive. The depth along the line is the one FrameBuffer.DrawLineDepth gives
 // its cells, perspective-correct and exact at the ends; read there what it is and what a
 // depth that is not positive, NaN or infinite does.
@@ -163,7 +168,7 @@ func (c *Canvas) DrawLineDepth(x0, y0 int, z0 float64, x1, y1 int, z1 float64, c
 
 // FillTriangle fills the triangle with corners (x0, y0), (x1, y1), (x2, y2) in
 // pixel coordinates, like FrameBuffer.FillTriangle but into pixels. The z values
-// are the corners' distances from the camera and must be positive.
+// are the corners' depths (see SetDepth) and must be positive.
 func (c *Canvas) FillTriangle(x0, y0, z0, x1, y1, z1, x2, y2, z2 float64, color Color) {
 	scanTriangle(c.width, c.height, x0, y0, z0, x1, y1, z1, x2, y2, z2, func(x, y int, z, _, _, _ float64) {
 		c.SetDepth(x, y, z, color)

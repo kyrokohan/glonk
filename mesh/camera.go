@@ -3,6 +3,7 @@ package mesh
 import (
 	"math"
 
+	"glonk.dev/engine"
 	"glonk.dev/geometry"
 )
 
@@ -72,22 +73,56 @@ func (c Camera) withDefaults() (cam Camera, ok bool) {
 // than Near or behind the camera, has no finite place on the screen, or the camera
 // sees nothing at all (see Camera).
 func (c Camera) Project(p geometry.Vector3, w, h int) (x, y float64, ok bool) {
+	x, y, _, ok = c.projectDepth(p, w, h)
+	return x, y, ok
+}
+
+// ProjectPixels returns where p appears on the pixels of cv, and how deep it is, placed and
+// stored the way DrawShadedPixels, DrawPixels and DrawDepthPixels place and store what they
+// draw. It is Project on the grid the canvas belongs to, with y stretched to pixel rows.
+//
+// x and y are fractional pixel coordinates. Floor them to get the pixel p is in, with
+// math.Floor: converting to int rounds a negative number toward zero, which would put a
+// point just off the left or top edge on the canvas.
+//
+// depth is the distance from the camera along Look, which is what those methods give
+// Canvas.SetDepth and Canvas.DrawLineDepth. Giving it to them too is what makes a marker,
+// a billboard or a particle hidden by the solids in front of it, and hide those behind it,
+// in whatever order they are drawn. It is not the straight-line distance: a point to one
+// side of the view direction is farther away than its depth.
+//
+// ok is false when Project's would be: p is nearer than Near or behind the camera, has no
+// finite place on the screen, or the camera sees nothing at all (see Camera). It is also
+// false for a nil canvas. A point off the canvas is still ok, with coordinates outside
+// it; SetDepth ignores a write there.
+func (c Camera) ProjectPixels(p geometry.Vector3, cv *engine.Canvas) (x, y, depth float64, ok bool) {
+	if cv == nil {
+		return 0, 0, 0, false
+	}
+	x, y, depth, ok = c.projectDepth(p, cv.Width(), cv.Height()/2)
+	return x, 2 * y, depth, ok
+}
+
+// projectDepth is Project that also returns the depth of p, its view-space z: the distance
+// along Look. Project and ProjectPixels both go through it, so they cannot disagree about
+// what is ok.
+func (c Camera) projectDepth(p geometry.Vector3, w, h int) (x, y, z float64, ok bool) {
 	c, usable := c.withDefaults()
 	if !usable {
-		return 0, 0, false
+		return 0, 0, 0, false
 	}
 	v := c.toView(p)
 
 	if v.Z < c.Near {
-		return 0, 0, false
+		return 0, 0, 0, false
 	}
 
 	px, py := c.projectView(v, w, h)
-	if !finite(px, py) { // NaN or infinity: no place on the screen
-		return 0, 0, false
+	if !finite(px, py, v.Z) { // NaN or infinity: no place on the screen
+		return 0, 0, 0, false
 	}
 
-	return px, py, true
+	return px, py, v.Z, true
 }
 
 // Forward returns the unit vector the camera faces, flat on the xz plane: Pitch
