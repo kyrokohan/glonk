@@ -4,6 +4,10 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-13
+
+On top of 0.5.0 this release adds widgets for a heads-up display and menus, rectangles and circles on the canvas, and pictures from JPEG and PNG files, and reads the terminal size from the output so that the examples start on Windows. Nothing was removed, renamed or changed.
+
 ### Added
 
 - `Canvas.FillRect(x, y, w, h, color)` fills a rectangle of pixels and `Canvas.DrawRect` draws its border, one pixel thick and inside it, so a rectangle under 3 pixels wide or tall is all border. A width or height that is not positive draws nothing. Like `DrawLine` they clip, never read or write depth, and let the zero `Color` erase, and only the part on the canvas is visited, so no position or size can overflow or make them slow. A whole 200 by 120 canvas takes about 9 microseconds, a small rectangle 85 nanoseconds and a border about 0.5 microseconds, none allocating.
@@ -24,7 +28,7 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ### Fixed
 
-- The terminal size is read from the output handle, so the examples run on Windows, where asking the input handle fails with "The handle is invalid".
+- The terminal size is read from the output handle, so the examples start on Windows (tried in Windows Terminal on Windows 11), where asking the input handle fails with "The handle is invalid".
 
 ## [0.5.0] - 2026-11-11
 
@@ -151,7 +155,8 @@ The first release. The API is pre-1.0 and may still change. The README lists the
 - Three example programs (`bounce2d`, `cube3d` and a model `viewer`), runnable examples in the package documentation, fuzz tests for the parsers, rasterizers and clipping, and a test that keeps the documentation complete.
 - Continuous integration (format, vet and race tests on Linux and macOS for Go 1.26 and 1.27, cross-compilation, 32-bit tests), Dependabot, a security policy and contributing notes.
 
-[Unreleased]: https://github.com/kyrokohan/glonk/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/kyrokohan/glonk/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/kyrokohan/glonk/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/kyrokohan/glonk/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/kyrokohan/glonk/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/kyrokohan/glonk/compare/v0.2.0...v0.3.0
