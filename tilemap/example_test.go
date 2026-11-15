@@ -55,3 +55,35 @@ func ExampleMap_At() {
 	// Output:
 	// # X true true
 }
+
+// Sees says whether a straight line between two points crosses no solid tile. Here two people in a
+// room with a pillar: the one at the left sees the one above, but not the one behind the pillar.
+func ExampleMap_Sees() {
+	room := tilemap.FromLines(map[rune]tilemap.Tile{'#': {Solid: true}},
+		"#########",
+		"#.......#",
+		"#...#...#",
+		"#.......#",
+		"#########",
+	)
+	left := geometry.Vector2{X: 1.5, Y: 2.5}
+	fmt.Println(room.Sees(left, geometry.Vector2{X: 3.5, Y: 1.5})) // above and to the right
+	fmt.Println(room.Sees(left, geometry.Vector2{X: 7.5, Y: 2.5})) // behind the pillar
+	// Output:
+	// true
+	// false
+}
+
+// Cast shoots a ray and returns the first solid tile it meets, where it enters it and how far it
+// went. The direction can be any length. Here a shot down a corridor ends at the wall.
+func ExampleMap_Cast() {
+	corridor := tilemap.FromLines(map[rune]tilemap.Tile{'#': {Solid: true}},
+		"##########",
+		"#........#",
+		"##########",
+	)
+	hit, ok := corridor.Cast(geometry.Vector2{X: 2.5, Y: 1.5}, geometry.Vector2{X: 1, Y: 0})
+	fmt.Println(ok, hit.X, hit.Y, hit.Point, hit.Distance)
+	// Output:
+	// true 9 1 {9 1.5} 6.5
+}

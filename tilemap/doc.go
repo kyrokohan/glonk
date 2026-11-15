@@ -40,6 +40,27 @@
 //	moved, hitX, hitY := level.Move(player.Bounds(), geometry.Vector2{X: dx, Y: dy})
 //	player.Position = moved.Min
 //
+// # Seeing through the map
+//
+// [Map.Sees] says whether a straight line between two points crosses no solid tile, for whether
+// an enemy can see the player or a shot is clear, and [Map.Cast] shoots a ray and says which solid
+// tile it meets first, where, and how far, for what a shot hits. Both walk the grid one tile at
+// a time, exactly, so no wall is thin enough to miss and the work is at most the size of the map,
+// where stepping along the line a tenth of a tile at a time can see past the tip of a corner and
+// does far more work.
+//
+//	if level.Sees(enemy.Bounds().Center(), player.Bounds().Center()) { // nothing solid in the way
+//	hit, _ := level.Cast(muzzle, aim)                // hit.X, hit.Y: the tile; hit.Point; hit.Distance
+//
+// A point is in the tile it floors to, as for [Map.Solid], [Map.Draw] and sprites, so a point on
+// the line between tiles is in the tile to its right or below it, and a point at whole numbers,
+// the top left of its tile, is in that tile alone. A line through a corner is stopped only by the
+// tile that holds the corner, so it passes between two solid tiles that touch only there when
+// that tile is not solid. Outside the map is solid, so a ray from inside it always hits
+// something, at the edge of the map at the latest. The walk is exact for numbers that a computer
+// holds exactly, such as whole numbers, halves and sixty-fourths, which is what makes a corner a
+// corner.
+//
 // # Size
 //
 // A map holds up to 4,194,304 cells, and a bigger one is empty. It stores two bytes for each

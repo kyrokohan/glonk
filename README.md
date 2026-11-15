@@ -293,6 +293,10 @@ level := tilemap.FromLines(map[rune]tilemap.Tile{
 moved, hitX, hitY := level.Move(player.Bounds(), geometry.Vector2{X: dx, Y: dy})
 player.Position = moved.Min
 
+// can the enemy see the player, and what does a shot hit?
+sees := level.Sees(enemy.Bounds().Center(), player.Bounds().Center())
+hit, _ := level.Cast(muzzle, aim) // hit.X, hit.Y, hit.Point, hit.Distance
+
 // the camera: the screen's rectangle, centered on the player, kept inside the level
 screen := geometry.NewRect(0, 0, float64(fb.Width()), float64(fb.Height()))
 view := screen.CenterOn(player.Bounds().Center()).Within(level.Bounds())
@@ -309,6 +313,7 @@ sprites.DrawView(fb, view)
 - **The edge of the world is a wall.** `Solid` is true outside the map, and a map is empty and solid on a nil pointer.
 - **The camera is a `Rect`.** `Rect.CenterOn(p)` centers it on a point and `Rect.Within(level)` keeps it inside, or centers it where the level is smaller than the screen. `Map.Draw(fb, view)` and `Layer.DrawView(fb, view)` use only its top left corner, floored in the world, so a sprite stands on its tile however the view moves and the picture moves a whole cell at a time. For a smooth follow, ease the view toward the player yourself with `Vector2.Lerp`.
 - **Moving through the map.** `Map.Move(box, delta)` moves a box along X, stopping at the first solid tile, then along Y, so a box that goes into a wall at an angle slides along it. It looks at every tile on the way, so a long frame cannot carry the box through a thin wall, and it stops with the box's edge exactly on the tile's edge, so there is no rounding gap and the box rests against a wall the same at any frame rate: neither habit of the Collision section is needed. It reports whether it was stopped on each axis. Only the tiles a box moves into stop it, so one that starts inside a wall can move on, and one outside the map cannot move.
+- **Line of sight and ray casts.** `Map.Sees(a, b)` says whether a straight line between two points crosses no solid tile, and `Map.Cast(from, direction)` shoots a ray and returns a `Hit`: the first solid tile it meets, where it enters it (`Point`, on the tile's edge) and how far (`Distance`, in cells). Both walk the grid one tile at a time, exactly, so no wall is thin enough to miss and the work is at most the size of the map. A point is in the tile it floors to, so a point at whole numbers is in its own tile, and a line through a corner is stopped only by the tile that holds the corner. Outside the map is solid, so a ray from inside always hits something. A 400 by 200 map crossed corner to corner takes about 1.4 microseconds and none of it allocates.
 - **Cost.** Drawing 200 by 60 cells takes about 20 microseconds and a move about 24 nanoseconds, neither allocating. `Layer.Draw` is as fast as before: `DrawView` has a loop of its own.
 - **Not included.** Tiles of other sizes than one cell (write a tile twice across for a squarer look), tile animation (`Set` the cell in your own `Update`), loading maps from files, parallax and camera shake.
 
