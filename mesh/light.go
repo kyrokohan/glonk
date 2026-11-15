@@ -1,6 +1,8 @@
 package mesh
 
 import (
+	"math"
+
 	"glonk.dev/engine"
 	"glonk.dev/geometry"
 )
@@ -164,11 +166,12 @@ type screenPoint struct {
 }
 
 // eachShadedTriangle does the work shared by every solid drawing mode. For each
-// face turned toward the camera it cuts the face at the near plane, projects the
-// pieces onto a w x h grid of cells, and hands each to fn. A mesh without Normals is
-// lit here, once for each face, and fn gets the brightness from 0 to 1; a mesh with
-// them is lit by fn, cell by cell, from the corners' places and normals. A face that
-// names a vertex the mesh does not have is skipped.
+// face turned toward the camera it cuts the face at the near plane, and at the far one
+// where the camera has one, projects the pieces onto a w x h grid of cells, and hands
+// each to fn. A mesh without Normals is lit here, once for each face, and fn gets the
+// brightness from 0 to 1; a mesh with them is lit by fn, cell by cell, from the
+// corners' places and normals. A face that names a vertex the mesh does not have is
+// skipped.
 func (m Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(t *shadedTriangle)) {
 	cam, ok := cam.withDefaults()
 	if !ok || !m.Transform.valid() {
@@ -177,7 +180,7 @@ func (m Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(t
 
 	eye := cam.viewTransform()
 	proj := cam.projector(w, h)
-	if m.offscreen(eye, proj, cam.Near) {
+	if m.offscreen(eye, proj, cam.Near, cam.Far) {
 		return
 	}
 
@@ -192,6 +195,8 @@ func (m Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(t
 	normals := s.worldNormals(m, place) // nil: shade flat
 	smooth := normals != nil
 
+	limited := !math.IsInf(cam.Far, 1) // there is a far plane to cut at
+
 	var tris [2][3]clipVert
 	tri := &s.tri // in the scratch, because a pointer handed to fn would move a local to the heap
 	tri.smooth = smooth
@@ -204,6 +209,16 @@ func (m Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(t
 			continue
 		}
 		v0, v1, v2 := view[f[0]], view[f[1]], view[f[2]]
+
+		// A face wholly beyond the far plane is skipped before it is lit, and one that crosses
+		// it is cut below; one wholly in front of it needs nothing done.
+		crossesFar := false
+		if limited {
+			if v0.Z > cam.Far && v1.Z > cam.Far && v2.Z > cam.Far {
+				continue
+			}
+			crossesFar = v0.Z > cam.Far || v1.Z > cam.Far || v2.Z > cam.Far
+		}
 
 		front := frontFacing(v1.Sub(v0).Cross(v2.Sub(v0)), v0)
 		if !front && !m.DoubleSided {
@@ -223,14 +238,14 @@ func (m Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(t
 			tri.color = m.FaceColors[i]
 		}
 
-		var cut bool // the near plane crosses a tinted triangle
+		var cut bool // the near or the far plane crosses a tinted triangle
 		if vertexColors {
 			vc := [3]engine.Color{m.VertexColors[f[0]], m.VertexColors[f[1]], m.VertexColors[f[2]]}
 			if tri.tinted = !vc[0].IsDefault() || !vc[1].IsDefault() || !vc[2].IsDefault(); tri.tinted {
 				for k := range corner {
 					corner[k] = cornerColor(vc[k], tri.color, hasFaceColor)
 				}
-				cut = v0.Z < cam.Near || v1.Z < cam.Near || v2.Z < cam.Near
+				cut = crossesFar || v0.Z < cam.Near || v1.Z < cam.Near || v2.Z < cam.Near
 			}
 		}
 
@@ -246,7 +261,11 @@ func (m Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(t
 		}
 
 		n := clipTriangleNear(a, b, c, cam.Near, smooth, &tris)
-		for _, t := range tris[:n] {
+		pieces := tris[:n]
+		if crossesFar {
+			pieces = s.far[:clipTrianglesFar(pieces, cam.Far, smooth, &s.far)]
+		}
+		for _, t := range pieces {
 			for i, v := range t {
 				x, y := proj.project(v.view)
 				tri.corners[i] = screenPoint{x, y, v.view.Z}
@@ -255,7 +274,7 @@ func (m Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(t
 				}
 				if tri.tinted {
 					// An uncut triangle comes out with its corners as they went in. A cut
-					// one has corners on the near plane, given the color at that place.
+					// one has corners on the near or far plane, given the color at that place.
 					if cut {
 						tri.rgb[i] = colorAtPoint(corner, v0, v1, v2, v.view)
 					} else {
@@ -271,8 +290,8 @@ func (m Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(t
 // DrawShaded renders the mesh's faces as solid triangles, shaded by the lights and
 // drawn in the mesh's Material. Nearer surfaces hide farther ones, faces turned away
 // from the camera are skipped (unless the mesh is DoubleSided), and faces crossing
-// the near plane are cut where they cross it. A mesh without Faces draws nothing; use
-// Draw for wireframes.
+// the near plane, or the far plane of a camera that has one, are cut where they cross
+// it. A mesh without Faces draws nothing; use Draw for wireframes.
 //
 // A mesh without Normals is shaded flat, each face lit as a whole. One with Normals
 // is shaded smooth, every cell lit on its own; see Mesh.Normals.

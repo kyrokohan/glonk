@@ -13,7 +13,7 @@ import (
 // offscreenFor runs the culling test the way a draw does, on a w x h grid.
 func offscreenFor(m Mesh, cam Camera, w, h int) bool {
 	cam, _ = cam.withDefaults()
-	return m.offscreen(cam.viewTransform(), cam.projector(w, h), cam.Near)
+	return m.offscreen(cam.viewTransform(), cam.projector(w, h), cam.Near, cam.Far)
 }
 
 // With a 90 degree lens on an 80x24 grid, the edge of the view (a cell beyond the grid) is 1.7
@@ -173,7 +173,7 @@ func TestCullingChangesNoPicture(t *testing.T) {
 		}
 
 		c, _ := cam.withDefaults()
-		switch off := m.offscreen(c.viewTransform(), c.projector(w, h), c.Near); {
+		switch off := m.offscreen(c.viewTransform(), c.projector(w, h), c.Near, c.Far); {
 		case off:
 			skipped++
 		case without[2] != picture(mustBuffer(t, w, h)):

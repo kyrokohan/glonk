@@ -8,10 +8,11 @@ var cullingOn = true
 
 // offscreen reports whether no part of the mesh can be on screen, so that drawing it can
 // be skipped. It only says yes when sure: the mesh is inside a sphere around its Position,
-// and the sphere is wholly beyond one side of the view, by more than a cell, or wholly
-// behind the near plane. The sphere is looked at only if the middle of the mesh is itself
-// off the view, so a mesh that is on screen costs one point and a few multiplications.
-func (m Mesh) offscreen(eye viewTransform, proj projector, near float64) bool {
+// and the sphere is wholly beyond one side of the view, by more than a cell, wholly behind
+// the near plane or wholly beyond the far one. The sphere is looked at only if the middle of
+// the mesh is itself off the view, so a mesh that is on screen costs one point and a few
+// multiplications.
+func (m Mesh) offscreen(eye viewTransform, proj projector, near, far float64) bool {
 	if !cullingOn || len(m.Vertices) == 0 {
 		return false
 	}
@@ -25,7 +26,7 @@ func (m Mesh) offscreen(eye viewTransform, proj projector, near float64) bool {
 	b, up := proj.focal*proj.h/2, proj.h/2+1
 	left, right := a*c.X+side*c.Z, -a*c.X+side*c.Z
 	top, bottom := -b*c.Y+up*c.Z, b*c.Y+up*c.Z
-	if left >= 0 && right >= 0 && top >= 0 && bottom >= 0 && c.Z >= near {
+	if left >= 0 && right >= 0 && top >= 0 && bottom >= 0 && c.Z >= near && c.Z <= far {
 		return false // the middle is on screen, the usual case, so there is no need to look further
 	}
 
@@ -37,7 +38,7 @@ func (m Mesh) offscreen(eye viewTransform, proj projector, near float64) bool {
 			return true
 		}
 	}
-	return c.Z+reach < near
+	return c.Z+reach < near || c.Z-reach > far
 }
 
 // reach is how far from its Position the mesh can get once it is placed: its farthest

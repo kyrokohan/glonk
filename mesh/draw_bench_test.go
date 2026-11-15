@@ -194,6 +194,59 @@ func BenchmarkDrawMany(b *testing.B) {
 	}
 }
 
+// BenchmarkDrawFar draws a long scene with and without a far plane: the thousand cubes, 5 to 40
+// away, with a Far of 20 that skips about half of them, and the big smooth sphere with a Far
+// that cuts through the middle of it, so that the faces it crosses are cut as well as skipped.
+func BenchmarkDrawFar(b *testing.B) {
+	cubes, cam, lights := manyScene()
+	fb, err := engine.NewFrameBuffer(80, 24)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	for _, far := range []float64{0, 20} {
+		cam := cam
+		cam.Far = far
+		for _, mode := range []string{"wireframe", "shaded", "pixels"} {
+			b.Run(fmt.Sprintf("many cubes %s far %v", mode, far), func(b *testing.B) {
+				b.ReportAllocs()
+				for b.Loop() {
+					fb.Clear()
+					for _, c := range cubes {
+						switch mode {
+						case "wireframe":
+							c.Draw(fb, cam, engine.Cell{Character: '#'})
+						case "shaded":
+							c.DrawShaded(fb, cam, lights...)
+						default:
+							c.DrawShadedPixels(fb.Canvas(), cam, lights...)
+						}
+					}
+				}
+			})
+		}
+	}
+
+	ball := Sphere(3, 128, 64)
+	ball.Transform.Position = geometry.Vector3{Z: 8} // from 5 to 11 away
+	for _, far := range []float64{0, 8} {
+		cam := Camera{FOV: math.Pi / 2, Near: 0.1, Far: far}
+		for _, mode := range []string{"wireframe", "shaded"} {
+			b.Run(fmt.Sprintf("big sphere %s far %v", mode, far), func(b *testing.B) {
+				b.ReportAllocs()
+				for b.Loop() {
+					fb.Clear()
+					if mode == "wireframe" {
+						ball.Draw(fb, cam, engine.Cell{Character: '#'})
+					} else {
+						ball.DrawShaded(fb, cam, lights...)
+					}
+				}
+			})
+		}
+	}
+}
+
 // BenchmarkDrawBig draws one big smooth sphere (about 16 thousand faces) where it is
 // all in view, where half of it is off the right edge, and where it is behind the
 // camera, as a wireframe and shaded. A model that is fully in view must not get slower
