@@ -477,3 +477,205 @@ func TestProjectPixelsPlacesAMarkerLikeTheMesh(t *testing.T) {
 		}
 	}
 }
+
+// rayCameras are the cameras the ray tests use: at rest, turned, tilted, moved, and with an odd
+// field of view and cell shape.
+func rayCameras() []Camera {
+	return []Camera{
+		{},
+		{Position: geometry.Vector3{X: 1, Y: 2, Z: -3}, Yaw: 0.7},
+		{Yaw: -2, Pitch: 0.4, FOV: 1},
+		{Position: geometry.Vector3{X: -4, Y: 1, Z: 2}, Yaw: 3, Pitch: -0.9, FOV: 2, Near: 0.5, CellAspect: 1.5},
+	}
+}
+
+// The ray through the place Project gives for a point passes through the point, and the distance
+// along it is the depth: origin + t*direction is the point for the depth t, which is how far the
+// point is along Look, worked out here from the camera's own vector.
+func TestRayPassesThroughTheProjectedPoint(t *testing.T) {
+	points := []geometry.Vector3{
+		{Z: 5}, {X: 1, Y: -2, Z: 7}, {X: 3, Y: 0.5, Z: 12}, {Y: 40, Z: 2}, {X: -2, Y: -1, Z: 3}, {X: -6, Y: 3, Z: -1},
+	}
+
+	for _, cam := range rayCameras() {
+		for _, size := range [][2]int{{80, 24}, {30, 11}, {1, 1}} {
+			through := 0
+			for _, p := range points {
+				x, y, ok := cam.Project(p, size[0], size[1])
+				if !ok {
+					continue
+				}
+				through++
+				origin, direction, rayOK := cam.Ray(x, y, size[0], size[1])
+				if !rayOK {
+					t.Fatalf("cam %+v, %dx%d: wanted a ray through %v, got none", cam, size[0], size[1], p)
+				}
+				if origin != cam.Position {
+					t.Errorf("cam %+v: wanted the ray to start at the camera, got %v", cam, origin)
+				}
+				depth := p.Sub(cam.Position).Dot(cam.Look())
+				if got := origin.Add(direction.Scale(depth)); !vecNear(got, p, 1e-9*(1+p.Length())) {
+					t.Errorf("cam %+v, %dx%d, p %v: wanted the ray to reach the point at its depth %v, got %v", cam, size[0], size[1], p, depth, got)
+				}
+			}
+			if through == 0 {
+				t.Errorf("cam %+v, %dx%d: wanted some point to be projected, got none", cam, size[0], size[1])
+			}
+
+			// The same on the pixels of a canvas, with the depth ProjectPixels returns.
+			cv := pixelCanvas(t, size[0], size[1])
+			for _, p := range points {
+				x, y, depth, ok := cam.ProjectPixels(p, cv)
+				if !ok {
+					continue
+				}
+				origin, direction, rayOK := cam.RayPixels(x, y, cv)
+				if !rayOK {
+					t.Fatalf("cam %+v, %dx%d pixels: wanted a ray through %v, got none", cam, size[0], size[1], p)
+				}
+				if got := origin.Add(direction.Scale(depth)); !vecNear(got, p, 1e-9*(1+p.Length())) {
+					t.Errorf("cam %+v, %dx%d pixels, p %v: wanted the ray to reach the point at the depth %v, got %v", cam, size[0], size[1], p, depth, got)
+				}
+			}
+		}
+	}
+}
+
+// Every ray is one deep along Look, on the screen or off it, so that the distance along it is the
+// depth; and the ray through the middle of the screen is Look itself.
+func TestRayIsOneDeepAlongLook(t *testing.T) {
+	places := [][2]float64{{0, 0}, {40, 12}, {79.9, 23.9}, {-30, 200}, {1e6, -1e6}, {12.25, 7.5}}
+
+	for _, cam := range rayCameras() {
+		for _, p := range places {
+			_, d, ok := cam.Ray(p[0], p[1], 80, 24)
+			if !ok {
+				t.Fatalf("cam %+v: wanted a ray through %v, off the screen or not, got none", cam, p)
+			}
+			if got := d.Dot(cam.Look()); math.Abs(got-1) > 1e-9*(1+d.Length()) {
+				t.Errorf("cam %+v, place %v: wanted a direction one deep along Look, got %v", cam, p, got)
+			}
+		}
+		if _, d, _ := cam.Ray(40, 12, 80, 24); !vecNear(d, cam.Look(), 1e-9) {
+			t.Errorf("cam %+v: wanted the ray through the middle to be Look %v, got %v", cam, cam.Look(), d)
+		}
+		cv := pixelCanvas(t, 80, 24)
+		if _, d, _ := cam.RayPixels(40, 24, cv); !vecNear(d, cam.Look(), 1e-9) {
+			t.Errorf("cam %+v: wanted the ray through the middle of the canvas to be Look, got %v", cam, d)
+		}
+	}
+}
+
+func TestCameraUp(t *testing.T) {
+	if got := (Camera{}).Up(); !vecNear(got, geometry.Vector3{Y: 1}, 1e-9) {
+		t.Errorf("wanted straight up for a camera at rest, got %v", got)
+	}
+
+	for _, cam := range rayCameras() {
+		up := cam.Up()
+		if !floatEquals(up.Length(), 1) || !floatEquals(up.Dot(cam.Look()), 0) || !floatEquals(up.Dot(cam.Right()), 0) {
+			t.Errorf("cam %+v: wanted a unit vector perpendicular to Look and Right, got %v", cam, up)
+		}
+		// In view space, where the camera is at the origin looking down +z, up is +y.
+		if v := cam.toView(cam.Position.Add(up)); !vecNear(v, geometry.Vector3{Y: 1}, 1e-9) {
+			t.Errorf("cam %+v: wanted up to be +y in view space, got %v", cam, v)
+		}
+	}
+}
+
+func TestRayIsNotOkWhereItCannotBeGiven(t *testing.T) {
+	cv := pixelCanvas(t, 40, 12)
+	inf := math.Inf(1)
+	tests := []struct {
+		name string
+		cam  Camera
+		x, y float64
+		w, h int
+		cv   *engine.Canvas // for RayPixels, when the test is about a canvas
+	}{
+		{"a camera that sees nothing", Camera{FOV: 4}, 20, 6, 40, 12, cv},
+		{"a camera with a bad cell shape", Camera{CellAspect: -1}, 20, 6, 40, 12, cv},
+		{"a grid with no height", Camera{}, 20, 6, 40, 0, nil},
+		{"a grid of negative height", Camera{}, 20, 6, 40, -12, nil},
+		{"a NaN place", Camera{}, math.NaN(), 6, 40, 12, nil},
+		{"an infinite place", Camera{}, 20, inf, 40, 12, nil},
+		{"a NaN yaw", Camera{Yaw: math.NaN()}, 20, 6, 40, 12, cv},
+		{"an infinite pitch", Camera{Pitch: inf}, 20, 6, 40, 12, cv},
+		{"a position that is not a number", Camera{Position: geometry.Vector3{X: math.NaN()}}, 20, 6, 40, 12, cv},
+		{"no canvas", Camera{}, 20, 6, 0, 0, nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.name != "no canvas" {
+				o, d, ok := tt.cam.Ray(tt.x, tt.y, tt.w, tt.h)
+				if ok || o != (geometry.Vector3{}) || d != (geometry.Vector3{}) {
+					t.Errorf("Ray: wanted (zero, zero, false), got (%v, %v, %v)", o, d, ok)
+				}
+			}
+			if tt.cv != nil || tt.name == "no canvas" {
+				o, d, ok := tt.cam.RayPixels(tt.x, tt.y, tt.cv)
+				if ok || o != (geometry.Vector3{}) || d != (geometry.Vector3{}) {
+					t.Errorf("RayPixels: wanted (zero, zero, false), got (%v, %v, %v)", o, d, ok)
+				}
+			}
+		})
+	}
+}
+
+// Against what the mesh really draws. A wall square to the view direction is drawn into the
+// canvas; the ray through the middle of every pixel meets the wall's plane at its distance, and
+// the pixel is drawn exactly where that point is inside the wall. That holds only if the field of
+// view, the shape of the cells, the half height, the doubling of y and the pitch and yaw all agree
+// with the drawing. A marker stored at that distance is hidden by the wall just behind it and
+// shown just in front, so a depth taken from a ray is the depth the drawing stores.
+func TestRayPixelsAgreeWithWhatTheMeshDraws(t *testing.T) {
+	const dist, half = 6.0, 2.0
+	marker := engine.RGB(0, 255, 0)
+
+	for _, cam := range rayCameras() {
+		// The wall's own axes, from the camera's, worked out apart from the code under test.
+		right := geometry.Vector3{X: 1}.RotateX(-cam.Pitch).RotateY(cam.Yaw)
+		up := geometry.Vector3{Y: 1}.RotateX(-cam.Pitch).RotateY(cam.Yaw)
+		centre := cam.Position.Add(cam.Look().Scale(dist))
+		at := func(a, b float64) geometry.Vector3 { return centre.Add(right.Scale(a)).Add(up.Scale(b)) }
+		wall := Mesh{
+			Vertices:    []geometry.Vector3{at(-half, -half), at(half, -half), at(half, half), at(-half, half)},
+			Faces:       [][3]int{{0, 1, 2}, {0, 2, 3}},
+			DoubleSided: true,
+		}.withColor(engine.RGB(200, 100, 50))
+
+		cv := pixelCanvas(t, 60, 20)
+		wall.DrawShadedPixels(cv, cam, Ambient{Level: 1})
+
+		inside, outside := 0, 0
+		for py := range cv.Height() {
+			for px := range cv.Width() {
+				origin, direction, ok := cam.RayPixels(float64(px)+0.5, float64(py)+0.5, cv)
+				if !ok {
+					t.Fatalf("cam %+v: wanted a ray through pixel (%d, %d), got none", cam, px, py)
+				}
+				hit := origin.Add(direction.Scale(dist)) // the wall is dist deep everywhere
+				a, b := hit.Sub(centre).Dot(right), hit.Sub(centre).Dot(up)
+				if math.Abs(math.Abs(a)-half) < 1e-6 || math.Abs(math.Abs(b)-half) < 1e-6 {
+					continue // on an edge of the wall, where either answer is right
+				}
+				wantDrawn := math.Abs(a) < half && math.Abs(b) < half
+				if drawn := !cv.At(px, py).IsDefault(); drawn != wantDrawn {
+					t.Fatalf("cam %+v, pixel (%d, %d): the ray meets the wall's plane at (%.3f, %.3f), wanted drawn=%v, got %v", cam, px, py, a, b, wantDrawn, drawn)
+				}
+				if !wantDrawn {
+					outside++
+					continue
+				}
+				inside++
+				if cv.SetDepth(px, py, dist+0.01, marker) || !cv.SetDepth(px, py, dist-0.01, marker) {
+					t.Fatalf("cam %+v, pixel (%d, %d): wanted the depth along the ray, %v, to be the depth the wall was stored at", cam, px, py, dist)
+				}
+			}
+		}
+		if inside < 30 || outside < 30 {
+			t.Errorf("cam %+v: wanted pixels on and off the wall, got %d and %d", cam, inside, outside)
+		}
+	}
+}

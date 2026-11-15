@@ -64,6 +64,15 @@ func (p projector) project(v geometry.Vector3) (x, y float64) {
 	return p.w/2 + ndcX*p.h/2*p.aspect, p.h/2 - ndcY*p.h/2
 }
 
+// ray is the reverse of project: the view-space direction of the ray through the cell
+// coordinates (x, y), one deep, so that its z is 1 and t along it is t deep. It is not
+// finite where the grid has no height.
+func (p projector) ray(x, y float64) geometry.Vector3 {
+	ndcX := (x - p.w/2) / (p.h / 2 * p.aspect)
+	ndcY := (p.h/2 - y) / (p.h / 2)
+	return geometry.Vector3{X: ndcX / p.focal, Y: ndcY / p.focal, Z: 1}
+}
+
 // scratch holds the lists a draw call needs, kept between calls so that drawing stops
 // allocating once they have grown to the size of the meshes drawn.
 type scratch struct {
