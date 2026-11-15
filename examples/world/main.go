@@ -43,7 +43,7 @@ const (
 var hudStyle = engine.Cell{Foreground: engine.Palette(252), Background: engine.Palette(235)}
 
 // legend is what each rune of levelText is. A coin and the start are floor under the sprite
-// that is put there.
+// that is put there, and the map's Kind of a tile says which it was.
 var legend = map[rune]tilemap.Tile{
 	'#': {Cell: engine.Cell{Character: '#', Foreground: engine.Palette(240), Background: engine.Palette(236)}, Solid: true},
 	'.': {Cell: engine.Cell{Character: '.', Foreground: engine.Palette(238), Background: engine.Palette(234)}},
@@ -96,18 +96,16 @@ func newWorldGame() *worldGame {
 		Frame:   sprite.FromLines(engine.Cell{Foreground: engine.Palette(208)}, `(@)`),
 		Overlay: true, // the floor shows behind the letters
 	}
-	for y, line := range lines {
-		x := 0
-		for _, r := range line {
+	for y := range g.level.Height() {
+		for x := range g.level.Width() {
 			at := geometry.Vector2{X: float64(x), Y: float64(y)}
-			switch r {
+			switch g.level.At(x, y).Kind { // the rune of the text that made the tile
 			case 'o':
 				g.coins.Add(&sprite.Sprite{Position: at, Animation: g.spin, Overlay: true})
 				g.total++
 			case '@':
 				g.player.Position = at
 			}
-			x++
 		}
 	}
 	g.hero.Add(g.player)
