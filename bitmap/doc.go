@@ -26,6 +26,22 @@
 //	tile.Set(3, 4, engine.RGB(230, 210, 40)) // the other 63 pixels stay see-through
 //	pic := bitmap.FromImage(img)             // any image.Image, with the alpha rule below
 //
+// # Frames
+//
+// [Bitmap.Sub] is a view of part of a picture that shares its pixels, so that the frames of an
+// animation can be side by side in one picture and drawn a frame at a time. Nothing is copied,
+// and every call here works on a view as it does on a picture: it can be drawn, stretched and
+// asked for its pixels. A rectangle that runs off the picture is cut to it.
+//
+//	var frames [4]*bitmap.Bitmap // four frames of 16 by 16 pixels in one strip
+//	for i := range frames {
+//		frames[i] = strip.Sub(i*16, 0, 16, 16)
+//	}
+//	frames[2].Draw(canvas, x, y)
+//
+// Make the views once, at start-up. A view keeps the whole picture in memory, and [Bitmap.Set]
+// on either one changes the other.
+//
 // # Transparency
 //
 // A pixel of a PNG with an alpha of 128 or more is drawn, as an opaque color, and one with

@@ -698,6 +698,206 @@ func TestFromImageIsACopy(t *testing.T) {
 	}
 }
 
+// gridPicture returns a picture of w by h pixels, no two of them alike, with a see-through pixel
+// at (1, 0), so that a pixel taken from the wrong place is told from the right one.
+func gridPicture(t testing.TB, w, h int) *Bitmap {
+	t.Helper()
+	pic := New(w, h)
+	for y := range h {
+		for x := range w {
+			if x != 1 || y != 0 {
+				pic.Set(x, y, engine.RGB(uint8(20*x+5), uint8(20*y+5), 7))
+			}
+		}
+	}
+	return pic
+}
+
+// subReference returns where, in a picture of pw by ph, the rectangle of w by h at (x, y) is
+// once it is cut to the picture, and how big, worked out with big integers so that nothing can
+// overflow. A rectangle with nothing left is 0 by 0.
+func subReference(pw, ph, x, y, w, h int) (x0, y0, vw, vh int) {
+	axis := func(start, n, limit int) (lo, count int) {
+		if n <= 0 {
+			return 0, 0
+		}
+		from := big.NewInt(int64(start))
+		to := new(big.Int).Add(from, big.NewInt(int64(n)))
+		if from.Sign() < 0 {
+			from.SetInt64(0)
+		}
+		if to.Cmp(big.NewInt(int64(limit))) > 0 {
+			to.SetInt64(int64(limit))
+		}
+		if from.Cmp(to) >= 0 {
+			return 0, 0
+		}
+		return int(from.Int64()), int(new(big.Int).Sub(to, from).Int64())
+	}
+	x0, vw = axis(x, w, pw)
+	y0, vh = axis(y, h, ph)
+	if vw == 0 || vh == 0 {
+		return 0, 0, 0, 0
+	}
+	return x0, y0, vw, vh
+}
+
+// checkView fails the test unless view is the vw by vh part of pic that starts at (x0, y0).
+func checkView(t *testing.T, view, pic *Bitmap, x0, y0, vw, vh int) {
+	t.Helper()
+	if view == nil {
+		t.Fatal("wanted a picture, even an empty one, got nil")
+	}
+	if view.Width() != vw || view.Height() != vh {
+		t.Fatalf("wanted %d by %d, got %d by %d", vw, vh, view.Width(), view.Height())
+	}
+	for y := range vh {
+		for x := range vw {
+			if got, want := view.At(x, y), pic.At(x0+x, y0+y); got != want {
+				t.Fatalf("pixel (%d, %d): wanted %v, got %v", x, y, want, got)
+			}
+		}
+	}
+	// Outside the view there is nothing, though the picture has pixels there.
+	for _, p := range [][2]int{{-1, 0}, {0, -1}, {vw, 0}, {0, vh}, {vw, vh}} {
+		if got := view.At(p[0], p[1]); !got.IsDefault() {
+			t.Fatalf("pixel %v is outside the view, wanted nothing, got %v", p, got)
+		}
+	}
+}
+
+func TestSubIsTheRectangleOfThePictureCutToIt(t *testing.T) {
+	const pw, ph = 5, 4
+	pic := gridPicture(t, pw, ph)
+	for x := -3; x < pw+3; x++ {
+		for y := -3; y < ph+3; y++ {
+			for w := -1; w < pw+4; w++ {
+				for h := -1; h < ph+4; h++ {
+					x0, y0, vw, vh := subReference(pw, ph, x, y, w, h)
+					checkView(t, pic.Sub(x, y, w, h), pic, x0, y0, vw, vh)
+				}
+			}
+		}
+	}
+}
+
+func TestSubWithHugeNumbers(t *testing.T) {
+	const pw, ph = 5, 4
+	pic := gridPicture(t, pw, ph)
+	for _, x := range hugePlaces() {
+		for _, y := range hugePlaces() {
+			for _, w := range hugeSizes() {
+				for _, h := range hugeSizes() {
+					x0, y0, vw, vh := subReference(pw, ph, x, y, w, h)
+					checkView(t, pic.Sub(x, y, w, h), pic, x0, y0, vw, vh)
+				}
+			}
+		}
+	}
+}
+
+func TestSubSharesThePixelsOfThePicture(t *testing.T) {
+	pic := gridPicture(t, 5, 4)
+	view := pic.Sub(1, 1, 3, 2)
+
+	view.Set(0, 0, red) // pixel (1, 1) of the picture
+	view.Set(2, 1, blue)
+	if pic.At(1, 1) != red || pic.At(3, 2) != blue {
+		t.Errorf("wanted Set on the view to change the picture, got %v and %v", pic.At(1, 1), pic.At(3, 2))
+	}
+	pic.Set(2, 1, green) // pixel (1, 0) of the view
+	if got := view.At(1, 0); got != green {
+		t.Errorf("wanted Set on the picture to show in the view, got %v", got)
+	}
+
+	// Outside the view, Set does nothing, though the picture is there.
+	before := pic.At(0, 1)
+	view.Set(-1, 0, yellow)
+	view.Set(3, 0, yellow)
+	view.Set(0, 2, yellow)
+	if pic.At(0, 1) != before || pic.At(4, 1) != gridPicture(t, 5, 4).At(4, 1) || pic.At(1, 3) != gridPicture(t, 5, 4).At(1, 3) {
+		t.Errorf("wanted Set outside the view to leave the picture alone")
+	}
+}
+
+func TestSubOfASubIsRelativeToTheFirst(t *testing.T) {
+	pic := gridPicture(t, 6, 5)
+	inner := pic.Sub(1, 1, 4, 3).Sub(1, 1, 2, 2)
+	checkView(t, inner, pic, 2, 2, 2, 2)
+
+	// It is cut to the view it is taken from, not to the picture behind it.
+	cut := pic.Sub(1, 1, 2, 2).Sub(0, 0, 5, 5)
+	checkView(t, cut, pic, 1, 1, 2, 2)
+	cut = pic.Sub(1, 1, 2, 2).Sub(1, 1, 5, 5)
+	checkView(t, cut, pic, 2, 2, 1, 1)
+	if got := pic.Sub(1, 1, 2, 2).Sub(2, 0, 3, 3); got.Width() != 0 || got.Height() != 0 {
+		t.Errorf("wanted nothing to be left, got %d by %d", got.Width(), got.Height())
+	}
+}
+
+func TestSubOfNothingIsAnEmptyPicture(t *testing.T) {
+	var none *Bitmap
+	for name, pic := range map[string]*Bitmap{"nil": none, "empty": New(0, 0)} {
+		t.Run(name, func(t *testing.T) {
+			view := pic.Sub(0, 0, 3, 3)
+			if view == nil || view.Width() != 0 || view.Height() != 0 {
+				t.Fatalf("wanted an empty picture, got %v", view)
+			}
+		})
+	}
+	// An empty view is drawn, stretched and set without a panic and draws nothing.
+	view := gridPicture(t, 3, 3).Sub(5, 5, 2, 2)
+	c := canvasOf(t, 4, 2, grey)
+	view.Draw(c, 0, 0)
+	view.DrawScaled(c, 0, 0, 4, 4)
+	view.DrawScaledDepth(c, 0, 0, 4, 4, 1)
+	view.Set(0, 0, red)
+	for _, p := range pixelsOf(c) {
+		if p != grey {
+			t.Fatalf("wanted an empty view to draw nothing, got %v", p)
+		}
+	}
+}
+
+// A view is drawn as the picture it shows: every call gives what the reference gives for the
+// view's own pixels, though they are not a run of the pixels behind it.
+func TestDrawingAViewIsDrawingItsPixels(t *testing.T) {
+	const w, h = 5, 3
+	view := gridPicture(t, 6, 5).Sub(1, 1, 3, 2) // narrower than the picture it is part of
+	for x := -4; x < w+4; x++ {
+		for y := -4; y < 2*h+4; y++ {
+			c := canvasOf(t, w, h, grey)
+			view.Draw(c, x, y)
+			if got, want := pixelsOf(c), referenceDraw(view, w, 2*h, grey, x, y, view.Width(), view.Height()); !slices.Equal(got, want) {
+				t.Fatalf("Draw at (%d, %d): wanted %v, got %v", x, y, want, got)
+			}
+			for rw := -1; rw < w+4; rw++ {
+				for rh := -1; rh < 2*h+4; rh++ {
+					c := canvasOf(t, w, h, grey)
+					view.DrawScaled(c, x, y, rw, rh)
+					want := referenceDraw(view, w, 2*h, grey, x, y, rw, rh)
+					if got := pixelsOf(c); !slices.Equal(got, want) {
+						t.Fatalf("stretched to %d by %d at (%d, %d): wanted %v, got %v", rw, rh, x, y, want, got)
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestDrawScaledDepthOfAViewIsDrawScaledOfIt(t *testing.T) {
+	view := gridPicture(t, 6, 5).Sub(2, 1, 3, 3)
+	for _, size := range [][2]int{{3, 3}, {7, 5}, {2, 2}, {9, 1}} {
+		want := canvasOf(t, 12, 6, grey)
+		view.DrawScaled(want, 2, 1, size[0], size[1])
+		got := canvasOf(t, 12, 6, grey)
+		view.DrawScaledDepth(got, 2, 1, size[0], size[1], 4)
+		if !slices.Equal(pixelsOf(got), pixelsOf(want)) {
+			t.Errorf("stretched to %d by %d: wanted what DrawScaled draws", size[0], size[1])
+		}
+	}
+}
+
 // nearestByInterval is which of the n pixels of a picture pixel i, of the m it is stretched
 // to, takes its color from, found a different way from the code: the pixel s covers the
 // stretched pixels from s*m/n up to (s+1)*m/n, and the one whose range holds the middle of
@@ -1122,8 +1322,12 @@ func TestDrawScaledDepthOfANilPictureDrawsNothing(t *testing.T) {
 func TestDrawingAllocatesNothing(t *testing.T) {
 	pic := testPicture(t)
 	scratch := New(3, 2)
+	view := gridPicture(t, 8, 8).Sub(1, 1, 5, 4)
 	c := canvasOf(t, 80, 24, grey)
 	draws := map[string]func(){
+		"Draw, a view":            func() { view.Draw(c, 10, 10) },
+		"DrawScaled, a view":      func() { view.DrawScaled(c, 5, 5, 60, 30) },
+		"DrawScaledDepth, a view": func() { view.DrawScaledDepth(c, 5, 5, 60, 30, 3) },
 		"Set":                     func() { scratch.Set(1, 1, red) },
 		"Set, outside":            func() { scratch.Set(-1, 7, red) },
 		"Draw":                    func() { pic.Draw(c, 10, 10) },
@@ -1226,6 +1430,33 @@ func FuzzDrawScaledDepth(f *testing.F) {
 	})
 }
 
+// Whatever the rectangle, position and size, a view is the part of the picture the reference says,
+// is drawn as the reference draws it, and nothing panics or overflows.
+func FuzzSubDraw(f *testing.F) {
+	f.Add(0, 0, 3, 2, 0, 0, 3, 2)
+	f.Add(1, 1, 3, 2, -2, -1, 7, 5)
+	f.Add(-2, -2, 4, 4, 1, 1, 1, 1)
+	f.Add(5, 4, 9, 9, 0, 0, 3, 3)
+	f.Add(0, 0, 0, 3, 0, 0, 2, 2)
+	f.Add(math.MinInt, math.MinInt, math.MaxInt, math.MaxInt, math.MinInt, math.MinInt, math.MaxInt, math.MaxInt)
+	f.Add(math.MaxInt, math.MaxInt, math.MaxInt, math.MaxInt, math.MaxInt, math.MaxInt, math.MaxInt, math.MaxInt)
+	f.Add(2, 1, math.MaxInt, math.MaxInt, -(math.MaxInt / 2), 2, math.MaxInt, 4)
+
+	pic := gridPicture(f, 6, 5)
+	f.Fuzz(func(t *testing.T, sx, sy, sw, sh, x, y, rw, rh int) {
+		view := pic.Sub(sx, sy, sw, sh)
+		x0, y0, vw, vh := subReference(6, 5, sx, sy, sw, sh)
+		checkView(t, view, pic, x0, y0, vw, vh)
+
+		const w, h = 4, 2
+		c := canvasOf(t, w, h, grey)
+		view.DrawScaled(c, x, y, rw, rh)
+		if got, want := pixelsOf(c), referenceDrawBig(view, w, 2*h, grey, x, y, rw, rh); !slices.Equal(got, want) {
+			t.Fatalf("stretched to %d by %d at (%d, %d): wanted %v, got %v", rw, rh, x, y, want, got)
+		}
+	})
+}
+
 func BenchmarkBitmap(b *testing.B) {
 	img := image.NewNRGBA(image.Rect(0, 0, 64, 64))
 	for i := range img.Pix {
@@ -1293,6 +1524,19 @@ func BenchmarkBitmap(b *testing.B) {
 		b.ReportAllocs()
 		for b.Loop() {
 			pic.DrawScaled(c, 1_000_000, 0, 5_000_000, 5_000_000)
+		}
+	})
+	frame := pic.Sub(8, 8, 32, 32)
+	b.Run("Draw, a 32 by 32 view of it", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			frame.Draw(c, 10, 10)
+		}
+	})
+	b.Run("Sub", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			_ = pic.Sub(8, 8, 32, 32)
 		}
 	})
 	b.Run("Decode, 64 by 64 PNG", func(b *testing.B) {
