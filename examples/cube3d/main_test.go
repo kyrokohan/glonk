@@ -481,11 +481,13 @@ func ghostPixels(t *testing.T, g *cubeGame) map[[2]int]engine.Color {
 	return out
 }
 
-// sceneAt is a game with the camera at a place, in glyph or half-block mode.
+// sceneAt is a game with the camera at a place, in glyph or half-block mode, without the
+// tree, which the tests that use it are not about and which would hide some of what they look at.
 func sceneAt(t *testing.T, x, z, yaw float64, halfBlocks bool) *cubeGame {
 	t.Helper()
 	t.Setenv("TERM_PROGRAM", "") // the pixel edge style depends on the terminal
 	g := newCubeGame()
+	g.tree = nil
 	g.cam.Position = geometry.Vector3{X: x, Z: z}
 	g.cam.Yaw = yaw
 	g.halfBlocks = halfBlocks
@@ -747,5 +749,114 @@ func TestCubesCoverTheFloorLines(t *testing.T) {
 				t.Fatalf("blocks %v, pose %v: wanted cubes in view, got %d cells", halfBlocks, pose, len(covered))
 			}
 		}
+	}
+}
+
+// treePixels counts the pixels of the canvas in one of the colors of the tree, which nothing else
+// in the scene is drawn in.
+func treePixels(c *engine.Canvas) int {
+	n := 0
+	for y := range c.Height() {
+		for x := range c.Width() {
+			if p := c.At(x, y); p == treeLeaf || p == treeDark || p == treeTrunk {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+// treeBox is the width and the height in pixels of the smallest box around the pixels of the tree.
+func treeBox(c *engine.Canvas) (w, h int) {
+	x0, y0, x1, y1 := c.Width(), c.Height(), -1, -1
+	for y := range c.Height() {
+		for x := range c.Width() {
+			if p := c.At(x, y); p == treeLeaf || p == treeDark || p == treeTrunk {
+				x0, y0, x1, y1 = min(x0, x), min(y0, y), max(x1, x), max(y1, y)
+			}
+		}
+	}
+	if x1 < 0 {
+		return 0, 0
+	}
+	return x1 - x0 + 1, y1 - y0 + 1
+}
+
+// The tree is a picture that stands in the scene: from a place with nothing between, all of it
+// is drawn, and a cube nearer than it, in front of a part of it, hides that part and leaves the
+// rest. It is drawn in half-block mode only, and not at all where the camera cannot see it.
+func TestTheTreeIsHiddenByACubeThatIsNearerAndStandsInTheScene(t *testing.T) {
+	// Facing the tree from the south, 5 units from it, with nothing else in the scene.
+	scene := func() *cubeGame {
+		g := sceneAt(t, 3, -2, 0, true)
+		g.tree = newTree()
+		g.cubes = nil
+		return g
+	}
+	pixels := func(g *cubeGame) int {
+		fb := newFrame(t, 80, 24)
+		g.Draw(fb)
+		return treePixels(fb.Canvas())
+	}
+
+	whole := pixels(scene())
+	if whole < 50 {
+		t.Fatalf("wanted the tree drawn from where nothing is in the way, got %d pixels", whole)
+	}
+
+	// It keeps the shape of the picture, 9 wide and 12 tall, and is not squashed to a square.
+	fb := newFrame(t, 80, 24)
+	scene().Draw(fb)
+	w, h := treeBox(fb.Canvas())
+	if ratio := float64(w) / float64(h); ratio < 0.6 || ratio > 0.9 {
+		t.Errorf("wanted the tree about 0.75 as wide as it is tall, got %d by %d pixels", w, h)
+	}
+
+	// A cube between the camera and the tree, covering the left of it and not all of it.
+	hidden := scene()
+	hidden.cubes = []mesh.Mesh{newCube(2, 2.2, 1, engine.Palette(208))}
+	if got := pixels(hidden); got <= 0 || got >= whole {
+		t.Errorf("wanted a cube in front to hide some of the %d pixels of the tree and not all, got %d", whole, got)
+	}
+
+	// The same cube behind the tree hides nothing of it.
+	behind := scene()
+	behind.cubes = []mesh.Mesh{newCube(2, 2.2, 6, engine.Palette(208))}
+	if got := pixels(behind); got != whole {
+		t.Errorf("wanted a cube behind the tree to hide none of its %d pixels, got %d", whole, got)
+	}
+
+	glyphs := scene()
+	glyphs.halfBlocks = false
+	if got := pixels(glyphs); got != 0 {
+		t.Errorf("wanted no tree in glyph mode, got %d pixels", got)
+	}
+
+	away := scene()
+	away.cam.Yaw = math.Pi // the tree is behind the camera
+	if got := pixels(away); got != 0 {
+		t.Errorf("wanted no tree behind the camera, got %d pixels", got)
+	}
+
+	// Looking steeply down from beside the tree, its foot is in view and its top is above the
+	// camera: a tree whose top cannot be projected is not drawn, and not guessed at.
+	over := scene()
+	over.cam.Position = geometry.Vector3{X: 3, Y: 1, Z: 2}
+	over.cam.Pitch = -1.4
+	if got := pixels(over); got != 0 {
+		t.Errorf("wanted no tree when its top cannot be projected, got %d pixels", got)
+	}
+}
+
+// The tree is in view when the game starts, so that it is seen without looking for it.
+func TestTheTreeIsInViewFromTheStart(t *testing.T) {
+	t.Setenv("TERM_PROGRAM", "")
+	g := newCubeGame()
+	g.halfBlocks = true
+	fb := newFrame(t, 80, 24)
+	g.Draw(fb)
+
+	if got := treePixels(fb.Canvas()); got < 20 {
+		t.Errorf("wanted the tree in view at the start, got %d pixels", got)
 	}
 }

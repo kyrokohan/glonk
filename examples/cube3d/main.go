@@ -8,15 +8,25 @@
 // and the floor stays dotted), B switches between exact and solid pixel edges, and Esc
 // quits. Letters work in either case. Where the terminal reports no key releases only one
 // key stays held, so walking and turning together does not work, and the game says so.
+//
+// In half-block mode a tree stands on the floor: a picture drawn with
+// bitmap.Bitmap.DrawScaledDepth at the pixels and the depth that mesh.Camera.ProjectPixels
+// gives its foot and top, so the cubes hide it where they are nearer and it hides what is
+// behind it.
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"math"
 	"os"
 	"unicode"
 
+	"glonk.dev/bitmap"
 	"glonk.dev/engine"
 	"glonk.dev/geometry"
 	"glonk.dev/mesh"
@@ -36,6 +46,67 @@ var lights = []mesh.Light{
 	mesh.Directional{Direction: geometry.Vector3{X: 0.4, Y: -1, Z: 0.6}},
 }
 
+// The tree: a picture of 9 by 12 pixels drawn here from text, so that the program needs no
+// file. . is see-through, g and d are leaves and t is the trunk, which is three pixels wide
+// because a picture stretched down with no smoothing loses a feature that is one pixel wide.
+// It stands on the floor at treeAt, treeHeight tall.
+var treeArt = []string{
+	"...ggg...",
+	"..ggggg..",
+	".gggdggg.",
+	".ggggggg.",
+	"ggdgggggg",
+	"ggggggdgg",
+	".ggggggg.",
+	"..ggdgg..",
+	"...ttt...",
+	"...ttt...",
+	"...ttt...",
+	"..ttttt..",
+}
+
+var (
+	treeLeaf  = engine.RGB(50, 180, 70)
+	treeDark  = engine.RGB(25, 120, 45)
+	treeTrunk = engine.RGB(120, 80, 40)
+)
+
+var treeAt = geometry.Vector3{X: 3, Y: floorY, Z: 3}
+
+const treeHeight = 3.0
+
+// newTree returns the picture of the tree, made from treeArt through a PNG, which is what
+// bitmap reads. It cannot fail: the picture is built here.
+func newTree() *bitmap.Bitmap {
+	img := image.NewNRGBA(image.Rect(0, 0, len(treeArt[0]), len(treeArt)))
+	for y, row := range treeArt {
+		for x, r := range row {
+			var c engine.Color
+			switch r {
+			case 'g':
+				c = treeLeaf
+			case 'd':
+				c = treeDark
+			case 't':
+				c = treeTrunk
+			default:
+				continue
+			}
+			red, green, blue := c.RGB()
+			img.SetNRGBA(x, y, color.NRGBA{R: red, G: green, B: blue, A: 255})
+		}
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		panic(err)
+	}
+	tree, err := bitmap.Decode(&buf)
+	if err != nil {
+		panic(err)
+	}
+	return tree
+}
+
 type cubeGame struct {
 	cam   mesh.Camera
 	floor mesh.Mesh
@@ -52,6 +123,9 @@ type cubeGame struct {
 	// terminal and keeps the setting from frame to frame and across resizes. The
 	// viewer has the same few lines.
 	flipEdges bool
+
+	// tree is the picture that stands in the scene in half-block mode.
+	tree *bitmap.Bitmap
 
 	// noReleases is set once Update has seen that the terminal reports no key releases, where
 	// only one key stays held, so that walking and turning together does not work. The HUD
@@ -147,6 +221,7 @@ func (g *cubeGame) Draw(fb *engine.FrameBuffer) {
 		for _, o := range g.cubes {
 			o.DrawShadedPixels(canvas, g.cam, lights...)
 		}
+		g.drawTree(canvas)
 		// The ghost is a wireframe with depth, drawn into the same pixels as the solids: a
 		// cube in front of it hides the part of its lines that it covers, to the pixel.
 		g.ghost.DrawDepthPixels(canvas, g.cam, g.ghost.Material.Color)
@@ -170,6 +245,28 @@ func (g *cubeGame) Draw(fb *engine.FrameBuffer) {
 	fb.DrawText(1, fb.Height()-2, "M mode  B edges  Esc quit", engine.Color{})
 }
 
+// drawTree stands the tree on the floor at treeAt, treeHeight tall, as the camera sees it.
+// The foot and the top are projected to pixels and the picture is stretched between them,
+// keeping its shape. Its depth is one number for the whole picture, the mean of the foot's and
+// the top's, which is what DrawScaledDepth takes. A tree the camera cannot see is not drawn.
+func (g *cubeGame) drawTree(c *engine.Canvas) {
+	if g.tree == nil {
+		return
+	}
+	footX, footY, footDepth, ok := g.cam.ProjectPixels(treeAt, c)
+	if !ok {
+		return
+	}
+	_, topY, topDepth, ok := g.cam.ProjectPixels(treeAt.Add(geometry.Vector3{Y: treeHeight}), c)
+	if !ok {
+		return
+	}
+	h := footY - topY
+	w := h * float64(g.tree.Width()) / float64(g.tree.Height())
+	// Floor the corner, as ProjectPixels says, and not a conversion to int.
+	g.tree.DrawScaledDepth(c, int(math.Floor(footX-w/2)), int(math.Floor(topY)), int(math.Round(w)), int(math.Round(h)), (footDepth+topDepth)/2)
+}
+
 // newCubeGame returns the scene main runs: a floor, six cubes and a wireframe ghost,
 // seen from just inside the south edge.
 func newCubeGame() *cubeGame {
@@ -189,6 +286,7 @@ func newCubeGame() *cubeGame {
 		},
 		ghost: newCube(2.6, 1.6, 8.6, engine.Palette(51)), // clear of every solid, partly behind the orange one from the start
 		fps:   30,
+		tree:  newTree(),
 	}
 }
 

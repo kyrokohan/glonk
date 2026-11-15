@@ -15,6 +15,7 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ### Changed
 
+- `examples/cube3d` has a tree standing on the floor in half-block mode: a 9 by 12 picture drawn with `DrawScaledDepth` at the pixels and the depth that `Camera.ProjectPixels` gives its foot and its top, so a cube that is nearer hides it and it hides what is behind it. Glyph mode is unchanged.
 - The docs of `Canvas.SetDepth`, `Canvas.FillTriangle`, `Canvas.DrawLineDepth`, `FrameBuffer.FillTriangle` and `FrameBuffer.DrawLineDepth` call a z a depth, where they said "the distance from the camera", and say what it is in a scene drawn through a `Camera`: the distance along its view direction, which is not the straight-line distance. No behavior changes.
 - `widget.Menu.Update` chooses on a new press of Enter, with `Input.Started`, and not on the repeats of a held one, so a held Enter chooses once and a menu that opens another does not choose in it at once. Up and Down still move on repeats, so holding one scrolls.
 - The keys of the examples that switch something use `Input.Started`, so holding one no longer flickers it: M and B in `cube3d`, N, R, V, M, D, C, F, L and B in the viewer, and Esc in `world`, which opened the pause menu and closed it again for as long as it was held. Esc in the other examples only quits, so it still uses `Pressed`.
