@@ -190,7 +190,7 @@ canvas.Compose()
 
 ## Pixel shapes and pictures
 
-The pixel `Canvas` draws rectangles and circles next to lines and triangles, and the `bitmap` package draws a JPEG or PNG on it, or a picture made in code:
+The pixel `Canvas` draws rectangles and circles next to lines and triangles, blends a color over what is there, and the `bitmap` package draws a JPEG or PNG on it, or a picture made in code:
 
 ```go
 canvas := fb.Canvas()
@@ -198,6 +198,7 @@ canvas.FillRect(2, 1, 20, 6, engine.RGB(40, 60, 220))
 canvas.DrawRect(0, 0, canvas.Width(), canvas.Height(), engine.RGB(255, 255, 255)) // a border
 canvas.FillCircle(40, 10, 8, engine.RGB(230, 210, 40))
 canvas.DrawCircle(40, 10, 12, engine.RGB(230, 210, 40)) // a ring around it
+canvas.BlendRect(0, 0, canvas.Width(), canvas.Height(), engine.RGB(0, 0, 0), 0.5) // all of it half way to black
 
 // once, at start-up: a //go:embed []byte, a file, a download
 logo, err := bitmap.Decode(bytes.NewReader(logoPNG))
@@ -211,6 +212,7 @@ canvas.Compose()
 
 - **Rectangles.** `FillRect(x, y, w, h, color)` fills the pixels from `(x, y)`, and `DrawRect` draws a border one pixel thick inside the same rectangle: one under 3 pixels wide or tall is all border. A width or height that is not positive draws nothing.
 - **Circles.** `FillCircle(cx, cy, r, color)` is the pixels with (x-cx)² + (y-cy)² <= r², so it is `2r+1` across and round, since the pixels of a canvas are square. `DrawCircle` is its outline, a ring one pixel thick. A radius of 0 is one pixel and a negative one draws nothing. The rows come from integer arithmetic, so the same pixels are drawn on every platform.
+- **Blending.** `BlendRect(x, y, w, h, color, t)` mixes `color` over the pixels of a rectangle by the part `t` from 0 to 1: each pixel that is there becomes `engine.Mix(pixel, color, t)`. A dim behind a menu, a fade to black, a red flash and a see-through panel are one call, and the whole canvas is `BlendRect(0, 0, canvas.Width(), canvas.Height(), ...)`. A pixel that is empty stays empty, since the terminal's own background is not known and there is nothing to mix with, so fill first where the tint should show there. A palette pixel becomes the exact RGB color it stands for, depth is never read or written, and nothing allocates: a whole 200 by 120 canvas takes about 44 microseconds.
 - **As lines are.** Shapes and pictures clip, replace the pixels under them whatever their depth (they never read or write it), and erase with the zero `Color`. Only the pixels on the canvas are visited, so a shape far off screen costs nothing and no number is too large. None allocates: a rectangle over a whole 200 by 120 canvas takes about 9 microseconds, a disc of radius 50 about 4, its ring about 1.
 - **Pictures.** `bitmap.Decode` reads a JPEG or PNG, found by what it holds and not by its name, once, into the colors of the canvas. `Draw` and `DrawScaled` then copy pixels and allocate nothing: 64 by 64 pixels take about 4 microseconds, or about 29 stretched to 128 by 96. A PNG pixel with an alpha of 128 or more is drawn as an opaque color and a lighter one is left alone, so what is under it shows. There is no blending, since a canvas pixel has no alpha and the terminal's own background is not known. Black is a color and is drawn. `DrawScaled` takes the pixel of the picture under the middle of each pixel it draws, with no smoothing, so a picture at its own size comes out exactly.
 - **Pictures made in code.** `bitmap.New(w, h)` makes a picture of see-through pixels, and `Set(x, y, color)` colors one: a generated texture, a sprite in other colors, a small map of a level. `bitmap.FromImage(img)` copies any `image.Image` with the alpha rule of `Decode`, so nothing has to be written out as a PNG and read back. `FromImage` has no limits, since its pixels are already in memory, but `New` gives an empty picture for a size of more than 4,194,304 pixels, as a size can come from a file.

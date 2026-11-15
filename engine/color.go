@@ -172,15 +172,23 @@ func Shade(color Color, intensity float64) Color {
 // color. On a terminal without true color the result is shown as the nearest of the palette
 // colors 16 to 255, as any RGB color is.
 func Mix(a, b Color, t float64) Color {
-	if math.IsNaN(t) {
-		t = 0
-	}
-	t = min(max(t, 0), 1)
-
+	t = clamp01(t)
 	ar, ag, ab := a.RGB()
 	br, bg, bb := b.RGB()
-	mix := func(from, to uint8) uint8 {
-		return uint8(math.Round(float64(from) + (float64(to)-float64(from))*t))
+	return RGB(mixChannel(ar, br, t), mixChannel(ag, bg, t), mixChannel(ab, bb, t))
+}
+
+// clamp01 holds t to 0 to 1, with NaN as 0.
+func clamp01(t float64) float64 {
+	if math.IsNaN(t) {
+		return 0
 	}
-	return RGB(mix(ar, br), mix(ag, bg), mix(ab, bb))
+	return min(max(t, 0), 1)
+}
+
+// mixChannel is the part t of the way from one red, green or blue to another, rounded to a
+// whole number, for a t that is already held to 0 to 1. Mix and Canvas.BlendRect both mix with
+// it, so that they cannot disagree.
+func mixChannel(from, to uint8, t float64) uint8 {
+	return uint8(math.Round(float64(from) + (float64(to)-float64(from))*t))
 }

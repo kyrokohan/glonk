@@ -197,6 +197,26 @@ func ExampleCanvas_FillRect() {
 	// ......######
 }
 
+// BlendRect mixes a color over the pixels of a rectangle, part of the way: 0 leaves them as
+// they are and 1 makes them the color. A pixel that is empty stays empty. Here the right half
+// of a row of red pixels, one of them empty, goes a quarter of the way to blue, which is
+// Mix(red, blue, 0.25) for each.
+func ExampleCanvas_BlendRect() {
+	fb, err := engine.NewFrameBuffer(4, 1)
+	if err != nil {
+		panic(err)
+	}
+
+	canvas := fb.Canvas()
+	canvas.FillRect(0, 0, 4, 1, engine.RGB(200, 0, 0))
+	canvas.Set(2, 0, engine.Color{}) // no color yet
+	canvas.BlendRect(2, 0, 2, 1, engine.RGB(0, 0, 200), 0.25)
+
+	fmt.Println(canvas.At(0, 0), canvas.At(1, 0), canvas.At(2, 0), canvas.At(3, 0))
+	// Output:
+	// #c80000 #c80000 default #960032
+}
+
 // FillCircle and DrawCircle draw a disc and a ring one pixel thick, around the center
 // pixel, exactly and the same on every platform. The pixels of a Canvas are square, so a
 // circle comes out round.
