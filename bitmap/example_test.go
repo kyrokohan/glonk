@@ -134,6 +134,36 @@ func ExampleFromImage() {
 	// ..YYY#.
 }
 
+// Sub is a view of part of a picture, which shares its pixels: the frames of an animation can
+// be side by side in one picture and drawn a frame at a time. Here a strip of three frames of 2 by
+// 2 pixels is drawn with a gap between them.
+func ExampleBitmap_Sub() {
+	strip := bitmap.New(6, 2)
+	for y, row := range []string{"YYY###", "YY#Y##"} {
+		for x, r := range row {
+			switch r {
+			case 'Y':
+				strip.Set(x, y, engine.RGB(230, 210, 40))
+			case '#':
+				strip.Set(x, y, engine.RGB(0, 0, 0))
+			}
+		}
+	}
+
+	fb, err := engine.NewFrameBuffer(8, 1) // 8 by 2 pixels
+	if err != nil {
+		panic(err)
+	}
+	canvas := fb.Canvas()
+	for i := range 3 {
+		strip.Sub(2*i, 0, 2, 2).Draw(canvas, 3*i, 0) // frame i
+	}
+	show(canvas)
+	// Output:
+	// YY.Y#.##
+	// YY.#Y.##
+}
+
 // DrawScaled stretches or squeezes a picture to any size, taking the pixel under the middle
 // of each one it draws, so a picture that is made bigger shows its pixels as blocks.
 func ExampleBitmap_DrawScaled() {

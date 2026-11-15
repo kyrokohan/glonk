@@ -28,11 +28,14 @@ var ErrFormat = errors.New("bitmap: not a JPEG or PNG picture")
 var ErrTooLarge = errors.New("bitmap: picture too large")
 
 // Bitmap is a picture, as the pixels of a Canvas. Every method is safe on a nil *Bitmap,
-// which is a picture of no pixels, and on an empty one, which New and FromImage return for
-// a size or an image that has none.
+// which is a picture of no pixels, and on an empty one, which New, FromImage and Sub return
+// for a size, an image or a rectangle that has none.
+//
+// A Bitmap can be a view of part of another, which shares its pixels: see Sub.
 type Bitmap struct {
 	w, h   int            // both 0, or both positive
-	pixels []engine.Color // row by row; the zero Color is a pixel that is not drawn
+	stride int            // the distance from a pixel to the one below it in pixels, at least w
+	pixels []engine.Color // row by row from the top left of the view; the zero Color is a pixel that is not drawn
 }
 
 // Decode reads a JPEG or PNG from r and returns it as a Bitmap, refusing one that is over
@@ -96,7 +99,7 @@ func New(w, h int) *Bitmap {
 	if w <= 0 || h <= 0 || h > defaultMaxPixels/w {
 		return &Bitmap{}
 	}
-	return &Bitmap{w: w, h: h, pixels: make([]engine.Color, w*h)}
+	return &Bitmap{w: w, h: h, stride: w, pixels: make([]engine.Color, w*h)}
 }
 
 // FromImage returns a copy of img as a Bitmap, with the rule Decode has for alpha: a pixel
@@ -115,7 +118,7 @@ func FromImage(img image.Image) *Bitmap {
 	if b.Empty() {
 		return &Bitmap{}
 	}
-	bm := &Bitmap{w: b.Dx(), h: b.Dy(), pixels: make([]engine.Color, b.Dx()*b.Dy())}
+	bm := &Bitmap{w: b.Dx(), h: b.Dy(), stride: b.Dx(), pixels: make([]engine.Color, b.Dx()*b.Dy())}
 	for y := range bm.h {
 		for x := range bm.w {
 			c := color.NRGBAModel.Convert(img.At(b.Min.X+x, b.Min.Y+y)).(color.NRGBA)
@@ -149,7 +152,7 @@ func (b *Bitmap) At(x, y int) engine.Color {
 	if b == nil || x < 0 || x >= b.w || y < 0 || y >= b.h {
 		return engine.Color{}
 	}
-	return b.pixels[y*b.w+x]
+	return b.pixels[y*b.stride+x]
 }
 
 // Set gives pixel (x, y), counted from the top left, the color c. The zero Color makes the
@@ -160,7 +163,29 @@ func (b *Bitmap) Set(x, y int, c engine.Color) {
 	if b == nil || x < 0 || x >= b.w || y < 0 || y >= b.h {
 		return
 	}
-	b.pixels[y*b.w+x] = c
+	b.pixels[y*b.stride+x] = c
+}
+
+// Sub returns the part of the picture that is w pixels wide and h tall with its top left
+// pixel at (x, y), as a Bitmap of its own that shares the pixels of this one, so that a strip
+// of animation frames in one picture is a frame at a time to every call here: draw it, stretch
+// it, ask for a pixel of it. Set on either changes the other. Nothing is copied, so a view keeps
+// the whole picture in memory for as long as it is used.
+//
+// A rectangle that runs off the picture is cut to it, and one with nothing left, or a width or
+// height that is not positive, gives an empty picture of 0 by 0. The rectangle is counted in
+// the pixels of the picture it is taken from, so a Sub of a Sub is relative to the first. No
+// position or size can overflow.
+func (b *Bitmap) Sub(x, y, w, h int) *Bitmap {
+	if b == nil {
+		return &Bitmap{}
+	}
+	x0, x1 := visible(x, w, b.w)
+	y0, y1 := visible(y, h, b.h)
+	if x0 == x1 || y0 == y1 {
+		return &Bitmap{}
+	}
+	return &Bitmap{w: x1 - x0, h: y1 - y0, stride: b.stride, pixels: b.pixels[y0*b.stride+x0:]}
 }
 
 // Draw draws the picture at its own size on c, with its top left pixel at pixel (x, y).
@@ -174,7 +199,7 @@ func (b *Bitmap) Draw(c *engine.Canvas, x, y int) {
 	x0, x1 := visible(x, b.w, c.Width())
 	y0, y1 := visible(y, b.h, c.Height())
 	for py := y0; py < y1; py++ {
-		row := b.pixels[(py-y)*b.w:]
+		row := b.pixels[(py-y)*b.stride:]
 		for px := x0; px < x1; px++ {
 			if p := row[px-x]; !p.IsDefault() {
 				c.Set(px, py, p)
@@ -194,10 +219,11 @@ func (b *Bitmap) DrawScaled(c *engine.Canvas, x, y, w, h int) {
 	}
 	x0, x1 := visible(x, w, c.Width())
 	y0, y1 := visible(y, h, c.Height())
+	bw, bh, stride := b.w, b.h, b.stride // in locals: c.Set could alias b for all the compiler knows
 	for py := y0; py < y1; py++ {
-		row := b.pixels[nearest(py-y, h, b.h)*b.w:]
+		row := b.pixels[nearest(py-y, h, bh)*stride:]
 		for px := x0; px < x1; px++ {
-			if p := row[nearest(px-x, w, b.w)]; !p.IsDefault() {
+			if p := row[nearest(px-x, w, bw)]; !p.IsDefault() {
 				c.Set(px, py, p)
 			}
 		}
@@ -220,10 +246,11 @@ func (b *Bitmap) DrawScaledDepth(c *engine.Canvas, x, y, w, h int, depth float64
 	}
 	x0, x1 := visible(x, w, c.Width())
 	y0, y1 := visible(y, h, c.Height())
+	bw, bh, stride := b.w, b.h, b.stride
 	for py := y0; py < y1; py++ {
-		row := b.pixels[nearest(py-y, h, b.h)*b.w:]
+		row := b.pixels[nearest(py-y, h, bh)*stride:]
 		for px := x0; px < x1; px++ {
-			if p := row[nearest(px-x, w, b.w)]; !p.IsDefault() {
+			if p := row[nearest(px-x, w, bw)]; !p.IsDefault() {
 				c.SetDepth(px, py, depth, p)
 			}
 		}
