@@ -4,6 +4,10 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-14
+
+On top of 0.6.0 this release adds a far plane and fog to the camera, the ray through a place on the screen and the pixel of a point in the world, the lighting rule, pictures that stand in a 3D scene, and a way to tell a key's first press from its repeats. A `Camera` literal that lists its values without field names no longer compiles, and `widget.Menu` chooses on a new press of Enter, not on a held one.
+
 ### Added
 
 - `Camera.Fog`, a `*Fog` with a `Color`, a `Start` and an `End`, fades shaded meshes toward a color as they get deeper: `DrawShaded` and `DrawShadedPixels` leave what is nearer than `Start` exactly as it is, make what is at `End` or beyond exactly the fog's color, and mix in a straight line between. In cells the color fades and the character, which shows the brightness, stays; in pixels the shaded color fades; flat and smooth, with and without vertex colors. A flat face is one color without fog, but with it every cell is its own depth, so each is asked for. The distance is the depth along `Look`, the same number as `Far`, `Canvas.SetDepth`, `ProjectPixels` and the `t` of a `Ray`; it is not the straight-line distance, so it does not change as the camera turns, and a thing at the side of the view is a little less foggy than one as far away in the middle. `Fog.Apply(color, depth)` is the same rule for a program that draws things of its own into the scene, so that they fade in step; a program that wants the world to end in the fog gives the camera a `Far` that `End` is at or before. A NaN `Start`, `End` or depth does nothing, and an `End` that is not beyond `Start` is a hard step at `Start`. Wireframes are not fogged. The `Fog` is a pointer, so copies of a `Camera` share it. With a fog, a big flat floor takes about 46 percent longer in cells and 65 in pixels, and a thousand cubes 6 and 15, since each cell and pixel is asked for its color; a camera with no `Fog` draws as it did, and the existing benchmarks are within about 1 percent of what they were, a thousand small meshes up to 3 percent for the 8 more bytes of the `Camera`.
@@ -181,7 +185,8 @@ The first release. The API is pre-1.0 and may still change. The README lists the
 - Three example programs (`bounce2d`, `cube3d` and a model `viewer`), runnable examples in the package documentation, fuzz tests for the parsers, rasterizers and clipping, and a test that keeps the documentation complete.
 - Continuous integration (format, vet and race tests on Linux and macOS for Go 1.26 and 1.27, cross-compilation, 32-bit tests), Dependabot, a security policy and contributing notes.
 
-[Unreleased]: https://github.com/kyrokohan/glonk/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/kyrokohan/glonk/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/kyrokohan/glonk/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/kyrokohan/glonk/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/kyrokohan/glonk/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/kyrokohan/glonk/compare/v0.3.0...v0.4.0
