@@ -11,12 +11,12 @@ import (
 // The fields say which way each angle turns; all angles are in radians.
 //
 // A FOV, Near or CellAspect left at 0 uses a default (a FOV of pi/2, a quarter turn,
-// a Near of 0.1 and a CellAspect of 2), so Camera{Position: p} is a working camera. A
-// value that makes no sense, namely a FOV outside 0 to pi (exclusive), a Near that is
-// negative, NaN or infinite, or a CellAspect that is negative, NaN or infinite, makes
-// the camera see nothing: Draw, DrawShaded and DrawShadedPixels draw nothing and
-// Project reports ok=false. So does a Position, Yaw or Pitch that is not a finite
-// number.
+// a Near of 0.1 and a CellAspect of 2), so Camera{Position: p} is a working camera, and
+// a Far left at 0 means no limit. A value that makes no sense, namely a FOV outside 0 to
+// pi (exclusive), a Near that is negative, NaN or infinite, a Far that is negative, NaN or
+// not beyond Near, or a CellAspect that is negative, NaN or infinite, makes the camera
+// see nothing: Draw, DrawShaded and DrawShadedPixels draw nothing and Project reports
+// ok=false. So does a Position, Yaw or Pitch that is not a finite number.
 type Camera struct {
 	// Position is where the camera is, in world coordinates.
 	Position geometry.Vector3
@@ -36,6 +36,16 @@ type Camera struct {
 	// nearer than which everything is cut away. It must be above 0; 0 means 0.1.
 	Near float64
 
+	// Far is the distance from the camera, along its view direction, of the plane farther
+	// than which everything is cut away, as Near cuts away what is nearer: a point exactly
+	// Far away is still drawn. A face or an edge that crosses it is cut where it crosses,
+	// and a mesh wholly beyond it is skipped without being looked at, which saves the time
+	// to draw the far end of a scene, or a floor that runs on to the horizon. It must be
+	// beyond Near; 0 means no limit, which +Inf does too. Project and ProjectPixels report
+	// a point beyond it as not visible, so a program that draws its own things can leave
+	// them out too. Ray is not limited by it: a ray has no length.
+	Far float64
+
 	// CellAspect is how many times taller a terminal cell is than it is wide, which
 	// is what makes a cube look like a cube and not a slab. Most fonts are close to 2,
 	// which is what 0 means. A larger value draws things wider, in more columns, and a
@@ -43,7 +53,7 @@ type Camera struct {
 	CellAspect float64
 }
 
-// What a zero FOV, Near and CellAspect stand for.
+// What a zero FOV, Near and CellAspect stand for. A zero Far stands for no limit.
 const (
 	defaultFOV        = math.Pi / 2
 	defaultNear       = 0.1
@@ -63,15 +73,19 @@ func (c Camera) withDefaults() (cam Camera, ok bool) {
 	if c.CellAspect == 0 {
 		c.CellAspect = defaultCellAspect
 	}
-	// Written so that NaN fails every test. An infinite Near passes, and sees nothing.
-	ok = c.FOV > 0 && c.FOV < math.Pi && c.Near > 0 && c.CellAspect > 0 && !math.IsInf(c.CellAspect, 0)
+	if c.Far == 0 {
+		c.Far = math.Inf(1)
+	}
+	// Written so that NaN fails every test. An infinite Near is not below any Far, so it
+	// sees nothing.
+	ok = c.FOV > 0 && c.FOV < math.Pi && c.Near > 0 && c.Far > c.Near && c.CellAspect > 0 && !math.IsInf(c.CellAspect, 0)
 	return c, ok
 }
 
 // Project returns where p appears on a grid of w x h cells, as fractional cell
 // coordinates; the caller is expected to floor them. ok is false when p is nearer
-// than Near or behind the camera, has no finite place on the screen, or the camera
-// sees nothing at all (see Camera).
+// than Near or behind the camera, farther than Far, has no finite place on the screen,
+// or the camera sees nothing at all (see Camera).
 func (c Camera) Project(p geometry.Vector3, w, h int) (x, y float64, ok bool) {
 	x, y, _, ok = c.projectDepth(p, w, h)
 	return x, y, ok
@@ -114,6 +128,9 @@ func (c Camera) ProjectPixels(p geometry.Vector3, cv *engine.Canvas) (x, y, dept
 // that draws by rays can store t as it is. Call Normalize on direction for a unit vector,
 // and then t is the straight-line distance.
 //
+// A ray is not limited by Near or Far: it has no length, and the point origin plus t times
+// direction is on the screen for any t that Project would accept.
+//
 // ok is false when Project's would be for a camera that sees nothing (see Camera), when the
 // grid has no height (h is not positive), when x or y is NaN or infinite, and when the ray
 // has no finite place, which a Position, Yaw or Pitch that is not a number gives.
@@ -151,7 +168,7 @@ func (c Camera) projectDepth(p geometry.Vector3, w, h int) (x, y, z float64, ok 
 	}
 	v := c.toView(p)
 
-	if v.Z < c.Near {
+	if v.Z < c.Near || v.Z > c.Far {
 		return 0, 0, 0, false
 	}
 

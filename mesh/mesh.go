@@ -161,8 +161,9 @@ func validIndex(i, n int) bool {
 
 // Draw renders the mesh's edges as lines, all in cell. A mesh whose Transform is
 // not valid is not drawn.
-// Edges crossing the near plane are cut where they cross it;
-// edges entirely behind it are skipped, and so are edges that name a vertex the
+// Edges crossing the near plane, or the far plane of a camera that has one, are cut
+// where they cross it; edges entirely behind the near plane or beyond the far one are
+// skipped, and so are edges that name a vertex the
 // mesh does not have (Validate finds them). An edge that ends far off screen
 // costs no more than one that stays on screen.
 //
@@ -236,9 +237,10 @@ func (m Mesh) eachEdge(cam Camera, w, h int, fn func(ax, ay, za, bx, by, zb floa
 
 	eye := cam.viewTransform()
 	proj := cam.projector(w, h)
-	if m.offscreen(eye, proj, cam.Near) {
+	if m.offscreen(eye, proj, cam.Near, cam.Far) {
 		return
 	}
+	limited := !math.IsInf(cam.Far, 1) // there is a far plane to cut at
 
 	s := getScratch(len(m.Vertices))
 	defer s.release()
@@ -264,6 +266,19 @@ func (m Mesh) eachEdge(cam Camera, w, h int, fn func(ax, ay, za, bx, by, zb floa
 		}
 		if !bIn {
 			b = clipNear(b, a, cam.Near)
+		}
+		// The ends are now in front of the near plane. An edge with both beyond the far plane
+		// is skipped, and an end that is beyond it is cut where the edge crosses it.
+		if limited {
+			if a.Z > cam.Far && b.Z > cam.Far {
+				continue
+			}
+			if a.Z > cam.Far {
+				a = clipFar(a, b, cam.Far)
+			}
+			if b.Z > cam.Far {
+				b = clipFar(b, a, cam.Far)
+			}
 		}
 
 		ax, ay := proj.project(a)

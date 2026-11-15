@@ -84,6 +84,49 @@ func clipTriangleNear(a, b, c clipVert, near float64, withAttrs bool, out *[2][3
 	return count
 }
 
+// clipFar returns where the segment from out to in crosses z = far, as clipNear does for the
+// near plane: the view is mirrored in z, which turns "beyond far" into "behind the plane".
+// out must be beyond the plane (Z > far) and in on or in front of it (Z <= far).
+func clipFar(out, in geometry.Vector3, far float64) geometry.Vector3 {
+	out.Z, in.Z = -out.Z, -in.Z
+	p := clipNear(out, in, -far)
+	p.Z = -p.Z // exactly far, as clipNear leaves it exactly -far
+	return p
+}
+
+// clipTriangleFar cuts the view-space triangle a, b, c against the plane z = far and writes
+// the part on the near side of it into out as zero, one or two triangles, returning how many,
+// as clipTriangleNear does for the near plane: the corners are mirrored in z, cut as if far
+// were a near plane, and mirrored back. Winding is preserved, every written vertex has Z <=
+// far exactly, and the world position and normal are carried along when withAttrs is set. It
+// allocates nothing.
+func clipTriangleFar(a, b, c clipVert, far float64, withAttrs bool, out *[2][3]clipVert) int {
+	a.view.Z, b.view.Z, c.view.Z = -a.view.Z, -b.view.Z, -c.view.Z
+	n := clipTriangleNear(a, b, c, -far, withAttrs, out)
+	for i := range n {
+		for j := range out[i] {
+			out[i][j].view.Z = -out[i][j].view.Z
+		}
+	}
+	return n
+}
+
+// clipTrianglesFar cuts each of the triangles in against z = far and writes the pieces into
+// out, returning how many. Two triangles, the most that a cut at the near plane leaves, give
+// four at the most. The pieces of one triangle share their cut points, so they leave no gap.
+func clipTrianglesFar(in [][3]clipVert, far float64, withAttrs bool, out *[4][3]clipVert) int {
+	var piece [2][3]clipVert
+	count := 0
+	for _, t := range in {
+		n := clipTriangleFar(t[0], t[1], t[2], far, withAttrs, &piece)
+		for i := range n {
+			out[count] = piece[i]
+			count++
+		}
+	}
+	return count
+}
+
 // clipSegment cuts the segment from (x0, y0) to (x1, y1) to the rectangle with
 // corners (minX, minY) and (maxX, maxY), keeping its direction, and reports whether
 // any of it is inside (Liang-Barsky). The ends it returns lie on the original

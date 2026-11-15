@@ -81,6 +81,7 @@ type scratch struct {
 	normal []geometry.Vector3 // the mesh's normals in world space, for smooth shading
 	ramp   []rune
 	tri    shadedTriangle // the triangle being handed to the fill
+	far    [4][3]clipVert // the pieces of a face cut at the far plane
 }
 
 var scratchPool = sync.Pool{New: func() any { return new(scratch) }}
