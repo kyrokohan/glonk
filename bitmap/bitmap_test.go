@@ -419,6 +419,285 @@ func TestAtIsEmptyOutsideThePicture(t *testing.T) {
 	}
 }
 
+// rowOf returns the pixels of row 0 of pic.
+func rowOf(pic *Bitmap) []engine.Color {
+	var row []engine.Color
+	for x := range pic.Width() {
+		row = append(row, pic.At(x, 0))
+	}
+	return row
+}
+
+// drawnOn returns the pixels of a grey canvas of 6 by 4 after pic is drawn on it with its top
+// left pixel at (1, 1).
+func drawnOn(t testing.TB, pic *Bitmap) []engine.Color {
+	t.Helper()
+	c := canvasOf(t, 6, 2, grey)
+	pic.Draw(c, 1, 1)
+	return pixelsOf(c)
+}
+
+func TestNewIsAPictureOfSeeThroughPixels(t *testing.T) {
+	pic := New(3, 2)
+	if pic.Width() != 3 || pic.Height() != 2 {
+		t.Fatalf("wanted a picture of 3 by 2, got %d by %d", pic.Width(), pic.Height())
+	}
+	for y := range 2 {
+		for x := range 3 {
+			if got := pic.At(x, y); !got.IsDefault() {
+				t.Errorf("pixel (%d, %d): wanted see-through, got %v", x, y, got)
+			}
+		}
+	}
+	c := canvasOf(t, 6, 2, grey)
+	pic.Draw(c, 1, 1)
+	for _, p := range pixelsOf(c) {
+		if p != grey {
+			t.Fatalf("wanted a new picture to draw nothing, got %v", p)
+		}
+	}
+}
+
+func TestNewAllowsTheSizesDecodeAllowsAndRefusesTheRest(t *testing.T) {
+	tests := []struct {
+		name string
+		w, h int
+		ok   bool
+	}{
+		{"no width", 0, 5, false},
+		{"no height", 5, 0, false},
+		{"negative width", -1, 5, false},
+		{"negative height", 5, -1, false},
+		{"both negative", -3, -3, false},
+		{"one pixel over, wide", 1<<22 + 1, 1, false},
+		{"one pixel over, tall", 1, 1<<22 + 1, false},
+		{"2,049 by 2,048", 2049, 2048, false},
+		{"2,048 by 2,049", 2048, 2049, false},
+		{"the largest int and 2", math.MaxInt, 2, false},
+		{"the largest int and the largest int", math.MaxInt, math.MaxInt, false},
+		{"2,048 by 2,048", 2048, 2048, true},
+		{"as wide as allowed", 1 << 22, 1, true},
+		{"as tall as allowed", 1, 1 << 22, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pic := New(tt.w, tt.h)
+			if pic == nil {
+				t.Fatal("wanted a picture, even an empty one, got nil")
+			}
+			wantW, wantH := tt.w, tt.h
+			if !tt.ok {
+				wantW, wantH = 0, 0
+			}
+			if pic.Width() != wantW || pic.Height() != wantH {
+				t.Fatalf("wanted %d by %d, got %d by %d", wantW, wantH, pic.Width(), pic.Height())
+			}
+			// An empty one can be set, read and drawn without panicking; a full one has its
+			// last pixel.
+			pic.Set(tt.w-1, tt.h-1, red)
+			want := engine.Color{}
+			if tt.ok {
+				want = red
+			}
+			if got := pic.At(tt.w-1, tt.h-1); got != want {
+				t.Errorf("wanted the last pixel to be %v, got %v", want, got)
+			}
+			c := canvasOf(t, 4, 2, grey)
+			pic.Draw(c, 0, 0)
+			pic.DrawScaled(c, 0, 0, 4, 4)
+		})
+	}
+}
+
+func TestSetGivesAPixelItsColor(t *testing.T) {
+	pic := New(3, 2)
+	for y := range 2 {
+		for x := range 3 {
+			pic.Set(x, y, testColors[y][x])
+		}
+	}
+	for y := range 2 {
+		for x := range 3 {
+			if got := pic.At(x, y); got != testColors[y][x] {
+				t.Errorf("pixel (%d, %d): wanted %v, got %v", x, y, testColors[y][x], got)
+			}
+		}
+	}
+	// Black is a color, not the lack of one.
+	if got := pic.At(2, 1); got.IsDefault() || got != black {
+		t.Errorf("wanted black to be a pixel, got %v", got)
+	}
+	// It is the picture Decode makes of the same pixels, so it draws the same.
+	if got, want := drawnOn(t, pic), drawnOn(t, testPicture(t)); !slices.Equal(got, want) {
+		t.Errorf("wanted a picture made with Set to draw as a decoded one does")
+	}
+}
+
+func TestSetWithTheZeroColorMakesAPixelSeeThrough(t *testing.T) {
+	pic := New(3, 2)
+	pic.Set(1, 1, yellow)
+	pic.Set(1, 1, engine.Color{})
+	if got := pic.At(1, 1); !got.IsDefault() {
+		t.Errorf("wanted the pixel to be see-through again, got %v", got)
+	}
+	for _, p := range drawnOn(t, pic) {
+		if p != grey {
+			t.Fatalf("wanted a picture of see-through pixels to draw nothing, got %v", p)
+		}
+	}
+}
+
+func TestSetOutsideThePictureChangesNothing(t *testing.T) {
+	pic := New(3, 2)
+	for _, p := range [][2]int{
+		{-1, 0}, {3, 0}, {0, -1}, {0, 2}, {-1, -1}, {3, 2}, {3, 1}, {2, 2},
+		{math.MinInt, 0}, {math.MaxInt, 0}, {0, math.MinInt}, {0, math.MaxInt},
+	} {
+		pic.Set(p[0], p[1], red)
+	}
+	for y := range 2 {
+		for x := range 3 {
+			if got := pic.At(x, y); !got.IsDefault() {
+				t.Errorf("pixel (%d, %d): wanted it left alone, got %v", x, y, got)
+			}
+		}
+	}
+
+	var none *Bitmap
+	none.Set(0, 0, red) // a nil picture is a picture of no pixels
+}
+
+func TestFromImageHasTheAlphaRuleOfDecode(t *testing.T) {
+	alphas := []uint8{0, 1, 127, 128, 200, 255}
+	img := image.NewNRGBA(image.Rect(0, 0, len(alphas), 1))
+	for x, a := range alphas {
+		img.SetNRGBA(x, 0, color.NRGBA{R: 50, G: 100, B: 150, A: a})
+	}
+	got := rowOf(FromImage(img))
+	want := []engine.Color{{}, {}, {}, engine.RGB(50, 100, 150), engine.RGB(50, 100, 150), engine.RGB(50, 100, 150)}
+	if !slices.Equal(got, want) {
+		t.Errorf("wanted %v, got %v", want, got)
+	}
+}
+
+// FromImage reads every kind of image the standard library has, and agrees with Decode on
+// them: the images of TestDecodeReadsEveryKindOfPNG, with the same colors.
+func TestFromImageReadsEveryKindOfImage(t *testing.T) {
+	gray := image.NewGray(image.Rect(0, 0, 2, 1))
+	gray.SetGray(0, 0, color.Gray{Y: 0})
+	gray.SetGray(1, 0, color.Gray{Y: 200})
+
+	rgba := image.NewRGBA(image.Rect(0, 0, 2, 1)) // premultiplied
+	rgba.SetRGBA(0, 0, color.RGBA{R: 10, G: 20, B: 30, A: 255})
+	rgba.SetRGBA(1, 0, color.RGBA{R: 0, G: 0, B: 0, A: 0})
+
+	pal := image.NewPaletted(image.Rect(0, 0, 3, 1), color.Palette{color.NRGBA{R: 1, G: 2, B: 3, A: 255}, color.NRGBA{A: 0}, color.NRGBA{R: 9, G: 9, B: 9, A: 100}})
+	pal.SetColorIndex(0, 0, 0)
+	pal.SetColorIndex(1, 0, 1)
+	pal.SetColorIndex(2, 0, 2)
+
+	nrgba64 := image.NewNRGBA64(image.Rect(0, 0, 2, 1))
+	nrgba64.SetNRGBA64(0, 0, color.NRGBA64{R: 0xFFFF, G: 0x8000, B: 0, A: 0xFFFF})
+	nrgba64.SetNRGBA64(1, 0, color.NRGBA64{R: 0xFFFF, G: 0xFFFF, B: 0xFFFF, A: 0x1000})
+
+	rgba64 := image.NewRGBA64(image.Rect(0, 0, 1, 1))
+	rgba64.SetRGBA64(0, 0, color.RGBA64{R: 0x4000, G: 0x8000, B: 0xC000, A: 0xFFFF})
+
+	gray16 := image.NewGray16(image.Rect(0, 0, 2, 1))
+	gray16.SetGray16(0, 0, color.Gray16{Y: 0x8000})
+	gray16.SetGray16(1, 0, color.Gray16{Y: 0xFFFF})
+
+	tests := []struct {
+		name string
+		img  image.Image
+		want []engine.Color
+	}{
+		{"gray", gray, []engine.Color{engine.RGB(0, 0, 0), engine.RGB(200, 200, 200)}},
+		{"rgba, premultiplied", rgba, []engine.Color{engine.RGB(10, 20, 30), {}}},
+		{"paletted, with transparency", pal, []engine.Color{engine.RGB(1, 2, 3), {}, {}}},
+		{"nrgba64", nrgba64, []engine.Color{engine.RGB(255, 128, 0), {}}},
+		{"rgba64", rgba64, []engine.Color{engine.RGB(64, 128, 192)}},
+		{"gray16", gray16, []engine.Color{engine.RGB(128, 128, 128), engine.RGB(255, 255, 255)}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := rowOf(FromImage(tt.img)); !slices.Equal(got, tt.want) {
+				t.Errorf("wanted %v, got %v", tt.want, got)
+			}
+			decoded, err := Decode(bytes.NewReader(encodePNG(t, tt.img)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got, want := rowOf(FromImage(tt.img)), rowOf(decoded); !slices.Equal(got, want) {
+				t.Errorf("wanted FromImage to agree with Decode, %v and %v", got, want)
+			}
+		})
+	}
+}
+
+func TestFromImageTakesTheTopLeftOfTheBoundsAsPixelZero(t *testing.T) {
+	img := image.NewNRGBA(image.Rect(5, 7, 8, 9)) // 3 by 2, away from the origin
+	for y := 7; y < 9; y++ {
+		for x := 5; x < 8; x++ {
+			img.SetNRGBA(x, y, color.NRGBA{R: uint8(10 * x), G: uint8(10 * y), B: 1, A: 255})
+		}
+	}
+	pic := FromImage(img)
+	if pic.Width() != 3 || pic.Height() != 2 {
+		t.Fatalf("wanted a picture of 3 by 2, got %d by %d", pic.Width(), pic.Height())
+	}
+	for y := range 2 {
+		for x := range 3 {
+			if want := engine.RGB(uint8(10*(5+x)), uint8(10*(7+y)), 1); pic.At(x, y) != want {
+				t.Errorf("pixel (%d, %d): wanted %v, got %v", x, y, want, pic.At(x, y))
+			}
+		}
+	}
+}
+
+func TestFromImageWithNoPixelsIsEmpty(t *testing.T) {
+	var nilImage image.Image
+	tests := map[string]image.Image{
+		"nil":         nilImage,
+		"no pixels":   image.NewNRGBA(image.Rect(0, 0, 0, 0)),
+		"no width":    image.NewNRGBA(image.Rect(0, 0, 0, 5)),
+		"no height":   image.NewNRGBA(image.Rect(0, 0, 5, 0)),
+		"away from 0": image.NewNRGBA(image.Rect(4, 4, 4, 9)),
+	}
+	for name, img := range tests {
+		t.Run(name, func(t *testing.T) {
+			pic := FromImage(img)
+			if pic == nil || pic.Width() != 0 || pic.Height() != 0 {
+				t.Fatalf("wanted an empty picture, got %v", pic)
+			}
+			c := canvasOf(t, 4, 2, grey)
+			pic.Draw(c, 0, 0)
+			pic.DrawScaled(c, 0, 0, 4, 4) // each of these would panic on a picture with a size but no pixels
+			pic.DrawScaledDepth(c, 0, 0, 4, 4, 1)
+			for _, p := range pixelsOf(c) {
+				if p != grey {
+					t.Fatalf("wanted an empty picture to draw nothing, got %v", p)
+				}
+			}
+		})
+	}
+}
+
+func TestFromImageIsACopy(t *testing.T) {
+	img := image.NewNRGBA(image.Rect(0, 0, 1, 1))
+	img.SetNRGBA(0, 0, color.NRGBA{R: 230, G: 210, B: 40, A: 255})
+	pic := FromImage(img)
+
+	img.SetNRGBA(0, 0, color.NRGBA{R: 1, G: 2, B: 3, A: 255})
+	if got := pic.At(0, 0); got != yellow {
+		t.Errorf("wanted the picture to keep the color it had, got %v", got)
+	}
+	pic.Set(0, 0, red)
+	if got := img.NRGBAAt(0, 0); got != (color.NRGBA{R: 1, G: 2, B: 3, A: 255}) {
+		t.Errorf("wanted Set to leave the image alone, got %v", got)
+	}
+}
+
 // nearestByInterval is which of the n pixels of a picture pixel i, of the m it is stretched
 // to, takes its color from, found a different way from the code: the pixel s covers the
 // stretched pixels from s*m/n up to (s+1)*m/n, and the one whose range holds the middle of
@@ -842,8 +1121,11 @@ func TestDrawScaledDepthOfANilPictureDrawsNothing(t *testing.T) {
 
 func TestDrawingAllocatesNothing(t *testing.T) {
 	pic := testPicture(t)
+	scratch := New(3, 2)
 	c := canvasOf(t, 80, 24, grey)
 	draws := map[string]func(){
+		"Set":                     func() { scratch.Set(1, 1, red) },
+		"Set, outside":            func() { scratch.Set(-1, 7, red) },
 		"Draw":                    func() { pic.Draw(c, 10, 10) },
 		"Draw, mostly off":        func() { pic.Draw(c, -1, 47) },
 		"DrawScaled":              func() { pic.DrawScaled(c, 5, 5, 60, 30) },

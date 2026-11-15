@@ -190,7 +190,7 @@ canvas.Compose()
 
 ## Pixel shapes and pictures
 
-The pixel `Canvas` draws rectangles and circles next to lines and triangles, and the `bitmap` package draws a JPEG or PNG on it:
+The pixel `Canvas` draws rectangles and circles next to lines and triangles, and the `bitmap` package draws a JPEG or PNG on it, or a picture made in code:
 
 ```go
 canvas := fb.Canvas()
@@ -213,6 +213,7 @@ canvas.Compose()
 - **Circles.** `FillCircle(cx, cy, r, color)` is the pixels with (x-cx)² + (y-cy)² <= r², so it is `2r+1` across and round, since the pixels of a canvas are square. `DrawCircle` is its outline, a ring one pixel thick. A radius of 0 is one pixel and a negative one draws nothing. The rows come from integer arithmetic, so the same pixels are drawn on every platform.
 - **As lines are.** Shapes and pictures clip, replace the pixels under them whatever their depth (they never read or write it), and erase with the zero `Color`. Only the pixels on the canvas are visited, so a shape far off screen costs nothing and no number is too large. None allocates: a rectangle over a whole 200 by 120 canvas takes about 9 microseconds, a disc of radius 50 about 4, its ring about 1.
 - **Pictures.** `bitmap.Decode` reads a JPEG or PNG, found by what it holds and not by its name, once, into the colors of the canvas. `Draw` and `DrawScaled` then copy pixels and allocate nothing: 64 by 64 pixels take about 4 microseconds, or about 29 stretched to 128 by 96. A PNG pixel with an alpha of 128 or more is drawn as an opaque color and a lighter one is left alone, so what is under it shows. There is no blending, since a canvas pixel has no alpha and the terminal's own background is not known. Black is a color and is drawn. `DrawScaled` takes the pixel of the picture under the middle of each pixel it draws, with no smoothing, so a picture at its own size comes out exactly.
+- **Pictures made in code.** `bitmap.New(w, h)` makes a picture of see-through pixels, and `Set(x, y, color)` colors one: a generated texture, a sprite in other colors, a small map of a level. `bitmap.FromImage(img)` copies any `image.Image` with the alpha rule of `Decode`, so nothing has to be written out as a PNG and read back. `FromImage` has no limits, since its pixels are already in memory, but `New` gives an empty picture for a size of more than 4,194,304 pixels, as a size can come from a file.
 - **Pictures in a 3D scene.** `Draw` and `DrawScaled` never read or write depth, which is right for a logo or a HUD. `DrawScaledDepth(canvas, x, y, w, h, depth)` is `DrawScaled` for a picture of a thing that stands in the scene, an enemy, a pickup or a tree: a nearer surface hides it, it hides a farther one, in whatever order they are drawn, and a tie keeps what is there. The depth is one number for the whole picture, the distance along the camera's view direction, and `Camera.ProjectPixels` gives it with the pixel to draw at: project the foot and the top of the thing, and stretch the picture between them. It costs about 4 to 5 percent more than `DrawScaled` and allocates nothing.
 - **Files that cannot be trusted.** A small file can claim a picture of billions of pixels, so `Decode` reads the size from the header and refuses a picture over 32 MiB, or of more than 4,194,304 pixels (2,048 by 2,048), before decoding it. `DecodeLimit` takes limits of your own, and a source that never ends is read only up to the limit. The decoders are linked only into programs that import `bitmap`, which adds about 220 KB to a stripped program.
 - **Not included.** Smooth scaling and anti-aliasing, animated formats, ellipses, rounded rectangles, lines thicker than a pixel, and blending partial alpha.
@@ -424,7 +425,7 @@ To test a whole run (start-up, key bytes in, frames out), give `Config.Input` an
 | `sprite` | Sprites (a `Cell`, a text-art `Frame` or an `Animation` at a position, optionally see-through) drawn in layers, through a view, with bounds and collision queries |
 | `tilemap` | Tile maps written as text art, drawn through a camera, with solid tiles that stop a moving box |
 | `widget` | A label, a panel, a bar and a menu for a HUD or a pause screen, drawn in screen space |
-| `bitmap` | JPEG and PNG pictures drawn on the pixel `Canvas` at their own size or stretched, with limits for files that cannot be trusted |
+| `bitmap` | JPEG and PNG pictures, or ones made in code, drawn on the pixel `Canvas` at their own size or stretched, with limits for files that cannot be trusted |
 
 ## Compatibility and limits
 
