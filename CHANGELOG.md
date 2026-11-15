@@ -4,6 +4,10 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+### Added
+
+- `bitmap.New(w, h)`, `Bitmap.Set(x, y, color)` and `bitmap.FromImage(img)` make a `Bitmap` in code, where a `Bitmap` could only come from `Decode`, which reads a PNG or a JPEG, so that a program that draws a generated texture, a sprite in other colors or a small map of a level had to encode a PNG in memory and decode it again. `New` makes a picture of see-through pixels and `Set` gives one a color: the zero `Color` makes it see-through again, and a pixel outside the picture is left out, as for `Canvas.Set`. `FromImage` copies any `image.Image` with the rule `Decode` has for alpha, an alpha of 128 or more is drawn as an opaque color and less is not, and the top left of its bounds is pixel (0, 0); changing the image afterwards does not change the `Bitmap`. `Decode`'s limits are for files that cannot be trusted, so `FromImage` has none, its pixels being in memory already; `New` gives an empty picture, 0 by 0, for a size that is not positive or has more than 4,194,304 pixels (2,048 by 2,048), as `tilemap.New` does, since a size can come from a file too. A picture with no pixels, from either, is safe to draw, as a nil one is.
+
 ## [0.7.0] - 2026-11-14
 
 On top of 0.6.0 this release adds a far plane and fog to the camera, the ray through a place on the screen and the pixel of a point in the world, the lighting rule, pictures that stand in a 3D scene, and a way to tell a key's first press from its repeats. A `Camera` literal that lists its values without field names no longer compiles, and `widget.Menu` chooses on a new press of Enter, not on a held one.

@@ -28,9 +28,10 @@ var ErrFormat = errors.New("bitmap: not a JPEG or PNG picture")
 var ErrTooLarge = errors.New("bitmap: picture too large")
 
 // Bitmap is a picture, as the pixels of a Canvas. Every method is safe on a nil *Bitmap,
-// which is a picture of no pixels.
+// which is a picture of no pixels, and on an empty one, which New and FromImage return for
+// a size or an image that has none.
 type Bitmap struct {
-	w, h   int
+	w, h   int            // both 0, or both positive
 	pixels []engine.Color // row by row; the zero Color is a pixel that is not drawn
 }
 
@@ -80,17 +81,40 @@ func DecodeLimit(r io.Reader, maxBytes, maxPixels int64) (*Bitmap, error) {
 	if err != nil {
 		return nil, fmt.Errorf("bitmap: %w", err)
 	}
-	b := img.Bounds()
-	if b.Empty() {
+	if img.Bounds().Empty() {
 		return nil, ErrFormat
 	}
-	return fromImage(img), nil
+	return FromImage(img), nil
 }
 
-// fromImage converts a picture to the colors of a canvas. A pixel that is half transparent
-// or more becomes the zero Color, which is not drawn.
-func fromImage(img image.Image) *Bitmap {
+// New returns a picture of w by h pixels, none of them drawn yet: every pixel is the zero
+// Color, which is see-through, until [Bitmap.Set] gives it a color. A size that is not
+// positive, or has more than 4,194,304 pixels (2,048 by 2,048), which is what Decode allows,
+// gives an empty picture of 0 by 0, so that a size read from a file cannot ask for gigabytes.
+func New(w, h int) *Bitmap {
+	// Divided, not multiplied, so that no pair of sizes overflows.
+	if w <= 0 || h <= 0 || h > defaultMaxPixels/w {
+		return &Bitmap{}
+	}
+	return &Bitmap{w: w, h: h, pixels: make([]engine.Color, w*h)}
+}
+
+// FromImage returns a copy of img as a Bitmap, with the rule Decode has for alpha: a pixel
+// with an alpha of 128 or more is drawn, as an opaque color, and one with less becomes the
+// zero Color, which is not drawn. The top left corner of img.Bounds() is pixel (0, 0). A nil
+// img, or one with no pixels, gives an empty picture of 0 by 0.
+//
+// Unlike Decode, it has no limits: the pixels are already in memory, and made by the program.
+// A picture that is bigger than that is the program's to refuse. Changing img afterwards does
+// not change the Bitmap.
+func FromImage(img image.Image) *Bitmap {
+	if img == nil {
+		return &Bitmap{}
+	}
 	b := img.Bounds()
+	if b.Empty() {
+		return &Bitmap{}
+	}
 	bm := &Bitmap{w: b.Dx(), h: b.Dy(), pixels: make([]engine.Color, b.Dx()*b.Dy())}
 	for y := range bm.h {
 		for x := range bm.w {
@@ -128,6 +152,17 @@ func (b *Bitmap) At(x, y int) engine.Color {
 	return b.pixels[y*b.w+x]
 }
 
+// Set gives pixel (x, y), counted from the top left, the color c. The zero Color makes the
+// pixel see-through, as At returns it. A pixel outside the picture is left out, as for
+// [engine.Canvas.Set]. It changes the picture for everything that draws it, so a Bitmap that
+// is shared and drawn while it is set needs the program's own lock.
+func (b *Bitmap) Set(x, y int, c engine.Color) {
+	if b == nil || x < 0 || x >= b.w || y < 0 || y >= b.h {
+		return
+	}
+	b.pixels[y*b.w+x] = c
+}
+
 // Draw draws the picture at its own size on c, with its top left pixel at pixel (x, y).
 // Pixels that are see-through are left as they are, and the others replace what is there,
 // whatever its depth, which Draw does not read or write, as Canvas.Set does. Only the pixels
@@ -154,7 +189,7 @@ func (b *Bitmap) Draw(c *engine.Canvas, x, y int) {
 // drawn as Draw draws it. A width or height that is not positive draws nothing. Everything
 // else is as for Draw.
 func (b *Bitmap) DrawScaled(c *engine.Canvas, x, y, w, h int) {
-	if b == nil {
+	if b == nil || b.w == 0 {
 		return
 	}
 	x0, x1 := visible(x, w, c.Width())
@@ -180,7 +215,7 @@ func (b *Bitmap) DrawScaled(c *engine.Canvas, x, y, w, h int) {
 // or is NaN, draws nothing, and an infinite depth is infinitely far: nothing is nearer than
 // it, so nothing is drawn. Everything else is as for DrawScaled.
 func (b *Bitmap) DrawScaledDepth(c *engine.Canvas, x, y, w, h int, depth float64) {
-	if b == nil || !(depth > 0) {
+	if b == nil || b.w == 0 || !(depth > 0) {
 		return
 	}
 	x0, x1 := visible(x, w, c.Width())

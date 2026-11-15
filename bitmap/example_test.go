@@ -73,6 +73,67 @@ func ExampleDecode() {
 	// ..YYY#.
 }
 
+// New makes a picture in code, with no file: every pixel starts see-through and Set gives it a
+// color. This is the picture of ExampleDecode, so it is drawn the same way.
+func ExampleNew() {
+	yellow := engine.RGB(230, 210, 40)
+	pic := bitmap.New(4, 3)
+	for y := range pic.Height() {
+		for x := range pic.Width() {
+			pic.Set(x, y, yellow)
+		}
+	}
+	pic.Set(0, 0, engine.Color{})      // the zero Color is see-through again
+	pic.Set(3, 2, engine.RGB(0, 0, 0)) // black is a color like any other
+	pic.Set(9, 9, yellow)              // outside the picture: left out
+
+	fb, err := engine.NewFrameBuffer(7, 2) // 7 by 4 pixels
+	if err != nil {
+		panic(err)
+	}
+	canvas := fb.Canvas()
+	canvas.FillRect(0, 0, canvas.Width(), canvas.Height(), engine.RGB(90, 90, 90))
+
+	pic.Draw(canvas, 2, 1)
+	show(canvas)
+	// Output:
+	// .......
+	// ...YYY.
+	// ..YYYY.
+	// ..YYY#.
+}
+
+// FromImage copies any image.Image, with the alpha rule of Decode: a pixel of 128 or more is
+// drawn and a fainter one is not. The top left corner of the image, here (10, 20), becomes pixel
+// (0, 0) of the picture.
+func ExampleFromImage() {
+	img := image.NewNRGBA(image.Rect(10, 20, 14, 23)) // 4 by 3
+	for y := 20; y < 23; y++ {
+		for x := 10; x < 14; x++ {
+			img.SetNRGBA(x, y, color.NRGBA{R: 230, G: 210, B: 40, A: 255})
+		}
+	}
+	img.SetNRGBA(10, 20, color.NRGBA{R: 230, G: 210, B: 40, A: 127}) // too faint to draw
+	img.SetNRGBA(13, 22, color.NRGBA{A: 255})                        // black
+
+	pic := bitmap.FromImage(img)
+
+	fb, err := engine.NewFrameBuffer(7, 2) // 7 by 4 pixels
+	if err != nil {
+		panic(err)
+	}
+	canvas := fb.Canvas()
+	canvas.FillRect(0, 0, canvas.Width(), canvas.Height(), engine.RGB(90, 90, 90))
+
+	pic.Draw(canvas, 2, 1)
+	show(canvas)
+	// Output:
+	// .......
+	// ...YYY.
+	// ..YYYY.
+	// ..YYY#.
+}
+
 // DrawScaled stretches or squeezes a picture to any size, taking the pixel under the middle
 // of each one it draws, so a picture that is made bigger shows its pixels as blocks.
 func ExampleBitmap_DrawScaled() {
