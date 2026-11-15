@@ -16,7 +16,7 @@ const maxCells = 1 << 22
 // maxTiles is how many different tiles one Map can hold.
 const maxTiles = 1 << 16
 
-// Tile is what a cell of a map is: how it looks, and whether it stops a mover.
+// Tile is what a cell of a map is: how it looks, whether it stops a mover, and what it is.
 type Tile struct {
 	// Cell is what is drawn for the tile. A hole, a blank with no background and no
 	// attributes, draws nothing and shows what is under it; the zero Cell is one.
@@ -24,6 +24,13 @@ type Tile struct {
 
 	// Solid says that the tile stops a mover, as a wall does.
 	Solid bool
+
+	// Kind says what the tile is, for a program to ask of Map.At: which picture a wall has,
+	// or whether a solid tile is a wall or a crate, which Cell cannot say for a game whose
+	// tiles have no look. FromLines fills it with the rune of the legend that made the tile,
+	// unless the tile has a Kind already, and 0 is no kind. Two tiles that differ only in
+	// Kind are different tiles to the map.
+	Kind rune
 }
 
 // Map is a grid of tiles. The grid holds a small number for each cell, which names one of
@@ -54,10 +61,14 @@ func New(w, h int, fill Tile) *Map {
 
 // FromLines makes a map from text art, a level written out: one cell for each rune, each
 // line a row, a short line padded to the longest with the empty tile. legend says what tile
-// each rune is. A rune that is not in it, a space included, is the empty tile, the zero
-// Tile, which is a hole that is not solid. Text with no lines or no runes, or more than
-// 4,194,304 cells, makes an empty map, and so do more than 65,535 different tiles in
-// the text, whose later ones come out as the empty tile.
+// each rune is, and a tile that comes of it has the rune as its Kind, so the map can say which
+// entry made it, unless the tile has a Kind of its own, which is kept. A rune that is not in the
+// legend, a space included, is the empty tile, the zero Tile, which is a hole that is not solid
+// and has no Kind: a program that wants to find a marker in the text lists it in the legend,
+// as 'P': {}. Runes whose tiles look the same but have different runes are different tiles, so
+// they cost a place in the map's table of tiles, though still not more than two bytes a cell.
+// Text with no lines or no runes, or more than 4,194,304 cells, makes an empty map, and so do
+// more than 65,535 different tiles in the text, whose later ones come out as the empty tile.
 //
 //	level := tilemap.FromLines(map[rune]tilemap.Tile{
 //		'#': {Cell: engine.Cell{Character: '#'}, Solid: true},
@@ -67,6 +78,7 @@ func New(w, h int, fill Tile) *Map {
 //		"#...#",
 //		"#####",
 //	)
+//	level.At(0, 0).Kind // '#'
 func FromLines(legend map[rune]Tile, lines ...string) *Map {
 	width := 0
 	for _, line := range lines {
@@ -83,6 +95,9 @@ func FromLines(legend map[rune]Tile, lines ...string) *Map {
 		x := 0
 		for _, r := range line {
 			if t, ok := legend[r]; ok {
+				if t.Kind == 0 {
+					t.Kind = r
+				}
 				m.ids[y*width+x] = m.idOf(t)
 			}
 			x++
@@ -132,7 +147,8 @@ func (m *Map) inside(x, y int) bool {
 	return m != nil && x >= 0 && x < m.width && y >= 0 && y < m.height
 }
 
-// At returns the tile in the cell (x, y), or the zero Tile outside the map.
+// At returns the tile in the cell (x, y), or the zero Tile outside the map. A tile that
+// FromLines made has the rune of its legend as its Kind.
 func (m *Map) At(x, y int) Tile {
 	if !m.inside(x, y) {
 		return Tile{}

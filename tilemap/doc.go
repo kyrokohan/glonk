@@ -2,8 +2,8 @@
 // view, and moves boxes through it, stopping at the solid tiles.
 //
 // A [Map] is a grid with one tile in each cell, and a [Tile] is what a cell looks like (an
-// [engine.Cell]) and whether it is solid. Write a level as text art with [FromLines], and
-// draw the part of it that is in view with [Map.Draw]. A view is a [geometry.Rect] in
+// [engine.Cell]), whether it is solid, and what it is, its Kind. Write a level as text art
+// with [FromLines], and draw the part of it that is in view with [Map.Draw]. A view is a [geometry.Rect] in
 // the map's cells, so the camera is a rectangle that moves over the map, and sprites are drawn
 // through the same view by sprite.Layer.DrawView, so that they stay on their tiles:
 //
@@ -15,6 +15,17 @@
 // and shows what is under it, as a see-through sprite does, so one map can be laid over
 // another. Any other tile replaces the cell under it. Outside the map, there is nothing to
 // draw and everything is solid: the edge of the world is a wall.
+//
+// # What a tile is
+//
+// [FromLines] gives each tile of its legend the rune that made it as its [Tile].Kind, so a game
+// asks the map which tile a cell is, and a wall and a crate that look and act alike are told
+// apart, where it would otherwise keep the text of the level beside the map. A Kind the legend
+// has is kept, and a rune the legend does not list is the empty tile, with no Kind: list a
+// marker such as 'P' in the legend, as 'P': {}, to find it. Tiles that differ only in Kind are
+// different tiles to the map.
+//
+//	if level.At(x, y).Kind == 'X' { // a crate, though it looks and is solid as a wall does
 //
 // # Moving through the map
 //

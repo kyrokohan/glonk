@@ -3,6 +3,7 @@ package tilemap
 import (
 	"math"
 	"math/rand/v2"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -10,14 +11,17 @@ import (
 	"glonk.dev/geometry"
 )
 
+// The tiles the tests use. Each has the Kind of the rune it stands for in legend, which
+// FromLines would fill in and keeps where it is already there, so that a tile it makes is
+// equal to the fixture.
 var (
-	wall    = Tile{Cell: engine.Cell{Character: '#', Foreground: engine.Palette(1)}, Solid: true}
-	floor   = Tile{Cell: engine.Cell{Character: '.', Foreground: engine.Palette(2), Background: engine.Palette(17)}}
-	water   = Tile{Cell: engine.Cell{Character: '~', Foreground: engine.Palette(4)}, Solid: true}
-	grass   = Tile{Cell: engine.Cell{Character: '"', Foreground: engine.Palette(10)}}
-	window  = Tile{Cell: engine.Cell{Character: ' ', Attrs: engine.Reverse}}         // a blank that shows: not a hole
-	shade   = Tile{Cell: engine.Cell{Character: ' ', Background: engine.Palette(3)}} // another
-	blank   = Tile{Cell: engine.Cell{Character: ' ', Foreground: engine.Palette(5)}} // a space whose foreground is not seen: a hole
+	wall    = Tile{Cell: engine.Cell{Character: '#', Foreground: engine.Palette(1)}, Solid: true, Kind: '#'}
+	floor   = Tile{Cell: engine.Cell{Character: '.', Foreground: engine.Palette(2), Background: engine.Palette(17)}, Kind: '.'}
+	water   = Tile{Cell: engine.Cell{Character: '~', Foreground: engine.Palette(4)}, Solid: true, Kind: '~'}
+	grass   = Tile{Cell: engine.Cell{Character: '"', Foreground: engine.Palette(10)}, Kind: '"'}
+	window  = Tile{Cell: engine.Cell{Character: ' ', Attrs: engine.Reverse}, Kind: 'w'}         // a blank that shows: not a hole
+	shade   = Tile{Cell: engine.Cell{Character: ' ', Background: engine.Palette(3)}, Kind: 's'} // another
+	blank   = Tile{Cell: engine.Cell{Character: ' ', Foreground: engine.Palette(5)}, Kind: 'o'} // a space whose foreground is not seen: a hole
 	nothing = Tile{}
 )
 
@@ -80,6 +84,109 @@ func TestFromLinesPadsShortLinesAndTakesUnknownRunesAsTheEmptyTile(t *testing.T)
 	}
 	if m.At(3, 3) != floor || m.At(3, 4) != floor || m.At(1, 4) != wall {
 		t.Errorf("wanted the legend's tiles where the text says")
+	}
+}
+
+// bareLegend is a legend as a program writes it, with no Kind on any tile. X looks like a wall
+// and is not one, and P is a marker with no look at all.
+func bareLegend() map[rune]Tile {
+	return map[rune]Tile{
+		'#': {Cell: engine.Cell{Character: '#'}, Solid: true},
+		'X': {Cell: engine.Cell{Character: '#'}, Solid: true},
+		'.': {Cell: engine.Cell{Character: '.'}},
+		'P': {},
+	}
+}
+
+func TestFromLinesGivesEveryTileTheRuneThatMadeIt(t *testing.T) {
+	lg := bareLegend()
+	lines := []string{"#X.P", ".X#P", "PP.#"}
+	m := FromLines(lg, lines...)
+	for y, line := range lines {
+		for x, r := range line {
+			got := m.At(x, y)
+			want := lg[r]
+			want.Kind = r
+			if got != want {
+				t.Errorf("(%d, %d): wanted the tile of %q with its Kind, %+v, got %+v", x, y, r, want, got)
+			}
+		}
+	}
+}
+
+func TestFromLinesLeavesWhatTheLegendDoesNotListWithNoKind(t *testing.T) {
+	m := FromLines(bareLegend(), "#?.", "", " é#日", "P")
+	for _, c := range [][2]int{{1, 0}, {0, 1}, {1, 1}, {2, 1}, {0, 2}, {1, 2}, {3, 2}, {1, 3}, {2, 3}, {3, 3}} {
+		if got := m.At(c[0], c[1]); got != nothing || got.Kind != 0 {
+			t.Errorf("(%d, %d): wanted the zero Tile, got %+v", c[0], c[1], got)
+		}
+	}
+	// A marker that is listed is not the zero Tile, though nothing about it is seen or solid.
+	if got := m.At(0, 3); got == nothing || got.Kind != 'P' || got.Solid || got.Cell != (engine.Cell{}) {
+		t.Errorf("wanted the listed marker P to be a see-through tile of kind P, got %+v", got)
+	}
+}
+
+func TestFromLinesKeepsAKindThatTheLegendHas(t *testing.T) {
+	crate := Tile{Cell: engine.Cell{Character: 'x'}, Solid: true, Kind: 'W'}
+	m := FromLines(map[rune]Tile{'a': crate, 'b': crate, 'c': {Cell: engine.Cell{Character: 'x'}, Solid: true}}, "abc")
+	if m.At(0, 0).Kind != 'W' || m.At(1, 0).Kind != 'W' {
+		t.Errorf("wanted the Kind of the legend kept, got %q and %q", m.At(0, 0).Kind, m.At(1, 0).Kind)
+	}
+	if m.At(2, 0).Kind != 'c' {
+		t.Errorf("wanted a tile with no Kind to get its rune, got %q", m.At(2, 0).Kind)
+	}
+	// Two runes that say the same Kind and look the same are one tile, as before: the empty
+	// tile, the crate, and the third.
+	if len(m.tiles) != 3 {
+		t.Errorf("wanted 3 different tiles, got %d", len(m.tiles))
+	}
+}
+
+// Runes whose tiles look alike are different tiles now, since the map can say which made them.
+func TestRunesWithTilesThatLookAlikeAreDifferentTiles(t *testing.T) {
+	m := FromLines(bareLegend(), "#X#X")
+	if len(m.tiles) != 3 { // the empty tile, #, X
+		t.Errorf("wanted 3 different tiles, got %d", len(m.tiles))
+	}
+	a, b := m.At(0, 0), m.At(1, 0)
+	if a == b || a.Cell != b.Cell || a.Solid != b.Solid {
+		t.Errorf("wanted tiles that look alike and differ in Kind, got %+v and %+v", a, b)
+	}
+	if m.At(2, 0) != a || m.At(3, 0) != b {
+		t.Errorf("wanted every # to be one tile and every X another")
+	}
+}
+
+func TestTilesThatDifferOnlyInKindAreDifferentTiles(t *testing.T) {
+	look := engine.Cell{Character: '#'}
+	a, b := Tile{Cell: look, Kind: 'a'}, Tile{Cell: look, Kind: 'b'}
+	m := New(4, 1, nothing)
+	m.Set(0, 0, a)
+	m.Set(1, 0, b)
+	m.Set(2, 0, a)
+	if m.At(0, 0) != a || m.At(1, 0) != b || m.At(2, 0) != a || m.At(3, 0) != nothing {
+		t.Errorf("wanted each cell to give back the tile Set in it, got %+v %+v %+v %+v", m.At(0, 0), m.At(1, 0), m.At(2, 0), m.At(3, 0))
+	}
+	if len(m.tiles) != 3 { // nothing, a, b: the second a is the first
+		t.Errorf("wanted 3 different tiles, got %d", len(m.tiles))
+	}
+}
+
+// Kind costs a cell nothing: a cell is still a two byte number naming a tile, and a map of a
+// million cells of three kinds holds four tiles.
+func TestACellStaysTwoBytesWhateverItsKind(t *testing.T) {
+	row := strings.Repeat("#X.", 334)[:1000]
+	lines := make([]string, 1000)
+	for i := range lines {
+		lines[i] = row
+	}
+	m := FromLines(bareLegend(), lines...)
+	if size := reflect.TypeOf(m.ids).Elem().Size(); size != 2 {
+		t.Errorf("wanted a cell to be 2 bytes, got %d", size)
+	}
+	if len(m.ids) != 1_000_000 || len(m.tiles) != 4 {
+		t.Errorf("wanted 1,000,000 cells of 4 different tiles, got %d and %d", len(m.ids), len(m.tiles))
 	}
 }
 
@@ -476,6 +583,23 @@ func FuzzFromLines(f *testing.F) {
 				}
 			}
 		}
+		// Every cell the text lists is the legend's tile with its rune as Kind, and every other is
+		// the zero Tile, unless the map ran out of room for tiles.
+		if len(m.tiles) < maxTiles {
+			for y, line := range strings.Split(text, "\n") {
+				x := 0
+				for _, r := range line {
+					want, listed := lg[r]
+					if listed {
+						want.Kind = r
+					}
+					if got := m.At(x, y); got != want {
+						t.Fatalf("(%d, %d) of %q: wanted %+v, got %+v", x, y, r, want, got)
+					}
+					x++
+				}
+			}
+		}
 		fb := newBuffer(t, 10, 4)
 		m.Draw(fb, geometry.Rect{})
 	})
@@ -511,6 +635,41 @@ func FuzzMapDraw(f *testing.F) {
 				}
 			}
 		}
+	})
+}
+
+func BenchmarkFromLines(b *testing.B) {
+	rng := rand.New(rand.NewPCG(7, 8))
+	lines := make([]string, 400)
+	for i := range lines {
+		row := make([]byte, 1000)
+		for j := range row {
+			row[j] = "#X."[rng.IntN(3)]
+		}
+		lines[i] = string(row)
+	}
+	lg := bareLegend()
+	b.Run("1000 by 400 of three tiles", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			FromLines(lg, lines...)
+		}
+	})
+}
+
+func BenchmarkMapAt(b *testing.B) {
+	m := FromLines(bareLegend(), strings.Repeat("#X.", 100), strings.Repeat(".X#", 100))
+	b.Run("At and Solid", func(b *testing.B) {
+		b.ReportAllocs()
+		n := 0
+		for b.Loop() {
+			for x := range 300 {
+				if m.At(x, 1).Solid || m.Solid(x, 0) {
+					n++
+				}
+			}
+		}
+		_ = n
 	})
 }
 
