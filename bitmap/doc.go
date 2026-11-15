@@ -45,6 +45,25 @@
 // Make the views once, at start-up. A view keeps the whole picture in memory, and [Bitmap.Set]
 // on either one changes the other.
 //
+// # Darker, and in one color
+//
+// [Bitmap.Shaded] is a view drawn darker, for a thing in a lit scene that has to be as dark as
+// the wall beside it, and [Bitmap.Tinted] is a view drawn mixed toward a color, by a part from 0
+// to 1: a part of 1 draws the shape of the picture all in the color, for the letters of a font
+// made from one white picture or for a thing that flashes white when it is hit. They share the
+// pixels, and combine with [Bitmap.Sub] and [Bitmap.Mirrored], which keep them.
+//
+//	lit := frame.Shaded(0.6)                     // as bright as the wall next to it
+//	flash := frame.Tinted(engine.RGB(255, 255, 255), 1) // all white, for the frame of a hit
+//	lit.Draw(canvas, x, y)
+//
+// A view has one brightness and one tint, and setting again replaces it. The shade comes first
+// and the tint is mixed over the shaded color, so a flash is not darkened by the room unless it
+// is shaded too. [Bitmap.At] and [Bitmap.Set] still deal in the picture's own colors; only
+// drawing changes them, and a pixel drawn this way is an exact RGB color. Each is a [engine.Shade]
+// or an [engine.Mix] for every pixel drawn, so a picture that is shaded or tinted takes several
+// times as long to draw as one that is not.
+//
 // # Transparency
 //
 // A pixel of a PNG with an alpha of 128 or more is drawn, as an opaque color, and one with

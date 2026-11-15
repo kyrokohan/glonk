@@ -193,6 +193,34 @@ func ExampleBitmap_Mirrored() {
 	// YY.YY
 }
 
+// Shaded is a view drawn darker, 1 for the colors as they are and 0 for black, and Tinted one drawn
+// mixed toward a color, here all the way, which draws the shape in one color. The picture is
+// not changed: it is drawn as it is on the first row.
+func ExampleBitmap_Tinted() {
+	pic := bitmap.New(2, 1)
+	pic.Set(0, 0, engine.RGB(255, 255, 255))
+	pic.Set(1, 0, engine.RGB(200, 100, 0))
+
+	fb, err := engine.NewFrameBuffer(2, 2) // 2 by 4 pixels
+	if err != nil {
+		panic(err)
+	}
+	canvas := fb.Canvas()
+	pic.Draw(canvas, 0, 0)
+	pic.Shaded(0.5).Draw(canvas, 0, 1)
+	pic.Tinted(engine.RGB(255, 0, 0), 1).Draw(canvas, 0, 2)
+	pic.Shaded(0.5).Tinted(engine.RGB(255, 255, 255), 0.5).Draw(canvas, 0, 3)
+
+	for y := range canvas.Height() {
+		fmt.Println(canvas.At(0, y), canvas.At(1, y))
+	}
+	// Output:
+	// #ffffff #c86400
+	// #808080 #643200
+	// #ff0000 #ff0000
+	// #c0c0c0 #b29980
+}
+
 // DrawScaled stretches or squeezes a picture to any size, taking the pixel under the middle
 // of each one it draws, so a picture that is made bigger shows its pixels as blocks.
 func ExampleBitmap_DrawScaled() {

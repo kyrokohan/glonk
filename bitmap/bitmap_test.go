@@ -1085,6 +1085,334 @@ func FuzzMirroredSubDraw(f *testing.F) {
 	})
 }
 
+// lookedCopy returns a plain picture of the pixels view shows, each one as drawing the view
+// should draw it: shaded by engine.Shade, then mixed by engine.Mix, and a see-through pixel
+// left so. The reference for every drawing of a shaded or tinted view.
+func lookedCopy(view *Bitmap, shade *float64, tint *engine.Color, part float64) *Bitmap {
+	out := New(view.Width(), view.Height())
+	for y := range view.Height() {
+		for x := range view.Width() {
+			p := view.At(x, y)
+			if p.IsDefault() {
+				continue
+			}
+			if shade != nil {
+				p = engine.Shade(p, *shade)
+			}
+			if tint != nil {
+				p = engine.Mix(p, *tint, part)
+			}
+			out.Set(x, y, p)
+		}
+	}
+	return out
+}
+
+// looks is every brightness and tint the tests of a look try: none, the ends, between, outside 0
+// to 1 and not a number.
+func looks() (shades []*float64, tints []*engine.Color, parts []float64) {
+	f := func(v float64) *float64 { return &v }
+	c := func(v engine.Color) *engine.Color { return &v }
+	return []*float64{nil, f(0), f(0.5), f(1), f(7), f(-1), f(math.NaN())},
+		[]*engine.Color{nil, c(blue), c(engine.Color{}), c(engine.Palette(196))},
+		[]float64{0, 0.3, 1, 2, -1, math.NaN()}
+}
+
+// applyLook puts the look on view, with the calls a program makes.
+func applyLook(view *Bitmap, shade *float64, tint *engine.Color, part float64) *Bitmap {
+	if shade != nil {
+		view = view.Shaded(*shade)
+	}
+	if tint != nil {
+		view = view.Tinted(*tint, part)
+	}
+	return view
+}
+
+// lookBases are views with a pixel of every kind: RGB, a palette color, black and see-through,
+// away from the corner of a bigger picture, and the same mirrored.
+func lookBases(t testing.TB) map[string]*Bitmap {
+	t.Helper()
+	pic := gridPicture(t, 6, 5)
+	pic.Set(2, 2, engine.Palette(196))
+	pic.Set(3, 2, black)
+	pic.Set(4, 2, engine.Palette(0))
+	return map[string]*Bitmap{
+		"a view":             pic.Sub(1, 1, 4, 3),
+		"a mirrored view":    pic.Sub(1, 1, 4, 3).Mirrored(),
+		"a whole picture":    gridPicture(t, 3, 2),
+		"mirrored, then Sub": pic.Mirrored().Sub(1, 1, 4, 3),
+	}
+}
+
+func TestAViewIsDrawnAsShadeAndMixSayForEachPixel(t *testing.T) {
+	shades, tints, parts := looks()
+	places := [][4]int{{0, 0, 4, 3}, {1, 1, 8, 6}, {-2, -1, 2, 2}, {3, 2, 3, 5}, {0, 0, 1, 1}, {2, 4, 9, 4}}
+	for name, base := range lookBases(t) {
+		for _, shade := range shades {
+			for _, tint := range tints {
+				for _, part := range parts {
+					if tint == nil && part != 0 {
+						continue // no tint, so no part to vary
+					}
+					view := applyLook(base, shade, tint, part)
+					want := lookedCopy(base, shade, tint, part)
+					for _, pl := range places {
+						x, y, w, h := pl[0], pl[1], pl[2], pl[3]
+
+						got, ref := canvasOf(t, 6, 3, grey), canvasOf(t, 6, 3, grey)
+						view.Draw(got, x, y)
+						want.Draw(ref, x, y)
+						if !slices.Equal(pixelsOf(got), pixelsOf(ref)) {
+							t.Fatalf("%s, shade %v, tint %v at %v: Draw at (%d, %d): wanted %v, got %v", name, shade, tint, part, x, y, pixelsOf(ref), pixelsOf(got))
+						}
+
+						got, ref = canvasOf(t, 6, 3, grey), canvasOf(t, 6, 3, grey)
+						view.DrawScaled(got, x, y, w, h)
+						want.DrawScaled(ref, x, y, w, h)
+						if !slices.Equal(pixelsOf(got), pixelsOf(ref)) {
+							t.Fatalf("%s, shade %v, tint %v at %v: DrawScaled %d by %d at (%d, %d): wanted %v, got %v", name, shade, tint, part, w, h, x, y, pixelsOf(ref), pixelsOf(got))
+						}
+
+						got, ref = canvasOf(t, 6, 3, grey), canvasOf(t, 6, 3, grey)
+						view.DrawScaledDepth(got, x, y, w, h, 3)
+						want.DrawScaledDepth(ref, x, y, w, h, 3)
+						if !slices.Equal(pixelsOf(got), pixelsOf(ref)) {
+							t.Fatalf("%s, shade %v, tint %v at %v: DrawScaledDepth %d by %d at (%d, %d): wanted %v, got %v", name, shade, tint, part, w, h, x, y, pixelsOf(ref), pixelsOf(got))
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestALookIsExactAtItsEnds(t *testing.T) {
+	pic := New(2, 1)
+	pic.Set(0, 0, engine.RGB(200, 100, 0))
+	pic.Set(1, 0, engine.RGB(255, 255, 255))
+	draw := func(v *Bitmap) (engine.Color, engine.Color) {
+		c := canvasOf(t, 2, 1, grey)
+		v.Draw(c, 0, 0)
+		return c.At(0, 0), c.At(1, 0)
+	}
+	if a, b := draw(pic.Shaded(0.5)); a != engine.RGB(100, 50, 0) || b != engine.RGB(128, 128, 128) {
+		t.Errorf("wanted half as bright, got %v and %v", a, b)
+	}
+	if a, b := draw(pic.Shaded(0)); a != black || b != black {
+		t.Errorf("wanted black, which is a color, got %v and %v", a, b)
+	}
+	if a, b := draw(pic.Tinted(red, 1)); a != red || b != red {
+		t.Errorf("wanted the shape all in red, got %v and %v", a, b)
+	}
+	if a, b := draw(pic.Tinted(red, 0)); a != engine.RGB(200, 100, 0) || b != engine.RGB(255, 255, 255) {
+		t.Errorf("wanted the colors as they are, got %v and %v", a, b)
+	}
+	// The shade comes first and the tint is laid over it: half as bright, then half way to white.
+	if a, b := draw(pic.Shaded(0.5).Tinted(engine.RGB(255, 255, 255), 0.5)); a != engine.RGB(178, 153, 128) || b != engine.RGB(192, 192, 192) {
+		t.Errorf("wanted the shade and then the tint, got %v and %v", a, b)
+	}
+}
+
+// A shaded or tinted view is hidden by what is nearer and hides what is farther, as any picture
+// drawn with DrawScaledDepth is, and a depth that cannot be drawn at draws nothing.
+func TestALookedViewIsDrawnWithDepthAsAnyPictureIs(t *testing.T) {
+	base := lookBases(t)["a mirrored view"]
+	look := func(v *Bitmap) *Bitmap { return v.Shaded(0.5).Tinted(blue, 0.4) }
+	view := look(base)
+	want := lookedCopy(base, func() *float64 { v := 0.5; return &v }(), &blue, 0.4)
+
+	// Nearer than the picture on some pixels, farther on others.
+	prepare := func() *engine.Canvas {
+		c := canvasOf(t, 6, 3, grey)
+		for y := range c.Height() {
+			for x := range c.Width() {
+				c.SetDepth(x, y, float64(1+(x+y)%5), yellow) // depths 1 to 5, the picture's is 3
+			}
+		}
+		return c
+	}
+	got, ref := prepare(), prepare()
+	view.DrawScaledDepth(got, 0, 0, 6, 5, 3)
+	want.DrawScaledDepth(ref, 0, 0, 6, 5, 3)
+	if !slices.Equal(pixelsOf(got), pixelsOf(ref)) {
+		t.Errorf("wanted the looked view hidden by what is nearer: wanted %v, got %v", pixelsOf(ref), pixelsOf(got))
+	}
+	if slices.Equal(pixelsOf(got), pixelsOf(prepare())) {
+		t.Errorf("wanted the looked view to be drawn where it is nearer")
+	}
+
+	for _, depth := range []float64{0, -1, math.NaN(), math.Inf(1)} {
+		c := prepare()
+		view.DrawScaledDepth(c, 0, 0, 6, 5, depth)
+		if !slices.Equal(pixelsOf(c), pixelsOf(prepare())) {
+			t.Errorf("wanted a depth of %v to draw nothing", depth)
+		}
+	}
+}
+
+// Draw and DrawScaled never read or write depth, looked or not: they replace the pixels whatever
+// is nearer, and leave the depth as it was, which a SetDepth afterwards shows.
+func TestDrawingALookedViewNeverReadsOrWritesDepth(t *testing.T) {
+	view := lookBases(t)["a view"].Shaded(0.5).Tinted(blue, 0.4)
+	draws := map[string]func(c *engine.Canvas){
+		"Draw":       func(c *engine.Canvas) { view.Draw(c, 0, 0) },
+		"DrawScaled": func(c *engine.Canvas) { view.DrawScaled(c, 0, 0, 8, 6) },
+	}
+	for name, draw := range draws {
+		// Where nothing was drawn at a depth, a later SetDepth is not hidden by this draw.
+		c := canvasOf(t, 6, 3, grey)
+		draw(c)
+		for y := range c.Height() {
+			for x := range c.Width() {
+				if !c.SetDepth(x, y, 1e9, yellow) {
+					t.Fatalf("%s: wanted the depth of (%d, %d) untouched, got a pixel that hides a far one", name, x, y)
+				}
+			}
+		}
+
+		// Where something is nearer, the pixels are replaced all the same.
+		c = canvasOf(t, 6, 3, grey)
+		for y := range c.Height() {
+			for x := range c.Width() {
+				c.SetDepth(x, y, 1, yellow)
+			}
+		}
+		draw(c)
+		ref := canvasOf(t, 6, 3, yellow) // the same pixels, with no depth to hide anything
+		draw(ref)
+		if !slices.Equal(pixelsOf(c), pixelsOf(ref)) {
+			t.Errorf("%s: wanted the looked view to replace what is nearer", name)
+		}
+	}
+}
+
+func TestATintDoesNotPaintASeeThroughPixel(t *testing.T) {
+	pic := New(3, 1)
+	pic.Set(0, 0, yellow)
+	pic.Set(2, 0, yellow)
+	c := canvasOf(t, 3, 1, grey)
+	pic.Tinted(red, 1).Draw(c, 0, 0)
+	if c.At(0, 0) != red || c.At(1, 0) != grey || c.At(2, 0) != red {
+		t.Errorf("wanted red, the canvas as it was, and red, got %v, %v and %v", c.At(0, 0), c.At(1, 0), c.At(2, 0))
+	}
+}
+
+// A view has one brightness and one tint: setting again replaces it, and the order of the two
+// calls does not matter, since the look is always the shade and then the tint.
+func TestALookIsSetAndDoesNotStack(t *testing.T) {
+	pic := gridPicture(t, 4, 3)
+	once := drawnOn(t, pic.Shaded(0.5))
+	if twice := drawnOn(t, pic.Shaded(0.5).Shaded(0.5)); !slices.Equal(twice, once) {
+		t.Errorf("wanted a second Shaded to replace the first, not to add to it")
+	}
+	if changed := drawnOn(t, pic.Shaded(0.2).Shaded(0.5)); !slices.Equal(changed, once) {
+		t.Errorf("wanted the last Shaded to be the one that counts")
+	}
+	tinted := drawnOn(t, pic.Tinted(blue, 0.5))
+	if replaced := drawnOn(t, pic.Tinted(red, 1).Tinted(blue, 0.5)); !slices.Equal(replaced, tinted) {
+		t.Errorf("wanted the last Tinted to be the one that counts")
+	}
+	if a, b := drawnOn(t, pic.Shaded(0.5).Tinted(blue, 0.5)), drawnOn(t, pic.Tinted(blue, 0.5).Shaded(0.5)); !slices.Equal(a, b) {
+		t.Errorf("wanted the order of the calls to make no difference")
+	}
+}
+
+func TestALookIsOnTheViewAndNotThePicture(t *testing.T) {
+	pic := gridPicture(t, 4, 3)
+	before := drawnOn(t, pic)
+	dark := pic.Shaded(0)
+	_ = pic.Tinted(red, 1)
+	if !slices.Equal(drawnOn(t, pic), before) {
+		t.Errorf("wanted the picture drawn as it was")
+	}
+	if slices.Equal(drawnOn(t, dark), before) {
+		t.Errorf("wanted the view to be drawn darker")
+	}
+
+	// At and Set deal in the picture's own colors, through a look.
+	if got, want := dark.At(2, 1), pic.At(2, 1); got != want {
+		t.Errorf("wanted At to give the color as it is, %v, got %v", want, got)
+	}
+	dark.Set(0, 0, yellow)
+	if got := pic.At(0, 0); got != yellow {
+		t.Errorf("wanted Set to store the color as it is, got %v", got)
+	}
+	c := canvasOf(t, 6, 2, grey)
+	pic.Shaded(0.5).Draw(c, 0, 0)
+	if got, want := c.At(0, 0), engine.Shade(yellow, 0.5); got != want {
+		t.Errorf("wanted the pixel Set through the view to be drawn shaded, %v, got %v", want, got)
+	}
+}
+
+func TestSubAndMirroredKeepTheLook(t *testing.T) {
+	pic := gridPicture(t, 6, 5)
+	look := func(v *Bitmap) *Bitmap { return v.Shaded(0.4).Tinted(blue, 0.3) }
+	// The look put on first or last draws the same.
+	for name, pair := range map[string][2]*Bitmap{
+		"Sub":      {look(pic).Sub(1, 1, 4, 3), look(pic.Sub(1, 1, 4, 3))},
+		"Mirrored": {look(pic).Mirrored(), look(pic.Mirrored())},
+		"both":     {look(pic).Sub(1, 1, 4, 3).Mirrored(), look(pic.Sub(1, 1, 4, 3).Mirrored())},
+	} {
+		if !slices.Equal(drawnOn(t, pair[0]), drawnOn(t, pair[1])) {
+			t.Errorf("%s: wanted the look to stay with the view", name)
+		}
+	}
+}
+
+func TestShadedAndTintedOfNothingAreAnEmptyPicture(t *testing.T) {
+	var none *Bitmap
+	for name, pic := range map[string]*Bitmap{"nil": none, "empty": New(0, 0)} {
+		for look, v := range map[string]*Bitmap{"Shaded": pic.Shaded(0.5), "Tinted": pic.Tinted(red, 1)} {
+			t.Run(name+" "+look, func(t *testing.T) {
+				if v == nil || v.Width() != 0 || v.Height() != 0 {
+					t.Fatalf("wanted an empty picture, got %v", v)
+				}
+				c := canvasOf(t, 4, 2, grey)
+				v.Draw(c, 0, 0)
+				v.DrawScaled(c, 0, 0, 4, 4)
+				v.DrawScaledDepth(c, 0, 0, 4, 4, 1)
+				for _, p := range pixelsOf(c) {
+					if p != grey {
+						t.Fatalf("wanted an empty picture to draw nothing, got %v", p)
+					}
+				}
+			})
+		}
+	}
+}
+
+// Whatever the view, look, position and size, drawing a shaded or tinted view draws what a
+// plain copy of its looked pixels draws, and nothing panics or overflows.
+func FuzzLookedDraw(f *testing.F) {
+	f.Add(0, 0, 3, 2, 0, 0, 3, 2, 0.5, 0.5, false)
+	f.Add(1, 1, 3, 2, -2, -1, 7, 5, 1.0, 1.0, true)
+	f.Add(-2, -2, 4, 4, 1, 1, 1, 1, 0.0, 0.0, false)
+	f.Add(0, 0, 6, 5, 0, 0, 12, 10, math.NaN(), 7.0, true)
+	f.Add(math.MinInt, math.MinInt, math.MaxInt, math.MaxInt, math.MinInt, math.MinInt, math.MaxInt, math.MaxInt, -1.0, math.NaN(), false)
+	f.Add(2, 1, math.MaxInt, math.MaxInt, -(math.MaxInt / 2), 2, math.MaxInt, 4, 0.3, 0.3, true)
+
+	pic := gridPicture(f, 6, 5)
+	pic.Set(2, 2, engine.Palette(196))
+	f.Fuzz(func(t *testing.T, sx, sy, sw, sh, x, y, rw, rh int, shade, part float64, flip bool) {
+		view := pic.Sub(sx, sy, sw, sh)
+		if flip {
+			view = view.Mirrored()
+		}
+		tint := blue
+		want := lookedCopy(view, &shade, &tint, part)
+		view = view.Shaded(shade).Tinted(tint, part)
+
+		const w, h = 4, 2
+		got, ref := canvasOf(t, w, h, grey), canvasOf(t, w, h, grey)
+		view.DrawScaled(got, x, y, rw, rh)
+		want.DrawScaled(ref, x, y, rw, rh)
+		if !slices.Equal(pixelsOf(got), pixelsOf(ref)) {
+			t.Fatalf("stretched to %d by %d at (%d, %d): wanted %v, got %v", rw, rh, x, y, pixelsOf(ref), pixelsOf(got))
+		}
+	})
+}
+
 // nearestByInterval is which of the n pixels of a picture pixel i, of the m it is stretched
 // to, takes its color from, found a different way from the code: the pixel s covers the
 // stretched pixels from s*m/n up to (s+1)*m/n, and the one whose range holds the middle of
@@ -1511,24 +1839,28 @@ func TestDrawingAllocatesNothing(t *testing.T) {
 	scratch := New(3, 2)
 	view := gridPicture(t, 8, 8).Sub(1, 1, 5, 4)
 	flipped := view.Mirrored()
+	looked := view.Shaded(0.5).Tinted(blue, 0.3).Mirrored()
 	c := canvasOf(t, 80, 24, grey)
 	draws := map[string]func(){
-		"Draw, mirrored":            func() { flipped.Draw(c, 10, 10) },
-		"DrawScaled, mirrored":      func() { flipped.DrawScaled(c, 5, 5, 60, 30) },
-		"DrawScaledDepth, mirrored": func() { flipped.DrawScaledDepth(c, 5, 5, 60, 30, 3) },
-		"Draw, a view":              func() { view.Draw(c, 10, 10) },
-		"DrawScaled, a view":        func() { view.DrawScaled(c, 5, 5, 60, 30) },
-		"DrawScaledDepth, a view":   func() { view.DrawScaledDepth(c, 5, 5, 60, 30, 3) },
-		"Set":                       func() { scratch.Set(1, 1, red) },
-		"Set, outside":              func() { scratch.Set(-1, 7, red) },
-		"Draw":                      func() { pic.Draw(c, 10, 10) },
-		"Draw, mostly off":          func() { pic.Draw(c, -1, 47) },
-		"DrawScaled":                func() { pic.DrawScaled(c, 5, 5, 60, 30) },
-		"DrawScaled, huge":          func() { pic.DrawScaled(c, -(math.MaxInt / 2), 0, math.MaxInt, math.MaxInt) },
-		"DrawScaled, big numbers":   func() { pic.DrawScaled(c, 0, 0, aboveInt32, aboveInt32) },
-		"DrawScaledDepth":           func() { pic.DrawScaledDepth(c, 5, 5, 60, 30, 3) },
-		"DrawScaledDepth, off":      func() { pic.DrawScaledDepth(c, -1, 47, 3, 2, 3) },
-		"DrawScaledDepth, huge":     func() { pic.DrawScaledDepth(c, -(math.MaxInt / 2), 0, math.MaxInt, math.MaxInt, 3) },
+		"Draw, shaded and tinted":            func() { looked.Draw(c, 10, 10) },
+		"DrawScaled, shaded and tinted":      func() { looked.DrawScaled(c, 5, 5, 60, 30) },
+		"DrawScaledDepth, shaded and tinted": func() { looked.DrawScaledDepth(c, 5, 5, 60, 30, 3) },
+		"Draw, mirrored":                     func() { flipped.Draw(c, 10, 10) },
+		"DrawScaled, mirrored":               func() { flipped.DrawScaled(c, 5, 5, 60, 30) },
+		"DrawScaledDepth, mirrored":          func() { flipped.DrawScaledDepth(c, 5, 5, 60, 30, 3) },
+		"Draw, a view":                       func() { view.Draw(c, 10, 10) },
+		"DrawScaled, a view":                 func() { view.DrawScaled(c, 5, 5, 60, 30) },
+		"DrawScaledDepth, a view":            func() { view.DrawScaledDepth(c, 5, 5, 60, 30, 3) },
+		"Set":                                func() { scratch.Set(1, 1, red) },
+		"Set, outside":                       func() { scratch.Set(-1, 7, red) },
+		"Draw":                               func() { pic.Draw(c, 10, 10) },
+		"Draw, mostly off":                   func() { pic.Draw(c, -1, 47) },
+		"DrawScaled":                         func() { pic.DrawScaled(c, 5, 5, 60, 30) },
+		"DrawScaled, huge":                   func() { pic.DrawScaled(c, -(math.MaxInt / 2), 0, math.MaxInt, math.MaxInt) },
+		"DrawScaled, big numbers":            func() { pic.DrawScaled(c, 0, 0, aboveInt32, aboveInt32) },
+		"DrawScaledDepth":                    func() { pic.DrawScaledDepth(c, 5, 5, 60, 30, 3) },
+		"DrawScaledDepth, off":               func() { pic.DrawScaledDepth(c, -1, 47, 3, 2, 3) },
+		"DrawScaledDepth, huge":              func() { pic.DrawScaledDepth(c, -(math.MaxInt / 2), 0, math.MaxInt, math.MaxInt, 3) },
 	}
 	for name, draw := range draws {
 		if n := testing.AllocsPerRun(50, draw); n != 0 {
@@ -1735,6 +2067,37 @@ func BenchmarkBitmap(b *testing.B) {
 		b.ReportAllocs()
 		for b.Loop() {
 			flipped.DrawScaled(c, 10, 10, 128, 96)
+		}
+	})
+	shaded, tinted, both := pic.Shaded(0.5), pic.Tinted(engine.RGB(255, 255, 255), 0.5), pic.Shaded(0.5).Tinted(engine.RGB(255, 255, 255), 0.5)
+	b.Run("Draw, shaded, 64 by 64", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			shaded.Draw(c, 10, 10)
+		}
+	})
+	b.Run("Draw, tinted, 64 by 64", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			tinted.Draw(c, 10, 10)
+		}
+	})
+	b.Run("Draw, shaded and tinted, 64 by 64", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			both.Draw(c, 10, 10)
+		}
+	})
+	b.Run("DrawScaled, shaded and tinted, 64 by 64 to 128 by 96", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			both.DrawScaled(c, 10, 10, 128, 96)
+		}
+	})
+	b.Run("Shaded and Tinted", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			_ = pic.Shaded(0.5).Tinted(engine.RGB(255, 255, 255), 0.5)
 		}
 	})
 	b.Run("Mirrored", func(b *testing.B) {
