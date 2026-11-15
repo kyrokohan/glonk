@@ -32,12 +32,41 @@ var ErrTooLarge = errors.New("bitmap: picture too large")
 // for a size, an image or a rectangle that has none.
 //
 // A Bitmap can be a view of part of another, or of one turned left to right, which shares its
-// pixels: see Sub and Mirrored.
+// pixels: see Sub and Mirrored. A view can also be drawn darker or mixed toward a color, as
+// Shaded and Tinted say, with At and Set still dealing in the picture's own colors.
 type Bitmap struct {
 	w, h   int            // both 0, or both positive
 	stride int            // the distance from a pixel to the one below it in pixels, at least w
 	mirror bool           // the columns run from right to left: column x is column w-1-x of pixels
+	look   look           // how drawing changes the colors, which At and Set do not see
 	pixels []engine.Color // row by row from the top left of the view; the zero Color is a pixel that is not drawn
+}
+
+// look is how a view is drawn: darker, and then mixed toward a color. Its zero value draws the
+// colors as they are.
+type look struct {
+	shaded     bool
+	brightness float64
+	tinted     bool
+	tint       engine.Color
+	part       float64
+}
+
+// active reports whether drawing changes the colors at all.
+func (l *look) active() bool {
+	return l.shaded || l.tinted
+}
+
+// apply returns the color p is drawn in: shaded first, since light belongs to the surface, and
+// then mixed toward the tint, which is laid on top.
+func (l *look) apply(p engine.Color) engine.Color {
+	if l.shaded {
+		p = engine.Shade(p, l.brightness)
+	}
+	if l.tinted {
+		p = engine.Mix(p, l.tint, l.part)
+	}
+	return p
 }
 
 // Decode reads a JPEG or PNG from r and returns it as a Bitmap, refusing one that is over
@@ -198,7 +227,7 @@ func (b *Bitmap) Sub(x, y, w, h int) *Bitmap {
 	if b.mirror {
 		col = b.w - x1
 	}
-	return &Bitmap{w: x1 - x0, h: y1 - y0, stride: b.stride, mirror: b.mirror, pixels: b.pixels[y0*b.stride+col:]}
+	return &Bitmap{w: x1 - x0, h: y1 - y0, stride: b.stride, mirror: b.mirror, look: b.look, pixels: b.pixels[y0*b.stride+col:]}
 }
 
 // Mirrored returns a view of the picture with its columns reversed, left to right, for a thing
@@ -218,12 +247,88 @@ func (b *Bitmap) Mirrored() *Bitmap {
 	return &v
 }
 
+// Shaded returns a view of the picture that is drawn darker: each pixel of it is
+// [engine.Shade] of its color by brightness, 1 for the color as it is and 0 for black, clamped
+// to 0 to 1 with NaN as 0. It is for a thing in a lit scene, which has to be as dark as the wall
+// beside it. It shares the pixels, as Sub's views do, and Sub and Mirrored keep the brightness.
+// It sets the brightness and does not add to one the view has already: Shaded(0.5) of a view
+// that is already half as bright is half as bright, not a quarter.
+//
+// At and Set still deal in the picture's own colors; only drawing changes them. A pixel that is
+// drawn shaded is an exact RGB color even at a brightness of 1, as Shade makes it, and a pixel
+// that is see-through stays so. When a view is also tinted, the shade comes first and the tint is
+// mixed over the shaded color. A nil picture gives an empty one.
+func (b *Bitmap) Shaded(brightness float64) *Bitmap {
+	if b == nil {
+		return &Bitmap{}
+	}
+	v := *b
+	v.look.shaded, v.look.brightness = true, brightness
+	return &v
+}
+
+// Tinted returns a view of the picture that is drawn mixed toward a color: each pixel of it is
+// [engine.Mix] of its color and color by part, 0 for the pixel as it is and 1 for color, so a
+// part of 1 draws the picture's shape all in one color, for the letters of a font made from one
+// white picture or for a thing that flashes white when it is hit. part is clamped to 0 to 1
+// with NaN as 0, and the zero Color is read as black, as Mix reads it. It shares the pixels, as
+// Sub's views do, and Sub and Mirrored keep the tint. It sets the tint and does not add to one
+// the view has already.
+//
+// At and Set still deal in the picture's own colors; only drawing changes them. A pixel that is
+// drawn tinted is an exact RGB color even at a part of 0, as Mix makes it, and a pixel that is
+// see-through stays so. When a view is also shaded, the shade comes first and the tint is mixed
+// over the shaded color, so that a flash is not darkened by the room unless it is shaded too. A
+// nil picture gives an empty one.
+func (b *Bitmap) Tinted(color engine.Color, part float64) *Bitmap {
+	if b == nil {
+		return &Bitmap{}
+	}
+	v := *b
+	v.look.tinted, v.look.tint, v.look.part = true, color, part
+	return &v
+}
+
+// drawLooked is Draw, DrawScaled and DrawScaledDepth for a view that is shaded or tinted, which
+// is the slow way, a Shade or a Mix for each pixel, so it has one loop for all three and for a
+// view that is mirrored. Draw is DrawScaled at the picture's own size. It draws with Set, or
+// with SetDepth where withDepth is true. A picture of no pixels is left out by the callers, or
+// is drawn at no size, so there is nothing to index.
+func (b *Bitmap) drawLooked(c *engine.Canvas, x, y, w, h int, withDepth bool, depth float64) {
+	x0, x1 := visible(x, w, c.Width())
+	y0, y1 := visible(y, h, c.Height())
+	bw, bh, stride, mirror := b.w, b.h, b.stride, b.mirror
+	for py := y0; py < y1; py++ {
+		row := b.pixels[nearest(py-y, h, bh)*stride:]
+		for px := x0; px < x1; px++ {
+			s := nearest(px-x, w, bw)
+			if mirror {
+				s = bw - 1 - s
+			}
+			p := row[s]
+			if p.IsDefault() {
+				continue
+			}
+			p = b.look.apply(p)
+			if withDepth {
+				c.SetDepth(px, py, depth, p)
+			} else {
+				c.Set(px, py, p)
+			}
+		}
+	}
+}
+
 // Draw draws the picture at its own size on c, with its top left pixel at pixel (x, y).
 // Pixels that are see-through are left as they are, and the others replace what is there,
 // whatever its depth, which Draw does not read or write, as Canvas.Set does. Only the pixels
 // that are on the canvas are visited, so no position can make it slow, or overflow.
 func (b *Bitmap) Draw(c *engine.Canvas, x, y int) {
 	if b == nil {
+		return
+	}
+	if b.look.active() {
+		b.drawLooked(c, x, y, b.w, b.h, false, 0)
 		return
 	}
 	x0, x1 := visible(x, b.w, c.Width())
@@ -253,6 +358,10 @@ func (b *Bitmap) Draw(c *engine.Canvas, x, y int) {
 // else is as for Draw.
 func (b *Bitmap) DrawScaled(c *engine.Canvas, x, y, w, h int) {
 	if b == nil || b.w == 0 {
+		return
+	}
+	if b.look.active() {
+		b.drawLooked(c, x, y, w, h, false, 0)
 		return
 	}
 	x0, x1 := visible(x, w, c.Width())
@@ -293,6 +402,10 @@ func (b *Bitmap) DrawScaled(c *engine.Canvas, x, y, w, h int) {
 // it, so nothing is drawn. Everything else is as for DrawScaled.
 func (b *Bitmap) DrawScaledDepth(c *engine.Canvas, x, y, w, h int, depth float64) {
 	if b == nil || b.w == 0 || !(depth > 0) {
+		return
+	}
+	if b.look.active() {
+		b.drawLooked(c, x, y, w, h, true, depth)
 		return
 	}
 	x0, x1 := visible(x, w, c.Width())
