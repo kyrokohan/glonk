@@ -36,3 +36,22 @@ func ExampleFromLines() {
 	// ......
 	// ######
 }
+
+// A tile says what it is: FromLines gives each tile of its legend the rune that made it as its
+// Kind, so a game can ask the map instead of keeping the text of the level beside it. Here a
+// wall and a crate look and act alike, and only the Kind tells them apart.
+func ExampleMap_At() {
+	level := tilemap.FromLines(map[rune]tilemap.Tile{
+		'#': {Cell: engine.Cell{Character: '#'}, Solid: true},
+		'X': {Cell: engine.Cell{Character: '#'}, Solid: true},
+		'.': {Cell: engine.Cell{Character: '.'}},
+	},
+		"#####",
+		"#.X.#",
+		"#####",
+	)
+	wall, crate := level.At(0, 0), level.At(2, 1)
+	fmt.Println(string(wall.Kind), string(crate.Kind), wall.Cell == crate.Cell, wall.Solid == crate.Solid)
+	// Output:
+	// # X true true
+}
