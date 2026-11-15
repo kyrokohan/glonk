@@ -87,3 +87,34 @@ func ExampleMap_Cast() {
 	// Output:
 	// true 9 1 {9 1.5} 6.5
 }
+
+// A Route says how to walk to a target round the walls: To searches the tiles once, and Next gives
+// every mover the center of the neighbor tile to step to. Here the enemy at the left reaches the
+// player at the right by the doorway at the top of the wall, as a diagonal step does not cut its
+// corner.
+func ExampleRoute() {
+	level := tilemap.FromLines(map[rune]tilemap.Tile{'#': {Solid: true}},
+		"........",
+		"...#....",
+		"...#....",
+		"########",
+	)
+	var route tilemap.Route
+	route.To(level, geometry.Vector2{X: 6.5, Y: 1.5}) // the player's tile
+
+	enemy := geometry.Vector2{X: 0.5, Y: 2.5}
+	steps, _ := route.Steps(enemy)
+	fmt.Println(steps, "steps away")
+	for {
+		next, ok := route.Next(enemy)
+		if !ok {
+			break
+		}
+		fmt.Printf("(%d, %d) ", int(next.X), int(next.Y))
+		enemy = next
+	}
+	fmt.Println()
+	// Output:
+	// 6 steps away
+	// (1, 1) (2, 0) (3, 0) (4, 0) (5, 0) (6, 1)
+}
