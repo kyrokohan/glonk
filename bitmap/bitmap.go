@@ -31,10 +31,12 @@ var ErrTooLarge = errors.New("bitmap: picture too large")
 // which is a picture of no pixels, and on an empty one, which New, FromImage and Sub return
 // for a size, an image or a rectangle that has none.
 //
-// A Bitmap can be a view of part of another, which shares its pixels: see Sub.
+// A Bitmap can be a view of part of another, or of one turned left to right, which shares its
+// pixels: see Sub and Mirrored.
 type Bitmap struct {
 	w, h   int            // both 0, or both positive
 	stride int            // the distance from a pixel to the one below it in pixels, at least w
+	mirror bool           // the columns run from right to left: column x is column w-1-x of pixels
 	pixels []engine.Color // row by row from the top left of the view; the zero Color is a pixel that is not drawn
 }
 
@@ -152,6 +154,9 @@ func (b *Bitmap) At(x, y int) engine.Color {
 	if b == nil || x < 0 || x >= b.w || y < 0 || y >= b.h {
 		return engine.Color{}
 	}
+	if b.mirror {
+		x = b.w - 1 - x
+	}
 	return b.pixels[y*b.stride+x]
 }
 
@@ -162,6 +167,9 @@ func (b *Bitmap) At(x, y int) engine.Color {
 func (b *Bitmap) Set(x, y int, c engine.Color) {
 	if b == nil || x < 0 || x >= b.w || y < 0 || y >= b.h {
 		return
+	}
+	if b.mirror {
+		x = b.w - 1 - x
 	}
 	b.pixels[y*b.stride+x] = c
 }
@@ -185,7 +193,29 @@ func (b *Bitmap) Sub(x, y, w, h int) *Bitmap {
 	if x0 == x1 || y0 == y1 {
 		return &Bitmap{}
 	}
-	return &Bitmap{w: x1 - x0, h: y1 - y0, stride: b.stride, pixels: b.pixels[y0*b.stride+x0:]}
+	// A mirrored view counts its columns from the right of the pixels behind it.
+	col := x0
+	if b.mirror {
+		col = b.w - x1
+	}
+	return &Bitmap{w: x1 - x0, h: y1 - y0, stride: b.stride, mirror: b.mirror, pixels: b.pixels[y0*b.stride+col:]}
+}
+
+// Mirrored returns a view of the picture with its columns reversed, left to right, for a thing
+// that faces the other way. It shares the pixels, as Sub's views do, and everything sees the
+// reversed picture: its pixel (0, 0) is the picture's top right pixel, At and Set count from
+// the new left, Sub takes its rectangle from it, and drawing draws it. Mirrored of a mirrored
+// view is the picture the right way round again. Stretched, it is the reversed picture
+// stretched, so a pixel is taken from the middle of the stretched one as it is for any picture,
+// and where that is exactly between two pixels of the picture it takes the other one than the
+// picture itself does. A nil picture gives an empty one.
+func (b *Bitmap) Mirrored() *Bitmap {
+	if b == nil {
+		return &Bitmap{}
+	}
+	v := *b
+	v.mirror = !b.mirror
+	return &v
 }
 
 // Draw draws the picture at its own size on c, with its top left pixel at pixel (x, y).
@@ -198,12 +228,20 @@ func (b *Bitmap) Draw(c *engine.Canvas, x, y int) {
 	}
 	x0, x1 := visible(x, b.w, c.Width())
 	y0, y1 := visible(y, b.h, c.Height())
+	// The column of the picture that goes at x0, and which way the next ones are. Where any
+	// pixel is visible, x0-x is under b.w, so this cannot overflow.
+	first, step := x0-x, 1
+	if b.mirror {
+		first, step = b.w-1-first, -1
+	}
 	for py := y0; py < y1; py++ {
 		row := b.pixels[(py-y)*b.stride:]
+		i := first
 		for px := x0; px < x1; px++ {
-			if p := row[px-x]; !p.IsDefault() {
+			if p := row[i]; !p.IsDefault() {
 				c.Set(px, py, p)
 			}
+			i += step
 		}
 	}
 }
@@ -220,6 +258,19 @@ func (b *Bitmap) DrawScaled(c *engine.Canvas, x, y, w, h int) {
 	x0, x1 := visible(x, w, c.Width())
 	y0, y1 := visible(y, h, c.Height())
 	bw, bh, stride := b.w, b.h, b.stride // in locals: c.Set could alias b for all the compiler knows
+	if b.mirror {
+		// A loop of its own, since a test of the flag for every pixel costs a picture that is not
+		// mirrored about 15 percent.
+		for py := y0; py < y1; py++ {
+			row := b.pixels[nearest(py-y, h, bh)*stride:]
+			for px := x0; px < x1; px++ {
+				if p := row[bw-1-nearest(px-x, w, bw)]; !p.IsDefault() {
+					c.Set(px, py, p)
+				}
+			}
+		}
+		return
+	}
 	for py := y0; py < y1; py++ {
 		row := b.pixels[nearest(py-y, h, bh)*stride:]
 		for px := x0; px < x1; px++ {
@@ -247,6 +298,17 @@ func (b *Bitmap) DrawScaledDepth(c *engine.Canvas, x, y, w, h int, depth float64
 	x0, x1 := visible(x, w, c.Width())
 	y0, y1 := visible(y, h, c.Height())
 	bw, bh, stride := b.w, b.h, b.stride
+	if b.mirror { // a loop of its own, as in DrawScaled
+		for py := y0; py < y1; py++ {
+			row := b.pixels[nearest(py-y, h, bh)*stride:]
+			for px := x0; px < x1; px++ {
+				if p := row[bw-1-nearest(px-x, w, bw)]; !p.IsDefault() {
+					c.SetDepth(px, py, depth, p)
+				}
+			}
+		}
+		return
+	}
 	for py := y0; py < y1; py++ {
 		row := b.pixels[nearest(py-y, h, bh)*stride:]
 		for px := x0; px < x1; px++ {

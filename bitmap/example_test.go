@@ -164,6 +164,35 @@ func ExampleBitmap_Sub() {
 	// YY.#Y.##
 }
 
+// Mirrored is a view with its columns reversed, for a thing that faces the other way. Here the
+// third frame of a strip is drawn as it is and mirrored, side by side.
+func ExampleBitmap_Mirrored() {
+	strip := bitmap.New(4, 2) // two frames of 2 by 2
+	for y, row := range []string{"Y#YY", "YYY#"} {
+		for x, r := range row {
+			switch r {
+			case 'Y':
+				strip.Set(x, y, engine.RGB(230, 210, 40))
+			case '#':
+				strip.Set(x, y, engine.RGB(0, 0, 0))
+			}
+		}
+	}
+
+	fb, err := engine.NewFrameBuffer(5, 1) // 5 by 2 pixels
+	if err != nil {
+		panic(err)
+	}
+	canvas := fb.Canvas()
+	frame := strip.Sub(0, 0, 2, 2)
+	frame.Draw(canvas, 0, 0)
+	frame.Mirrored().Draw(canvas, 3, 0)
+	show(canvas)
+	// Output:
+	// Y#.#Y
+	// YY.YY
+}
+
 // DrawScaled stretches or squeezes a picture to any size, taking the pixel under the middle
 // of each one it draws, so a picture that is made bigger shows its pixels as blocks.
 func ExampleBitmap_DrawScaled() {

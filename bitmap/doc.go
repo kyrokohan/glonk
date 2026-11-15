@@ -39,6 +39,9 @@
 //	}
 //	frames[2].Draw(canvas, x, y)
 //
+// [Bitmap.Mirrored] is a view with its columns reversed, for a thing that faces the other way,
+// and can be taken of a frame or of a picture: frames[2].Mirrored().Draw(canvas, x, y).
+//
 // Make the views once, at start-up. A view keeps the whole picture in memory, and [Bitmap.Set]
 // on either one changes the other.
 //
