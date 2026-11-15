@@ -40,6 +40,26 @@
 //	moved, hitX, hitY := level.Move(player.Bounds(), geometry.Vector2{X: dx, Y: dy})
 //	player.Position = moved.Min
 //
+// # Walking to a target
+//
+// An enemy that walks straight at the player is stopped by the first wall between them, and
+// stays there. A [Route] is the way round: [Route.To] searches the tiles that are not solid, breadth
+// first, for how many steps each is from a target or several, and [Route.Next] says, from any
+// point, the center of the neighbor tile to step to be one step nearer, to steer to and
+// [Map.Move]. One Route serves every mover that wants the same target, so search again when the
+// target changes tile, not once a mover; it reuses its memory, so that costs nothing to allocate,
+// and the work is a few steps for each tile of the map at the most.
+//
+//	var route tilemap.Route
+//	route.To(level, player.Bounds().Center())          // when the player's tile changes
+//	if next, ok := route.Next(enemy.Bounds().Center()); ok { // else it has arrived, or cannot
+//		// move toward next with level.Move
+//	}
+//
+// A step goes to any of the 8 neighbors of a tile, a diagonal one only if both tiles beside it
+// are open, so that a mover does not cut through the corner of a wall, and a diagonal counts as
+// one step. A Route is a snapshot of the map: search again after a tile changes.
+//
 // # Seeing through the map
 //
 // [Map.Sees] says whether a straight line between two points crosses no solid tile, for whether
