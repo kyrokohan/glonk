@@ -296,15 +296,22 @@ func (m Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(t
 // A mesh without Normals is shaded flat, each face lit as a whole. One with Normals
 // is shaded smooth, every cell lit on its own; see Mesh.Normals.
 //
-// Brightness is shown by the character: a ramp from dim to bright, Material.Ramp.
+// Brightness is shown by the character: a ramp from dim to bright, Material.Ramp. A camera
+// with a Fog fades the color of each cell toward the fog's, by how deep the cell is, and the
+// character stays.
 func (m Mesh) DrawShaded(fb *engine.FrameBuffer, cam Camera, lights ...Light) {
 	rs := getScratch(0)
 	defer rs.release()
 	ramp := rs.rampFor(m.Material)
+	fog := cam.Fog
 	m.eachShadedTriangle(cam, lights, fb.Width(), fb.Height(), func(t *shadedTriangle) {
 		c := &t.corners
 		if t.tinted {
-			fillTinted(fb, t, ramp, lights)
+			fillTinted(fb, t, ramp, lights, fog)
+			return
+		}
+		if fog != nil {
+			fillFogged(fb, t, ramp, lights, fog)
 			return
 		}
 		if !t.smooth {
@@ -321,13 +328,19 @@ func (m Mesh) DrawShaded(fb *engine.FrameBuffer, cam Camera, lights ...Light) {
 // DrawShadedPixels is DrawShaded for a pixel Canvas: the same faces, culling,
 // clipping, depth and smoothing rules, but brightness is shown by the color (a darker
 // or lighter shade of Material.Color) and there are twice as many rows, so edges are
-// finer. Call Canvas.Compose afterwards to put the pixels into the FrameBuffer.
+// finer. Call Canvas.Compose afterwards to put the pixels into the FrameBuffer. A camera with
+// a Fog fades the shaded color of each pixel toward the fog's, by how deep the pixel is.
 func (m Mesh) DrawShadedPixels(c *engine.Canvas, cam Camera, lights ...Light) {
 	// Project onto the cell grid the canvas belongs to, then stretch y to pixel rows.
+	fog := cam.Fog
 	m.eachShadedTriangle(cam, lights, c.Width(), c.Height()/2, func(t *shadedTriangle) {
 		p := &t.corners
 		if t.tinted {
-			fillTintedPixels(c, t, lights)
+			fillTintedPixels(c, t, lights, fog)
+			return
+		}
+		if fog != nil {
+			fillFoggedPixels(c, t, lights, fog)
 			return
 		}
 		if !t.smooth {
