@@ -46,6 +46,12 @@ type Camera struct {
 	// them out too. Ray is not limited by it: a ray has no length.
 	Far float64
 
+	// Fog fades shaded meshes toward a color as they get deeper: DrawShaded and
+	// DrawShadedPixels apply it to every cell and pixel they draw. nil, the default, is no
+	// fog. It is a pointer, so every copy of the Camera shares it. Wireframes are not fogged.
+	// Fog.Apply is the same rule for a program that draws things of its own.
+	Fog *Fog
+
 	// CellAspect is how many times taller a terminal cell is than it is wide, which
 	// is what makes a cube look like a cube and not a slab. Most fonts are close to 2,
 	// which is what 0 means. A larger value draws things wider, in more columns, and a

@@ -174,6 +174,24 @@ func ExampleCamera_Ray() {
 	// 6.00 ahead, 6.18 deep
 }
 
+// A fog fades what is deeper toward its color: nothing before Start, the fog's color from End,
+// and a straight line between. A camera with a Fog fades every shaded mesh it draws by it, and a
+// program that draws things of its own calls Apply to fade them in step.
+func ExampleFog() {
+	fog := mesh.Fog{Color: engine.RGB(40, 40, 60), Start: 10, End: 30}
+	red := engine.RGB(200, 0, 0)
+	for _, depth := range []float64{5, 10, 20, 30, 50} {
+		r, g, b := fog.Apply(red, depth).RGB()
+		fmt.Printf("%2.0f deep: %3d %3d %3d\n", depth, r, g, b)
+	}
+	// Output:
+	//  5 deep: 200   0   0
+	// 10 deep: 200   0   0
+	// 20 deep: 120  20  30
+	// 30 deep:  40  40  60
+	// 50 deep:  40  40  60
+}
+
 // A Transform scales a model, turns it by Roll, Pitch and Yaw in that order, and moves
 // it to Position. Apply says where a point of the model ends up.
 func ExampleTransform() {

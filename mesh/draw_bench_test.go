@@ -247,6 +247,51 @@ func BenchmarkDrawFar(b *testing.B) {
 	}
 }
 
+// BenchmarkDrawFog draws with fog and without it: the thousand cubes, and a big flat floor seen
+// at a pitch, which is where a fog changes the color of a face from cell to cell, as cells and as
+// pixels. Without fog the code is the code there was; with it, every cell and pixel is asked for
+// its color.
+func BenchmarkDrawFog(b *testing.B) {
+	cubes, cam, lights := manyScene()
+	fb, err := engine.NewFrameBuffer(80, 24)
+	if err != nil {
+		b.Fatal(err)
+	}
+	fog := &Fog{Color: engine.RGB(30, 30, 60), Start: 8, End: 30}
+	floor := Plane(400, 400)
+	floor.Normals = nil
+	floor.Material.Color = engine.Palette(70)
+	floorCam := Camera{Position: geometry.Vector3{Y: 3}, Pitch: -0.6}
+
+	for _, withFog := range []bool{false, true} {
+		for _, scene := range []struct {
+			name   string
+			cam    Camera
+			meshes []Mesh
+		}{{"many cubes", cam, cubes}, {"floor", floorCam, []Mesh{floor}}} {
+			cam := scene.cam
+			if withFog {
+				cam.Fog = fog
+			}
+			for _, mode := range []string{"shaded", "pixels"} {
+				b.Run(fmt.Sprintf("%s %s fog %v", scene.name, mode, withFog), func(b *testing.B) {
+					b.ReportAllocs()
+					for b.Loop() {
+						fb.Clear()
+						for _, m := range scene.meshes {
+							if mode == "shaded" {
+								m.DrawShaded(fb, cam, lights...)
+							} else {
+								m.DrawShadedPixels(fb.Canvas(), cam, lights...)
+							}
+						}
+					}
+				})
+			}
+		}
+	}
+}
+
 // BenchmarkDrawBig draws one big smooth sphere (about 16 thousand faces) where it is
 // all in view, where half of it is off the right edge, and where it is behind the
 // camera, as a wireframe and shaded. A model that is fully in view must not get slower
