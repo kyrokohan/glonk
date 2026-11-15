@@ -31,6 +31,15 @@
 // canvas are about square, so a picture keeps its shape when its width and height are
 // scaled by the same amount.
 //
+// # Depth
+//
+// [Bitmap.Draw] and [Bitmap.DrawScaled] never read or write the depth of the canvas, which is
+// right for a logo or a HUD: they replace what is there. A picture of a thing that stands in a
+// 3D scene, an enemy, a pickup or a tree, should be hidden by the walls in front of it and
+// hide those behind it. [Bitmap.DrawScaledDepth] does that, with one depth for the whole
+// picture, and a tie keeps what is there. The depth and the pixel to draw at come from
+// mesh.Camera.ProjectPixels, from the pixels of the foot and the top of the thing.
+//
 // # Limits
 //
 // [DecodeLimit] sets the most bytes and the most pixels a picture may have; Decode allows

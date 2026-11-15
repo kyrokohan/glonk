@@ -169,6 +169,32 @@ func (b *Bitmap) DrawScaled(c *engine.Canvas, x, y, w, h int) {
 	}
 }
 
+// DrawScaledDepth is DrawScaled at a depth, for a picture of a thing that stands in a 3D
+// scene. Each pixel it draws is stored with [engine.Canvas.SetDepth], so a nearer surface
+// hides it, it hides a farther one, and the order of drawing stops mattering. A tie keeps what
+// is there, as for Canvas.DrawLineDepth. A see-through pixel is left alone, color and depth.
+//
+// depth is the same for the whole picture, which suits a thing that faces the camera. In a
+// scene drawn through a mesh.Camera it is the distance along the camera's view direction, and
+// mesh.Camera.ProjectPixels gives it with the pixel to draw at. A depth that is not positive,
+// or is NaN, draws nothing, and an infinite depth is infinitely far: nothing is nearer than
+// it, so nothing is drawn. Everything else is as for DrawScaled.
+func (b *Bitmap) DrawScaledDepth(c *engine.Canvas, x, y, w, h int, depth float64) {
+	if b == nil || !(depth > 0) {
+		return
+	}
+	x0, x1 := visible(x, w, c.Width())
+	y0, y1 := visible(y, h, c.Height())
+	for py := y0; py < y1; py++ {
+		row := b.pixels[nearest(py-y, h, b.h)*b.w:]
+		for px := x0; px < x1; px++ {
+			if p := row[nearest(px-x, w, b.w)]; !p.IsDefault() {
+				c.SetDepth(px, py, depth, p)
+			}
+		}
+	}
+}
+
 // visible returns the part of the n pixels from start that is inside [0, limit), as the first
 // and one past the last, empty (lo == hi) when there is none. It cannot overflow.
 func visible(start, n, limit int) (lo, hi int) {

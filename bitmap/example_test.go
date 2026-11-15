@@ -99,6 +99,45 @@ func ExampleBitmap_DrawScaled() {
 	// YYYYYY##
 }
 
+// DrawScaledDepth draws a picture that a nearer surface hides and that hides a farther one,
+// in whatever order they are drawn. Here a wall of gray pixels 2 away covers the left half of
+// the canvas: a picture 5 away is hidden where the wall is, and one 1 away is drawn over it,
+// with its see-through corner showing the wall.
+func ExampleBitmap_DrawScaledDepth() {
+	pic, err := bitmap.Decode(bytes.NewReader(logo()))
+	if err != nil {
+		panic(err)
+	}
+
+	for _, z := range []float64{5, 1} {
+		fb, err := engine.NewFrameBuffer(8, 2) // 8 by 4 pixels
+		if err != nil {
+			panic(err)
+		}
+		canvas := fb.Canvas()
+		for y := range canvas.Height() {
+			for x := range 4 {
+				canvas.SetDepth(x, y, 2, engine.RGB(90, 90, 90))
+			}
+		}
+
+		pic.DrawScaledDepth(canvas, 2, 0, 4, 3, z)
+		fmt.Printf("depth %.0f:\n", z)
+		show(canvas)
+	}
+	// Output:
+	// depth 5:
+	// ....YY..
+	// ....YY..
+	// ....Y#..
+	// ........
+	// depth 1:
+	// ...YYY..
+	// ..YYYY..
+	// ..YYY#..
+	// ........
+}
+
 // DecodeLimit takes limits of its own. A file that is longer, or whose header says it has more
 // pixels, is refused before it is decoded.
 func ExampleDecodeLimit() {
