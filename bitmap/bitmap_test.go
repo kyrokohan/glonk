@@ -624,13 +624,22 @@ func referenceDrawBig(pic *Bitmap, w, h int, bg engine.Color, x, y, rw, rh int) 
 	return out
 }
 
+// hugePlaces and hugeSizes are the positions and sizes the drawing tests try, to the ends of
+// what an int can hold.
+func hugePlaces() []int {
+	return slices.Concat([]int{math.MinInt, math.MinInt + 1, -3, 0, 2, math.MaxInt - 1, math.MaxInt}, intsFrom(-(1 << 40)))
+}
+
+func hugeSizes() []int {
+	return slices.Concat([]int{math.MinInt, -1, 0, 1, 3, math.MaxInt/2 + 1, math.MaxInt - 1, math.MaxInt}, intsFrom(1<<31, 1<<31+1))
+}
+
 // Positions and sizes as large as an int goes must not wrap around onto the canvas, loop for
 // long or panic, and must draw what the exact reference says.
 func TestDrawWithHugeNumbers(t *testing.T) {
 	const w, h = 5, 3
 	pic := testPicture(t)
-	places := slices.Concat([]int{math.MinInt, math.MinInt + 1, -3, 0, 2, math.MaxInt - 1, math.MaxInt}, intsFrom(-(1 << 40)))
-	sizes := slices.Concat([]int{math.MinInt, -1, 0, 1, 3, math.MaxInt/2 + 1, math.MaxInt - 1, math.MaxInt}, intsFrom(1<<31, 1<<31+1))
+	places, sizes := hugePlaces(), hugeSizes()
 	for _, x := range places {
 		for _, y := range places {
 			c := canvasOf(t, w, h, grey)
@@ -651,6 +660,186 @@ func TestDrawWithHugeNumbers(t *testing.T) {
 	}
 }
 
+// wallColor is the color of the walls the depth tests put in front of and behind a picture.
+var wallColor = engine.RGB(1, 2, 3)
+
+// wall puts a wall of wallColor at depth z on the pixels from (x0, y0) up to, not including, (x1, y1).
+func wall(c *engine.Canvas, x0, y0, x1, y1 int, z float64) {
+	for y := y0; y < y1; y++ {
+		for x := x0; x < x1; x++ {
+			c.SetDepth(x, y, z, wallColor)
+		}
+	}
+}
+
+// With nothing at a depth on the canvas, DrawScaledDepth draws what DrawScaled draws, at every
+// position and size, the extremes of an int included: one piece of scaling arithmetic, not two.
+func TestDrawScaledDepthOnAnEmptyCanvasDrawsWhatDrawScaledDraws(t *testing.T) {
+	const w, h = 5, 3
+	pic := testPicture(t)
+	places, sizes := hugePlaces(), hugeSizes()
+	for _, x := range places {
+		for _, y := range places {
+			for _, rw := range sizes {
+				for _, rh := range sizes {
+					want := canvasOf(t, w, h, grey)
+					pic.DrawScaled(want, x, y, rw, rh)
+					got := canvasOf(t, w, h, grey)
+					pic.DrawScaledDepth(got, x, y, rw, rh, 5)
+					if !slices.Equal(pixelsOf(got), pixelsOf(want)) {
+						t.Fatalf("to %d by %d at (%d, %d): wanted what DrawScaled draws, %v, got %v", rw, rh, x, y, pixelsOf(want), pixelsOf(got))
+					}
+				}
+			}
+		}
+	}
+}
+
+// A picture behind a wall changes nothing, one in front is drawn, and one half behind a corner
+// is half drawn. The picture is at (1, 1), 3 by 2: red, see-through, green over blue, yellow,
+// black.
+func TestDrawScaledDepthIsHiddenByWhatIsNearerAndHidesWhatIsFarther(t *testing.T) {
+	pic := testPicture(t)
+	at := [][2]int{{1, 1}, {2, 1}, {3, 1}, {1, 2}, {2, 2}, {3, 2}}
+
+	tests := []struct {
+		name string
+		wall func(c *engine.Canvas)
+		z    float64
+		want []engine.Color // the six pixels of the picture
+	}{
+		{"behind a wall", func(c *engine.Canvas) { wall(c, 0, 0, 5, 6, 4) }, 6,
+			[]engine.Color{wallColor, wallColor, wallColor, wallColor, wallColor, wallColor}},
+		{"in front of a wall", func(c *engine.Canvas) { wall(c, 0, 0, 5, 6, 4) }, 2,
+			[]engine.Color{red, wallColor, green, blue, yellow, black}},
+		{"half behind a corner", func(c *engine.Canvas) { wall(c, 0, 0, 2, 6, 2) }, 3,
+			[]engine.Color{wallColor, grey, green, wallColor, yellow, black}},
+		{"nothing near", func(c *engine.Canvas) {}, 3,
+			[]engine.Color{red, grey, green, blue, yellow, black}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := canvasOf(t, 5, 3, grey)
+			tt.wall(c)
+			pic.DrawScaledDepth(c, 1, 1, 3, 2, tt.z)
+
+			for i, p := range at {
+				if got := c.At(p[0], p[1]); got != tt.want[i] {
+					t.Errorf("pixel %v: wanted %v, got %v", p, tt.want[i], got)
+				}
+			}
+		})
+	}
+}
+
+// The depth is what decides, not the order: a picture drawn before a wall and after it come out
+// the same, and a tie keeps whatever was there first.
+func TestDrawScaledDepthDoesNotDependOnTheOrderOfDrawing(t *testing.T) {
+	pic := testPicture(t)
+	tests := []struct {
+		name         string
+		wallZ, picZ  float64
+		wantWallKept bool
+	}{
+		{"the wall is nearer", 2, 3, true},
+		{"the picture is nearer", 4, 3, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			picFirst := canvasOf(t, 5, 3, grey)
+			pic.DrawScaledDepth(picFirst, 1, 1, 3, 2, tt.picZ)
+			wall(picFirst, 0, 0, 2, 6, tt.wallZ)
+
+			wallFirst := canvasOf(t, 5, 3, grey)
+			wall(wallFirst, 0, 0, 2, 6, tt.wallZ)
+			pic.DrawScaledDepth(wallFirst, 1, 1, 3, 2, tt.picZ)
+
+			if !slices.Equal(pixelsOf(picFirst), pixelsOf(wallFirst)) {
+				t.Errorf("wanted the same canvas in either order, got %v and %v", pixelsOf(picFirst), pixelsOf(wallFirst))
+			}
+			if got := picFirst.At(1, 1) == wallColor; got != tt.wantWallKept {
+				t.Errorf("wanted the wall kept at (1, 1) = %v, got %v", tt.wantWallKept, got)
+			}
+		})
+	}
+}
+
+func TestDrawScaledDepthTieKeepsWhatIsThere(t *testing.T) {
+	pic := testPicture(t)
+
+	wallFirst := canvasOf(t, 5, 3, grey)
+	wall(wallFirst, 0, 0, 5, 6, 3)
+	pic.DrawScaledDepth(wallFirst, 1, 1, 3, 2, 3)
+	if got := wallFirst.At(1, 1); got != wallColor {
+		t.Errorf("wanted the wall drawn first to stay on a tie, got %v", got)
+	}
+
+	picFirst := canvasOf(t, 5, 3, grey)
+	pic.DrawScaledDepth(picFirst, 1, 1, 3, 2, 3)
+	wall(picFirst, 0, 0, 5, 6, 3)
+	if got := picFirst.At(1, 1); got != red {
+		t.Errorf("wanted the picture drawn first to stay on a tie, got %v", got)
+	}
+}
+
+// A see-through pixel writes neither a color nor a depth, and a pixel that is drawn writes
+// the depth it was drawn at.
+func TestDrawScaledDepthWritesDepthOnlyWhereItDraws(t *testing.T) {
+	pic := testPicture(t)
+
+	c := canvasOf(t, 5, 3, grey)
+	wall(c, 0, 0, 5, 6, 5)
+	pic.DrawScaledDepth(c, 1, 1, 3, 2, 1)
+	if got := c.At(2, 1); got != wallColor { // the see-through pixel
+		t.Errorf("wanted the wall to show through the see-through pixel, got %v", got)
+	}
+	if c.SetDepth(2, 1, 5.5, blue) || !c.SetDepth(2, 1, 4.5, blue) {
+		t.Errorf("wanted the depth under the see-through pixel to be the wall's, 5")
+	}
+	if c.SetDepth(1, 1, 1.5, blue) || !c.SetDepth(1, 1, 0.5, blue) {
+		t.Errorf("wanted the depth of a pixel that was drawn to be the picture's, 1")
+	}
+
+	e := canvasOf(t, 5, 3, grey)
+	pic.DrawScaledDepth(e, 1, 1, 3, 2, 3)
+	if !e.SetDepth(2, 1, 1e9, blue) {
+		t.Errorf("wanted no depth where the picture is see-through, so that any pixel wins")
+	}
+}
+
+// A depth that is not positive or is NaN draws nothing and writes no depth, and an infinite
+// one is infinitely far, so nothing is nearer than it.
+func TestDrawScaledDepthWithADepthThatCannotBeDrawnAt(t *testing.T) {
+	pic := testPicture(t)
+	for _, z := range []float64{0, math.Copysign(0, -1), -1, math.Inf(-1), math.NaN(), math.Inf(1)} {
+		c := canvasOf(t, 5, 3, grey)
+		before := pixelsOf(c)
+
+		pic.DrawScaledDepth(c, 0, 0, 5, 6, z)
+
+		if !slices.Equal(pixelsOf(c), before) {
+			t.Errorf("depth %v: wanted nothing drawn", z)
+		}
+		if !c.SetDepth(2, 2, 1e9, blue) {
+			t.Errorf("depth %v: wanted no depth written", z)
+		}
+	}
+}
+
+func TestDrawScaledDepthOfANilPictureDrawsNothing(t *testing.T) {
+	var none *Bitmap
+	c := canvasOf(t, 5, 3, grey)
+	before := pixelsOf(c)
+
+	none.DrawScaledDepth(c, 0, 0, 5, 6, 1)
+
+	if !slices.Equal(pixelsOf(c), before) {
+		t.Errorf("wanted nothing drawn")
+	}
+}
+
 func TestDrawingAllocatesNothing(t *testing.T) {
 	pic := testPicture(t)
 	c := canvasOf(t, 80, 24, grey)
@@ -660,6 +849,9 @@ func TestDrawingAllocatesNothing(t *testing.T) {
 		"DrawScaled":              func() { pic.DrawScaled(c, 5, 5, 60, 30) },
 		"DrawScaled, huge":        func() { pic.DrawScaled(c, -(math.MaxInt / 2), 0, math.MaxInt, math.MaxInt) },
 		"DrawScaled, big numbers": func() { pic.DrawScaled(c, 0, 0, aboveInt32, aboveInt32) },
+		"DrawScaledDepth":         func() { pic.DrawScaledDepth(c, 5, 5, 60, 30, 3) },
+		"DrawScaledDepth, off":    func() { pic.DrawScaledDepth(c, -1, 47, 3, 2, 3) },
+		"DrawScaledDepth, huge":   func() { pic.DrawScaledDepth(c, -(math.MaxInt / 2), 0, math.MaxInt, math.MaxInt, 3) },
 	}
 	for name, draw := range draws {
 		if n := testing.AllocsPerRun(50, draw); n != 0 {
@@ -724,6 +916,34 @@ func FuzzDrawScaled(f *testing.F) {
 	})
 }
 
+// Whatever the position, size and depth, DrawScaledDepth on an empty canvas draws what DrawScaled
+// draws where the depth can be drawn at, and nothing where it cannot, and does not panic.
+func FuzzDrawScaledDepth(f *testing.F) {
+	f.Add(0, 0, 3, 2, 1.0)
+	f.Add(-2, -1, 7, 5, 0.5)
+	f.Add(0, 0, 0, 3, 2.0)
+	f.Add(math.MinInt, math.MinInt, math.MaxInt, math.MaxInt, 1.0)
+	f.Add(2, 1, aboveInt32, aboveInt32, 4.0)
+	f.Add(0, 0, 3, 2, 0.0)
+	f.Add(0, 0, 3, 2, math.NaN())
+	f.Add(0, 0, 3, 2, math.Inf(1))
+
+	pic := testPicture(f)
+	f.Fuzz(func(t *testing.T, x, y, rw, rh int, depth float64) {
+		const w, h = 4, 2
+		got := canvasOf(t, w, h, grey)
+		pic.DrawScaledDepth(got, x, y, rw, rh, depth)
+
+		want := canvasOf(t, w, h, grey)
+		if depth > 0 && !math.IsInf(depth, 1) {
+			pic.DrawScaled(want, x, y, rw, rh)
+		}
+		if !slices.Equal(pixelsOf(got), pixelsOf(want)) {
+			t.Fatalf("stretched to %d by %d at (%d, %d), depth %v: wanted %v, got %v", rw, rh, x, y, depth, pixelsOf(want), pixelsOf(got))
+		}
+	})
+}
+
 func BenchmarkBitmap(b *testing.B) {
 	img := image.NewNRGBA(image.Rect(0, 0, 64, 64))
 	for i := range img.Pix {
@@ -755,6 +975,36 @@ func BenchmarkBitmap(b *testing.B) {
 		b.ReportAllocs()
 		for b.Loop() {
 			pic.DrawScaled(c, 0, 0, 200, 120)
+		}
+	})
+	// Each call is nearer than the last, so every pixel is drawn and none is hidden.
+	b.Run("DrawScaledDepth, 64 by 64 to 128 by 96", func(b *testing.B) {
+		b.ReportAllocs()
+		z := 1e9
+		for b.Loop() {
+			z--
+			pic.DrawScaledDepth(c, 10, 10, 128, 96, z)
+		}
+	})
+	b.Run("DrawScaledDepth, to the whole canvas", func(b *testing.B) {
+		b.ReportAllocs()
+		z := 1e9
+		for b.Loop() {
+			z--
+			pic.DrawScaledDepth(c, 0, 0, 200, 120, z)
+		}
+	})
+	b.Run("DrawScaledDepth, hidden behind what is there", func(b *testing.B) {
+		b.ReportAllocs()
+		c.SetDepth(10, 10, 1, engine.RGB(1, 2, 3)) // something is there, but the picture is farther
+		for b.Loop() {
+			pic.DrawScaledDepth(c, 10, 10, 128, 96, 2e9)
+		}
+	})
+	b.Run("DrawScaledDepth, far off", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			pic.DrawScaledDepth(c, 1_000_000, 0, 5_000_000, 5_000_000, 3)
 		}
 	})
 	b.Run("DrawScaled, far off", func(b *testing.B) {
