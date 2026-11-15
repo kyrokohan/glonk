@@ -162,3 +162,25 @@ func Shade(color Color, intensity float64) Color {
 	scale := func(v uint8) uint8 { return uint8(math.Round(float64(v) * intensity)) }
 	return RGB(scale(r), scale(g), scale(b))
 }
+
+// Mix returns the color the part t of the way from a to b: a for 0, b for 1, and between
+// them each of red, green and blue on a straight line, rounded to a whole number. A t outside
+// 0 to 1 is clamped and NaN is treated as 0, as Shade treats an intensity.
+//
+// Like Shade it reads a palette color as xterm defines it and the default color as black, and
+// the result is an exact RGB color, so Mix(a, b, 0) is a as RGB even where a is a palette
+// color. On a terminal without true color the result is shown as the nearest of the palette
+// colors 16 to 255, as any RGB color is.
+func Mix(a, b Color, t float64) Color {
+	if math.IsNaN(t) {
+		t = 0
+	}
+	t = min(max(t, 0), 1)
+
+	ar, ag, ab := a.RGB()
+	br, bg, bb := b.RGB()
+	mix := func(from, to uint8) uint8 {
+		return uint8(math.Round(float64(from) + (float64(to)-float64(from))*t))
+	}
+	return RGB(mix(ar, br), mix(ag, bg), mix(ab, bb))
+}

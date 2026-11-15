@@ -241,6 +241,13 @@ func ExampleShade() {
 	// #ff0000 #800000 #000000
 }
 
+func ExampleMix() {
+	red, blue := engine.RGB(200, 0, 0), engine.RGB(0, 0, 200)
+	fmt.Println(engine.Mix(red, blue, 0), engine.Mix(red, blue, 0.25), engine.Mix(red, blue, 1))
+	// Output:
+	// #c80000 #960032 #0000c8
+}
+
 func ExamplePalette() {
 	orange := engine.Palette(208)
 	black := engine.Palette(0) // a real color; the default is the zero Color

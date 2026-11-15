@@ -72,6 +72,54 @@ func TestShade(t *testing.T) {
 	}
 }
 
+func TestMix(t *testing.T) {
+	red, blue := RGB(200, 0, 0), RGB(0, 0, 200)
+	tests := []struct {
+		name string
+		a, b Color
+		t    float64
+		want Color
+	}{
+		{"0 is the first color", red, blue, 0, red},
+		{"1 is the second color", red, blue, 1, blue},
+		{"the middle", red, blue, 0.5, RGB(100, 0, 100)},
+		{"a quarter of the way", red, blue, 0.25, RGB(150, 0, 50)},
+		{"below 0 clamps to the first", red, blue, -3, red},
+		{"above 1 clamps to the second", red, blue, 7, blue},
+		{"NaN is 0", red, blue, math.NaN(), red},
+		{"negative infinity is 0", red, blue, math.Inf(-1), red},
+		{"positive infinity is 1", red, blue, math.Inf(1), blue},
+		{"a color with itself is itself", RGB(10, 20, 30), RGB(10, 20, 30), 0.37, RGB(10, 20, 30)},
+		{"each channel on its own", RGB(0, 100, 255), RGB(255, 200, 0), 0.5, RGB(128, 150, 128)}, // halves round up
+		{"going down is as exact as going up", RGB(255, 255, 255), RGB(0, 0, 0), 0.2, RGB(204, 204, 204)},
+		{"the default color is black", Color{}, RGB(100, 100, 100), 0.5, RGB(50, 50, 50)},
+		{"to the default color is to black", RGB(100, 100, 100), Color{}, 0.5, RGB(50, 50, 50)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Mix(tt.a, tt.b, tt.t); got != tt.want {
+				t.Errorf("wanted %v, got %v", tt.want, got)
+			}
+		})
+	}
+}
+
+// A palette color is read as xterm defines it, and the result is an exact RGB color, even at
+// the ends where it is the palette color's own RGB.
+func TestMixOfAPaletteColorIsExactRGB(t *testing.T) {
+	r, g, b := Palette(208).RGB()
+	if got := Mix(Palette(208), RGB(0, 0, 0), 0); got != RGB(r, g, b) {
+		t.Errorf("wanted palette color 208 as the RGB %v, got %v", RGB(r, g, b), got)
+	}
+	if got := Mix(RGB(0, 0, 0), Palette(208), 1); got != RGB(r, g, b) {
+		t.Errorf("wanted palette color 208 as the RGB %v, got %v", RGB(r, g, b), got)
+	}
+	if got := Mix(Palette(0), Palette(231), 1); got != RGB(255, 255, 255) {
+		t.Errorf("wanted white, got %v", got)
+	}
+}
+
 // The shade itself is an exact RGB: smooth on a terminal with true color.
 func TestShadeOfAPaletteColorIsExactRGB(t *testing.T) {
 	tests := []struct {
