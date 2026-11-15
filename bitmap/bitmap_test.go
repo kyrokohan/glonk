@@ -898,6 +898,193 @@ func TestDrawScaledDepthOfAViewIsDrawScaledOfIt(t *testing.T) {
 	}
 }
 
+func TestMirroredIsThePictureWithItsColumnsReversed(t *testing.T) {
+	const pw, ph = 5, 4
+	pic := gridPicture(t, pw, ph)
+	m := pic.Mirrored()
+	if m == nil || m.Width() != pw || m.Height() != ph {
+		t.Fatalf("wanted a picture of %d by %d, got %v", pw, ph, m)
+	}
+	for y := range ph {
+		for x := range pw {
+			if got, want := m.At(x, y), pic.At(pw-1-x, y); got != want {
+				t.Errorf("pixel (%d, %d): wanted the picture's (%d, %d), %v, got %v", x, y, pw-1-x, y, want, got)
+			}
+		}
+	}
+	for _, p := range [][2]int{{-1, 0}, {pw, 0}, {0, -1}, {0, ph}} {
+		if got := m.At(p[0], p[1]); !got.IsDefault() {
+			t.Errorf("pixel %v is outside, wanted nothing, got %v", p, got)
+		}
+	}
+	// The picture itself is as it was.
+	if got, want := pic.At(0, 0), gridPicture(t, pw, ph).At(0, 0); got != want {
+		t.Errorf("wanted the picture left alone, got %v", got)
+	}
+}
+
+func TestMirroredOfNothingIsAnEmptyPicture(t *testing.T) {
+	var none *Bitmap
+	for name, pic := range map[string]*Bitmap{"nil": none, "empty": New(0, 0)} {
+		t.Run(name, func(t *testing.T) {
+			m := pic.Mirrored()
+			if m == nil || m.Width() != 0 || m.Height() != 0 {
+				t.Fatalf("wanted an empty picture, got %v", m)
+			}
+			c := canvasOf(t, 4, 2, grey)
+			m.Draw(c, 0, 0)
+			m.DrawScaled(c, 0, 0, 4, 4)
+			m.DrawScaledDepth(c, 0, 0, 4, 4, 1)
+			m.Set(0, 0, red)
+			for _, p := range pixelsOf(c) {
+				if p != grey {
+					t.Fatalf("wanted an empty picture to draw nothing, got %v", p)
+				}
+			}
+		})
+	}
+}
+
+func TestMirroredTwiceIsThePictureAgain(t *testing.T) {
+	pic := gridPicture(t, 5, 4)
+	back := pic.Mirrored().Mirrored()
+	checkView(t, back, pic, 0, 0, 5, 4)
+	if got, want := drawnOn(t, back), drawnOn(t, pic); !slices.Equal(got, want) {
+		t.Errorf("wanted the picture drawn as it was")
+	}
+}
+
+func TestMirroredSharesThePixels(t *testing.T) {
+	pic := gridPicture(t, 5, 4)
+	m := pic.Mirrored()
+	m.Set(0, 1, red) // the left of the view is the right of the picture
+	if pic.At(4, 1) != red {
+		t.Errorf("wanted Set on the view to change the picture's pixel (4, 1), got %v", pic.At(4, 1))
+	}
+	pic.Set(1, 2, blue)
+	if got := m.At(3, 2); got != blue {
+		t.Errorf("wanted Set on the picture to show in the view at (3, 2), got %v", got)
+	}
+	m.Set(5, 1, yellow) // outside the view, though the picture would have a pixel there if it were not
+	m.Set(-1, 1, yellow)
+	if pic.At(0, 1) != gridPicture(t, 5, 4).At(0, 1) || pic.At(4, 1) != red {
+		t.Errorf("wanted Set outside the view to change nothing")
+	}
+}
+
+// Sub of a mirrored view counts its rectangle in the view, from the left of the reversed
+// picture, whatever the picture behind it is.
+func TestSubOfAMirroredViewIsTheRectangleOfTheView(t *testing.T) {
+	const pw, ph = 5, 4
+	pic := gridPicture(t, pw, ph)
+	for _, m := range []*Bitmap{pic.Mirrored(), gridPicture(t, 7, 6).Sub(1, 1, pw, ph).Mirrored(), gridPicture(t, 7, 6).Mirrored().Sub(1, 1, pw, ph)} {
+		for x := -3; x < pw+3; x++ {
+			for y := -3; y < ph+3; y++ {
+				for w := -1; w < pw+4; w++ {
+					for h := -1; h < ph+4; h++ {
+						x0, y0, vw, vh := subReference(pw, ph, x, y, w, h)
+						view := m.Sub(x, y, w, h)
+						checkView(t, view, m, x0, y0, vw, vh)
+						if view.Width() > 0 && view.Mirrored().At(0, 0) != m.At(x0+vw-1, y0) {
+							t.Fatalf("Sub(%d, %d, %d, %d) mirrored again: wanted its first pixel to be the view's last", x, y, w, h)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestDrawingAMirroredViewIsDrawingItsPixels(t *testing.T) {
+	const w, h = 5, 3
+	views := map[string]*Bitmap{
+		"a picture":           gridPicture(t, 3, 2).Mirrored(),
+		"a view of a picture": gridPicture(t, 6, 5).Sub(1, 1, 3, 2).Mirrored(),
+		"mirrored, then Sub":  gridPicture(t, 6, 5).Mirrored().Sub(1, 1, 3, 2),
+	}
+	for name, view := range views {
+		t.Run(name, func(t *testing.T) {
+			for x := -4; x < w+4; x++ {
+				for y := -4; y < 2*h+4; y++ {
+					c := canvasOf(t, w, h, grey)
+					view.Draw(c, x, y)
+					if got, want := pixelsOf(c), referenceDraw(view, w, 2*h, grey, x, y, view.Width(), view.Height()); !slices.Equal(got, want) {
+						t.Fatalf("Draw at (%d, %d): wanted %v, got %v", x, y, want, got)
+					}
+					for rw := -1; rw < w+4; rw++ {
+						for rh := -1; rh < 2*h+4; rh++ {
+							c := canvasOf(t, w, h, grey)
+							view.DrawScaled(c, x, y, rw, rh)
+							want := referenceDraw(view, w, 2*h, grey, x, y, rw, rh)
+							if got := pixelsOf(c); !slices.Equal(got, want) {
+								t.Fatalf("stretched to %d by %d at (%d, %d): wanted %v, got %v", rw, rh, x, y, want, got)
+							}
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestDrawScaledDepthOfAMirroredViewIsDrawScaledOfIt(t *testing.T) {
+	view := gridPicture(t, 6, 5).Sub(2, 1, 3, 3).Mirrored()
+	for _, size := range [][2]int{{3, 3}, {7, 5}, {2, 2}, {9, 1}} {
+		want := canvasOf(t, 12, 6, grey)
+		view.DrawScaled(want, 2, 1, size[0], size[1])
+		got := canvasOf(t, 12, 6, grey)
+		view.DrawScaledDepth(got, 2, 1, size[0], size[1], 4)
+		if !slices.Equal(pixelsOf(got), pixelsOf(want)) {
+			t.Errorf("stretched to %d by %d: wanted what DrawScaled draws", size[0], size[1])
+		}
+	}
+}
+
+// A pixel whose middle is exactly between two pixels of the picture takes the right one, as
+// nearestByInterval says. A mirrored view is the reversed picture, so there it is the right
+// one of the reversed picture, which is the left one of the picture.
+func TestMirroredTakesTheOtherPixelWhereTheMiddleIsBetweenTwo(t *testing.T) {
+	pic := New(2, 1)
+	pic.Set(0, 0, red)
+	pic.Set(1, 0, blue)
+
+	c := canvasOf(t, 1, 1, grey)
+	pic.DrawScaled(c, 0, 0, 1, 1) // the middle of the one pixel is between the two
+	if got := c.At(0, 0); got != blue {
+		t.Errorf("wanted the picture to give its right pixel, got %v", got)
+	}
+	c = canvasOf(t, 1, 1, grey)
+	pic.Mirrored().DrawScaled(c, 0, 0, 1, 1)
+	if got := c.At(0, 0); got != red {
+		t.Errorf("wanted the mirrored picture to give its right pixel, which is the picture's left, got %v", got)
+	}
+}
+
+// Whatever the rectangle, position and size, a mirrored view is the part of the mirrored picture
+// the reference says, drawn as the reference draws it, with nothing panicking or overflowing.
+func FuzzMirroredSubDraw(f *testing.F) {
+	f.Add(0, 0, 3, 2, 0, 0, 3, 2)
+	f.Add(1, 1, 3, 2, -2, -1, 7, 5)
+	f.Add(-2, -2, 4, 4, 1, 1, 1, 1)
+	f.Add(5, 4, 9, 9, 0, 0, 3, 3)
+	f.Add(math.MinInt, math.MinInt, math.MaxInt, math.MaxInt, math.MinInt, math.MinInt, math.MaxInt, math.MaxInt)
+	f.Add(2, 1, math.MaxInt, math.MaxInt, -(math.MaxInt / 2), 2, math.MaxInt, 4)
+
+	m := gridPicture(f, 6, 5).Mirrored()
+	f.Fuzz(func(t *testing.T, sx, sy, sw, sh, x, y, rw, rh int) {
+		view := m.Sub(sx, sy, sw, sh)
+		x0, y0, vw, vh := subReference(6, 5, sx, sy, sw, sh)
+		checkView(t, view, m, x0, y0, vw, vh)
+
+		const w, h = 4, 2
+		c := canvasOf(t, w, h, grey)
+		view.DrawScaled(c, x, y, rw, rh)
+		if got, want := pixelsOf(c), referenceDrawBig(view, w, 2*h, grey, x, y, rw, rh); !slices.Equal(got, want) {
+			t.Fatalf("stretched to %d by %d at (%d, %d): wanted %v, got %v", rw, rh, x, y, want, got)
+		}
+	})
+}
+
 // nearestByInterval is which of the n pixels of a picture pixel i, of the m it is stretched
 // to, takes its color from, found a different way from the code: the pixel s covers the
 // stretched pixels from s*m/n up to (s+1)*m/n, and the one whose range holds the middle of
@@ -1323,21 +1510,25 @@ func TestDrawingAllocatesNothing(t *testing.T) {
 	pic := testPicture(t)
 	scratch := New(3, 2)
 	view := gridPicture(t, 8, 8).Sub(1, 1, 5, 4)
+	flipped := view.Mirrored()
 	c := canvasOf(t, 80, 24, grey)
 	draws := map[string]func(){
-		"Draw, a view":            func() { view.Draw(c, 10, 10) },
-		"DrawScaled, a view":      func() { view.DrawScaled(c, 5, 5, 60, 30) },
-		"DrawScaledDepth, a view": func() { view.DrawScaledDepth(c, 5, 5, 60, 30, 3) },
-		"Set":                     func() { scratch.Set(1, 1, red) },
-		"Set, outside":            func() { scratch.Set(-1, 7, red) },
-		"Draw":                    func() { pic.Draw(c, 10, 10) },
-		"Draw, mostly off":        func() { pic.Draw(c, -1, 47) },
-		"DrawScaled":              func() { pic.DrawScaled(c, 5, 5, 60, 30) },
-		"DrawScaled, huge":        func() { pic.DrawScaled(c, -(math.MaxInt / 2), 0, math.MaxInt, math.MaxInt) },
-		"DrawScaled, big numbers": func() { pic.DrawScaled(c, 0, 0, aboveInt32, aboveInt32) },
-		"DrawScaledDepth":         func() { pic.DrawScaledDepth(c, 5, 5, 60, 30, 3) },
-		"DrawScaledDepth, off":    func() { pic.DrawScaledDepth(c, -1, 47, 3, 2, 3) },
-		"DrawScaledDepth, huge":   func() { pic.DrawScaledDepth(c, -(math.MaxInt / 2), 0, math.MaxInt, math.MaxInt, 3) },
+		"Draw, mirrored":            func() { flipped.Draw(c, 10, 10) },
+		"DrawScaled, mirrored":      func() { flipped.DrawScaled(c, 5, 5, 60, 30) },
+		"DrawScaledDepth, mirrored": func() { flipped.DrawScaledDepth(c, 5, 5, 60, 30, 3) },
+		"Draw, a view":              func() { view.Draw(c, 10, 10) },
+		"DrawScaled, a view":        func() { view.DrawScaled(c, 5, 5, 60, 30) },
+		"DrawScaledDepth, a view":   func() { view.DrawScaledDepth(c, 5, 5, 60, 30, 3) },
+		"Set":                       func() { scratch.Set(1, 1, red) },
+		"Set, outside":              func() { scratch.Set(-1, 7, red) },
+		"Draw":                      func() { pic.Draw(c, 10, 10) },
+		"Draw, mostly off":          func() { pic.Draw(c, -1, 47) },
+		"DrawScaled":                func() { pic.DrawScaled(c, 5, 5, 60, 30) },
+		"DrawScaled, huge":          func() { pic.DrawScaled(c, -(math.MaxInt / 2), 0, math.MaxInt, math.MaxInt) },
+		"DrawScaled, big numbers":   func() { pic.DrawScaled(c, 0, 0, aboveInt32, aboveInt32) },
+		"DrawScaledDepth":           func() { pic.DrawScaledDepth(c, 5, 5, 60, 30, 3) },
+		"DrawScaledDepth, off":      func() { pic.DrawScaledDepth(c, -1, 47, 3, 2, 3) },
+		"DrawScaledDepth, huge":     func() { pic.DrawScaledDepth(c, -(math.MaxInt / 2), 0, math.MaxInt, math.MaxInt, 3) },
 	}
 	for name, draw := range draws {
 		if n := testing.AllocsPerRun(50, draw); n != 0 {
@@ -1531,6 +1722,25 @@ func BenchmarkBitmap(b *testing.B) {
 		b.ReportAllocs()
 		for b.Loop() {
 			frame.Draw(c, 10, 10)
+		}
+	})
+	flipped := pic.Mirrored()
+	b.Run("Draw, mirrored, 64 by 64", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			flipped.Draw(c, 10, 10)
+		}
+	})
+	b.Run("DrawScaled, mirrored, 64 by 64 to 128 by 96", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			flipped.DrawScaled(c, 10, 10, 128, 96)
+		}
+	})
+	b.Run("Mirrored", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			_ = pic.Mirrored()
 		}
 	})
 	b.Run("Sub", func(b *testing.B) {
