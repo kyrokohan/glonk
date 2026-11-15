@@ -103,6 +103,44 @@ func (c Camera) ProjectPixels(p geometry.Vector3, cv *engine.Canvas) (x, y, dept
 	return x, 2 * y, depth, ok
 }
 
+// Ray returns the ray into the world through the place (x, y) on a grid of w x h cells, the
+// reverse of Project: the ray that Project(p, w, h) puts at (x, y) passes through p. Cell
+// coordinates are fractional, as Project returns them, so the middle of cell (i, j) is
+// (i+0.5, j+0.5). A place off the grid has a ray too.
+//
+// The ray starts at the camera, at origin, which is Position. direction is not a unit
+// vector. It is one deep along Look: its dot with Look is 1, so the point origin plus t
+// times direction is t deep, the depth that Canvas.SetDepth and ProjectPixels use. A program
+// that draws by rays can store t as it is. Call Normalize on direction for a unit vector,
+// and then t is the straight-line distance.
+//
+// ok is false when Project's would be for a camera that sees nothing (see Camera), when the
+// grid has no height (h is not positive), when x or y is NaN or infinite, and when the ray
+// has no finite place, which a Position, Yaw or Pitch that is not a number gives.
+func (c Camera) Ray(x, y float64, w, h int) (origin, direction geometry.Vector3, ok bool) {
+	c, usable := c.withDefaults()
+	if !usable || !(h > 0) {
+		return geometry.Vector3{}, geometry.Vector3{}, false
+	}
+	// Turned the way Look is: up by Pitch, then round by Yaw.
+	direction = c.projector(w, h).ray(x, y).RotateX(-c.Pitch).RotateY(c.Yaw)
+	if !finite(direction.X, direction.Y, direction.Z, c.Position.X, c.Position.Y, c.Position.Z) {
+		return geometry.Vector3{}, geometry.Vector3{}, false
+	}
+	return c.Position, direction, true
+}
+
+// RayPixels is Ray for the pixels of cv, the reverse of ProjectPixels: the ray that
+// ProjectPixels puts at (x, y) passes through the point, and with the depth it returns as t
+// it reaches it. x and y are fractional pixel coordinates, so the ray through the middle of
+// pixel (i, j) is RayPixels(i+0.5, j+0.5, cv). ok is also false for a nil canvas.
+func (c Camera) RayPixels(x, y float64, cv *engine.Canvas) (origin, direction geometry.Vector3, ok bool) {
+	if cv == nil {
+		return geometry.Vector3{}, geometry.Vector3{}, false
+	}
+	return c.Ray(x, y/2, cv.Width(), cv.Height()/2)
+}
+
 // projectDepth is Project that also returns the depth of p, its view-space z: the distance
 // along Look. Project and ProjectPixels both go through it, so they cannot disagree about
 // what is ok.
@@ -143,6 +181,12 @@ func (c Camera) Right() geometry.Vector3 {
 // at Position plus Look times any distance lands in the middle of the screen.
 func (c Camera) Look() geometry.Vector3 {
 	return geometry.Vector3{X: 0, Y: 0, Z: 1}.RotateX(-c.Pitch).RotateY(c.Yaw)
+}
+
+// Up returns the unit vector to the camera's up, perpendicular to Look and Right. Unlike
+// Forward and Right, which stay flat on the xz plane, it tilts with Pitch, as Look does.
+func (c Camera) Up() geometry.Vector3 {
+	return c.Look().Cross(c.Right())
 }
 
 // toView moves a world point into view space: camera at the origin, looking down +z.

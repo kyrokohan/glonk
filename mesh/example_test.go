@@ -156,6 +156,24 @@ func ExampleCamera_ProjectPixels() {
 	// z=7: pixel (20, 12), depth 7, drawn: false
 }
 
+// The ray through a place on the screen is the reverse of Project. Here it finds what is under
+// the middle of the screen: a camera 1.5 up, looking down at the floor 6 ahead, and the place on
+// the floor (y = 0) that the player is looking at, which is where to put something down. The
+// direction is one deep along Look, so t is also how deep that place is.
+func ExampleCamera_Ray() {
+	cam := mesh.Camera{Position: geometry.Vector3{Y: 1.5}, Pitch: -math.Atan2(1.5, 6)}
+
+	origin, direction, ok := cam.Ray(40, 12, 80, 24) // the middle of a screen of 80 by 24 cells
+	if !ok {
+		return
+	}
+	t := -origin.Y / direction.Y // how far along the ray the floor is
+	floor := origin.Add(direction.Scale(t))
+	fmt.Printf("%.2f ahead, %.2f deep\n", floor.Z, t)
+	// Output:
+	// 6.00 ahead, 6.18 deep
+}
+
 // A Transform scales a model, turns it by Roll, Pitch and Yaw in that order, and moves
 // it to Position. Apply says where a point of the model ends up.
 func ExampleTransform() {
