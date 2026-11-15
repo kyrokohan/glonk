@@ -16,12 +16,8 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"image"
-	"image/color"
-	"image/png"
 	"math"
 	"os"
 	"unicode"
@@ -75,34 +71,21 @@ var treeAt = geometry.Vector3{X: 3, Y: floorY, Z: 3}
 
 const treeHeight = 3.0
 
-// newTree returns the picture of the tree, made from treeArt through a PNG, which is what
-// bitmap reads. It cannot fail: the picture is built here.
+// newTree returns the picture of the tree, made from treeArt. A character that is not a
+// color of the tree, the dots, is left see-through.
 func newTree() *bitmap.Bitmap {
-	img := image.NewNRGBA(image.Rect(0, 0, len(treeArt[0]), len(treeArt)))
+	tree := bitmap.New(len(treeArt[0]), len(treeArt))
 	for y, row := range treeArt {
 		for x, r := range row {
-			var c engine.Color
 			switch r {
 			case 'g':
-				c = treeLeaf
+				tree.Set(x, y, treeLeaf)
 			case 'd':
-				c = treeDark
+				tree.Set(x, y, treeDark)
 			case 't':
-				c = treeTrunk
-			default:
-				continue
+				tree.Set(x, y, treeTrunk)
 			}
-			red, green, blue := c.RGB()
-			img.SetNRGBA(x, y, color.NRGBA{R: red, G: green, B: blue, A: 255})
 		}
-	}
-	var buf bytes.Buffer
-	if err := png.Encode(&buf, img); err != nil {
-		panic(err)
-	}
-	tree, err := bitmap.Decode(&buf)
-	if err != nil {
-		panic(err)
 	}
 	return tree
 }
