@@ -18,6 +18,8 @@ make check    # formatting, go vet, and all tests with the race detector
 make lint     # staticcheck, which finds mistakes that go vet does not
 make vuln     # govulncheck, which lists known vulnerabilities in Go and our dependencies
 make fuzz     # fuzz every fuzz test for FUZZTIME each (default 10s)
+make bench    # run the benchmarks once, with allocations
+make benchcmp # compare the benchmarks with those of a base, BASE=origin/main unless said
 make run      # try an example; EXAMPLE=./examples/cube3d picks another
 ```
 
@@ -43,6 +45,20 @@ Every change, the maintainer's included, goes in through a pull request; nobody 
 - Text and cell contents reach the terminal only through the frame buffer, which checks every cell. Do not send them by another route. Control sequences are built in one place, `engine/escape.go`.
 - Comments say why, not what.
 - The website at glonk.dev is the plain HTML in `site/`, deployed from `main` by Cloudflare as Workers static assets, configured in `wrangler.jsonc`, whose 404 page is what answers a request for any other path with the `go-import` tags. Its install line must match the README's and the module in `go.mod`, and both pages must keep their `go-import` tags at the top of the head, because the import path depends on them. `internal/sitecheck` checks all of that.
+
+## Measuring speed
+
+glonk keeps its drawing, loading and searching fast, and a change that can slow a hot path should show that it did not. `make benchcmp` runs every benchmark on the working tree (uncommitted changes included) and on `BASE`, a commit, tag or branch, `origin/main` unless said, and prints what changed:
+
+```
+make benchcmp                       # against origin/main
+make benchcmp BASE=v0.8.0           # against a release
+make benchcmp BENCH=Draw ROUNDS=9   # fewer benchmarks, a closer look
+```
+
+It takes about two minutes a round, so about ten for everything at the default 5 rounds; `BENCH` narrows it. Each round runs the base, the base again and the head, one after the other in an order that turns from round to round, so a computer that warms up or gets busy affects all three alike, and the test binaries are built without file paths (`-trimpath`), so that identical code is an identical binary: two builds that differed only in the length of a path differed by 4 percent on whole groups of benchmarks. The base run twice is a control. The noise is how far the control's best run is from the base's, which is about 0.3 percent for most benchmarks and over 1 percent for the few that are short and busy. A benchmark is reported as slower or faster only if its change is beyond `THRESHOLD` percent (3) both by the best run and by the typical run, the median, since either alone can be fooled by one round in which the machine was idle or busy, and the best run's is also beyond twice the noise. A benchmark whose noise alone is beyond the threshold is marked noisy, since a change that size could hide in it. Allocations do not vary where there are few of them, so any rise in `allocs/op` is a regression, whatever the time; a rise of a thousandth or less in a benchmark that allocates hundreds of thousands of times is the runtime's own bookkeeping and is not. It exits 1 for a regression, which is what to look at before sending the change; `make bench` runs the benchmarks once without comparing.
+
+Run on identical code, it flagged nothing in 151 benchmarks, and made to see a change of 5 percent it found it in 147 of them; it cannot tell 1 or 2 percent from noise, which is why the threshold is 3. Use more rounds and a narrower `BENCH` for a closer look, and close other programs. Nothing is published or kept between runs.
 
 ## Making a release
 

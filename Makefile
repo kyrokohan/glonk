@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help fmt fmtcheck test vet lint vuln fuzz run build check
+.PHONY: help fmt fmtcheck test vet lint vuln fuzz bench benchcmp run build check
 
 help:
 	@echo "Available targets:"
@@ -10,6 +10,8 @@ help:
 	@echo "  lint     - Find more mistakes with staticcheck (downloads it the first time)"
 	@echo "  vuln     - List known vulnerabilities in Go and our dependencies with govulncheck"
 	@echo "  fuzz     - Fuzz every fuzz test for FUZZTIME each (default 10s)"
+	@echo "  bench    - Run the benchmarks once, with allocations (BENCH= picks some)"
+	@echo "  benchcmp - Compare the benchmarks with those of BASE (default origin/main), a few minutes"
 	@echo "  run      - Run an example (default bounce2d; EXAMPLE=./examples/cube3d; ARGS= passes arguments)"
 	@echo "  build    - Compile every package"
 	@echo "  check    - Check formatting, run tests and vet"
@@ -58,6 +60,24 @@ fuzz:
 			go test $$pkg -run '^$$' -fuzz "^$$t$$" -fuzztime $(FUZZTIME) || exit 1; \
 		done; \
 	done
+
+# Run once, with allocations, on the working tree; BENCH is a regular expression for the names.
+BENCH ?= .
+bench:
+	@echo "Benchmarking..."
+	go test -run '^$$' -bench '$(BENCH)' -benchmem ./...
+
+# The benchmarks of the working tree against those of BASE (a commit, tag or branch), in
+# interleaved rounds with the base run twice as a control for noise: see internal/benchcmp. It
+# exits 1 for a change that is clearly slower or allocates more. It takes minutes; BENCH=Draw
+# ROUNDS=9 narrows it and looks closer.
+BASE ?= origin/main
+ROUNDS ?= 5
+BENCHTIME ?= 200ms
+THRESHOLD ?= 3
+benchcmp:
+	@echo "Comparing the benchmarks with $(BASE)..."
+	go run ./internal/benchcmp -base '$(BASE)' -bench '$(BENCH)' -rounds $(ROUNDS) -benchtime $(BENCHTIME) -threshold $(THRESHOLD)
 
 EXAMPLE ?= ./examples/bounce2d
 ARGS ?=
