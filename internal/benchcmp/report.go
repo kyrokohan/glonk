@@ -19,7 +19,8 @@ type header struct {
 	head, base string
 	rounds     int
 	benchtime  string
-	threshold  float64 // a fraction
+	threshold  float64  // a fraction
+	notRun     []string // the packages whose test binary is the base's, each with how many benchmarks it has
 }
 
 // formatTime writes a time in nanoseconds as ns, us, ms or s, with the digits that matter.
@@ -42,7 +43,13 @@ func percent(f float64) string { return fmt.Sprintf("%+.1f%%", f*100) }
 // are not the same, the slowest first, or all of them, and then counts the rest.
 func report(w io.Writer, h header, entries []entry, onlyHead, onlyBase []string, all bool) int {
 	fmt.Fprintf(w, "head: %s\nbase: %s\n", h.head, h.base)
-	fmt.Fprintf(w, "%d rounds of %s, each running the base, the base again and the head\n", h.rounds, h.benchtime)
+	if h.rounds > 0 {
+		fmt.Fprintf(w, "%d rounds of %s, each running the base, the base again and the head\n", h.rounds, h.benchtime)
+	}
+
+	if len(h.notRun) > 0 {
+		fmt.Fprintf(w, "not run, since their test binary is the same file as the base's, so it is the same code: %s\n", strings.Join(h.notRun, ", "))
+	}
 
 	noises := make([]float64, len(entries))
 	worst := 0

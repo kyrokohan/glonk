@@ -84,3 +84,18 @@ func TestReportWithAllListsEverythingAndNothingChangedIsShort(t *testing.T) {
 		t.Errorf("wanted no noise line and the one in the base, got\n%s", none.String())
 	}
 }
+
+func TestReportSaysWhichPackagesWereNotRun(t *testing.T) {
+	var buf bytes.Buffer
+	h := header{head: "h", base: "b", rounds: 3, benchtime: "1s", threshold: 0.03, notRun: []string{"engine (30)", "geometry (3)"}}
+	report(&buf, h, nil, nil, nil, false)
+	want := "not run, since their test binary is the same file as the base's, so it is the same code: engine (30), geometry (3)\n"
+	if !strings.Contains(buf.String(), want) || !strings.Contains(buf.String(), "0 benchmarks compared") {
+		t.Errorf("wanted the packages that were not run, got\n%s", buf.String())
+	}
+	var none bytes.Buffer
+	report(&none, header{head: "h", base: "b", rounds: 3, benchtime: "1s", threshold: 0.03}, nil, nil, nil, false)
+	if strings.Contains(none.String(), "not run") {
+		t.Errorf("wanted nothing about packages not run when all were, got\n%s", none.String())
+	}
+}
