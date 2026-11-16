@@ -4,6 +4,10 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-15
+
+On top of 0.8.0 this release adds a frame drawn as a picture, frame numbers for a running game, a bounding sphere for every mesh that lets drawing skip what is off screen and leave out the lights that cannot reach it, and a way to compare benchmarks with a base. A `Mesh` has a new unexported field, so a `Mesh` literal that lists its values without field names no longer compiles; and a mesh from a shape or a loader now carries its bounds, so a program that changes its `Vertices` in place must call `UpdateBounds`, or the mesh can be skipped while it is on screen. Nothing was removed or renamed.
+
 ### Added
 
 - `FrameBuffer.Image(ImageOptions)` draws a frame as an `*image.RGBA`, for a test to compare with a stored picture or for a person to look at without a terminal. `String()` gave the characters of a frame and no colors, and a frame drawn on a canvas is row after row of `▀`, so a test could check where a letter was but not what the frame looked like; a game on glonk carried 130 lines of its own to turn cells into the pixels of a PNG, and the screenshots of #20 need the same. The picture is `Width*Scale` by `2*Height*Scale` pixels, a cell being one pixel of a `Canvas` across and two down, so a frame made with a canvas comes out pixel for pixel at Scale 1 (a test checks it on random canvases). A half-block cell is its two pixels, a space or an unset character its background and `█` its foreground; any other character is a mark, a rectangle in its foreground over the middle half of the cell, which shows where text is and in what color and not what it says. `Reverse` swaps a cell's colors; Bold, Dim and Underline are not drawn. `ImageOptions` has `Scale` (below 1 counts as 1), `Colors` (`Colors256` shows RGB as the nearest palette color, as a terminal without true color does; the other modes are exact, since a picture has no terminal to ask) and `Foreground` and `Background`, what a cell's default colors look like, light gray and black unless set. A picture of more than 4,194,304 pixels is not made: the image is empty, 0 by 0, so a scale read from somewhere cannot ask for gigabytes. `engine/testdata/frame.png` is a real picture of a frame, compared pixel by pixel by a test (`go test ./engine -update` writes it again), and `ExampleFrameBuffer_Image` writes the picture to the path in `GLONK_SCREENSHOT` when it is set.
@@ -212,7 +216,8 @@ The first release. The API is pre-1.0 and may still change. The README lists the
 - Three example programs (`bounce2d`, `cube3d` and a model `viewer`), runnable examples in the package documentation, fuzz tests for the parsers, rasterizers and clipping, and a test that keeps the documentation complete.
 - Continuous integration (format, vet and race tests on Linux and macOS for Go 1.26 and 1.27, cross-compilation, 32-bit tests), Dependabot, a security policy and contributing notes.
 
-[Unreleased]: https://github.com/kyrokohan/glonk/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/kyrokohan/glonk/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/kyrokohan/glonk/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/kyrokohan/glonk/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/kyrokohan/glonk/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/kyrokohan/glonk/compare/v0.5.0...v0.6.0
