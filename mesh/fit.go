@@ -51,6 +51,7 @@ func (m Mesh) Fit(size float64) Mesh {
 	for i, v := range out.Vertices {
 		out.Vertices[i] = v.Sub(center).Scale(scale)
 	}
+	out.UpdateBounds()
 	return out
 }
 

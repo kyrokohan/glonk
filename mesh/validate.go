@@ -5,7 +5,7 @@ import "fmt"
 // Validate checks a mesh that was built by hand or by other code, and returns an
 // error describing the first problem: a Transform that cannot be applied (a number
 // that is not finite, or a negative Scale), a vertex that is not a finite number,
-// normals that are not one per vertex or not finite numbers, face colors that are not
+// a vertex outside the bounds that UpdateBounds kept, normals that are not one per vertex or not finite numbers, face colors that are not
 // one per face, or an edge or face that names a vertex the mesh does not have.
 //
 // Drawing skips edges and faces with a bad index instead of failing, so Validate is
@@ -20,6 +20,15 @@ func (m Mesh) Validate() error {
 	for i, v := range m.Vertices {
 		if !finite(v.X, v.Y, v.Z) {
 			return fmt.Errorf("mesh: vertex %d is not a finite number: %v", i, v)
+		}
+	}
+	// A vertex that has moved out of the sphere UpdateBounds kept makes drawing skip the mesh
+	// while it is on screen.
+	if b := m.currentBounds(); b != nil {
+		for i, v := range m.Vertices {
+			if v.Sub(b.center).Length() > b.radius {
+				return fmt.Errorf("mesh: vertex %d is outside the bounds that UpdateBounds kept: call UpdateBounds again after changing Vertices", i)
+			}
 		}
 	}
 	if len(m.Normals) != 0 && len(m.Normals) != n {

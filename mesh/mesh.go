@@ -15,9 +15,17 @@ import (
 // Edges drive wireframe drawing and Faces drive shaded drawing; a mesh can have
 // either or both. Faces index into Vertices and are wound so the face normal,
 // (b-a)x(c-a), points out of the surface.
+//
+// Drawing skips a mesh that cannot be on screen: one whose vertices all lie inside a
+// sphere that is wholly beyond a side of the view, or in front of the near plane or past the
+// far one. A mesh built by hand with its vertices where they are in the world, as a level
+// built in place is, should call UpdateBounds once after it sets them, so that the sphere is
+// round the vertices and not round the origin of the model; the shapes and models this package
+// makes already have it. A vertex changed in place needs UpdateBounds again.
 type Mesh struct {
 	// Vertices are the points of the model, in model space: the space before
-	// Transform is applied.
+	// Transform is applied. Skipping what is off screen goes by where they are, as
+	// UpdateBounds worked it out: call it again after changing a vertex in place.
 	Vertices []geometry.Vector3
 
 	// Edges are pairs of indices into Vertices. Draw draws each as a line.
@@ -79,6 +87,9 @@ type Mesh struct {
 	// look inside out or vanish), and for open surfaces such as a flat leaf.
 	// It only affects shaded drawing, not wireframes.
 	DoubleSided bool
+
+	// bounds is the sphere that UpdateBounds keeps, or nil.
+	bounds *bounds
 }
 
 func corner(i, bit int, size float64) float64 {
@@ -136,7 +147,9 @@ func Cube(size float64) Mesh {
 		faces = append(faces, [3]int{quad[0], quad[1], quad[2]}, [3]int{quad[0], quad[2], quad[3]})
 	}
 
-	return Mesh{Vertices: vertices, Edges: edges, Faces: faces}
+	m := Mesh{Vertices: vertices, Edges: edges, Faces: faces}
+	m.UpdateBounds()
+	return m
 }
 
 // Clone returns a copy of the mesh that shares nothing with it, so changing the
@@ -151,6 +164,13 @@ func (m Mesh) Clone() Mesh {
 	out.Normals = slices.Clone(m.Normals)
 	out.FaceColors = slices.Clone(m.FaceColors)
 	out.VertexColors = slices.Clone(m.VertexColors)
+	// The sphere holds the same vertices, which are now these ones; a stale one means nothing.
+	out.bounds = nil
+	if b := m.currentBounds(); b != nil {
+		kept := *b
+		kept.first = &out.Vertices[0]
+		out.bounds = &kept
+	}
 	return out
 }
 

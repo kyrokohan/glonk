@@ -27,5 +27,6 @@ func Grid(size float64, divisions int) Mesh {
 		m.Edges = append(m.Edges, [2]int{base, base + 1}, [2]int{base + 2, base + 3})
 	}
 
+	m.UpdateBounds()
 	return m
 }

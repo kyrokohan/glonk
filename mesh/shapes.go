@@ -97,6 +97,7 @@ func Sphere(radius float64, segments, rings int) Mesh {
 			m.Edges = append(m.Edges, [2]int{ring(r, s), ring(r, s+1)})
 		}
 	}
+	m.UpdateBounds()
 	return m
 }
 
@@ -159,6 +160,7 @@ func Cylinder(radius, height float64, segments int) Mesh {
 			[3]int{capBottom, rimBottom + s, rimBottom + next})
 		m.Edges = append(m.Edges, [2]int{t0, t1}, [2]int{b0, b1}, [2]int{t0, b0})
 	}
+	m.UpdateBounds()
 	return m
 }
 
@@ -220,6 +222,7 @@ func Cone(radius, height float64, segments int) Mesh {
 			[3]int{middle, capRim + s, capRim + next})
 		m.Edges = append(m.Edges, [2]int{rim + s, rim + next}, [2]int{rim + s, tip + s})
 	}
+	m.UpdateBounds()
 	return m
 }
 
@@ -231,10 +234,12 @@ func Cone(radius, height float64, segments int) Mesh {
 func Plane(width, depth float64) Mesh {
 	hw, hd := extent(width)/2, extent(depth)/2
 	up := geometry.Vector3{Y: 1}
-	return Mesh{
+	m := Mesh{
 		Vertices: []geometry.Vector3{{X: -hw, Z: -hd}, {X: -hw, Z: hd}, {X: hw, Z: hd}, {X: hw, Z: -hd}},
 		Normals:  []geometry.Vector3{up, up, up, up},
 		Faces:    [][3]int{{0, 1, 2}, {0, 2, 3}},
 		Edges:    [][2]int{{0, 1}, {1, 2}, {2, 3}, {3, 0}},
 	}
+	m.UpdateBounds()
+	return m
 }
