@@ -7,8 +7,10 @@
 // base, the base again and the head, one after the other, in an order that rotates, so that a
 // computer that slows down or warms up over the minutes affects all three alike. The base again
 // is a control: the same code again shows how much a result varies by chance, and a change is
-// reported only if it is clearly more than that, by the best run and by the typical run. Allocations do not vary, so any rise in them
-// is reported. See Makefile (make benchcmp) and CONTRIBUTING.md.
+// reported only if it is clearly more than that, by the best run and by the typical run. Allocations
+// hardly vary, so any rise in them is reported. A package whose test binary is the same file for both
+// is not run: built without file paths, the same code is the same binary, so there is nothing to
+// compare and any difference would be noise. See Makefile (make benchcmp) and CONTRIBUTING.md.
 //
 // The exit status is 0 if nothing regressed, 1 if something did, and 2 if the comparison could
 // not be made.
@@ -17,6 +19,7 @@ package main
 import (
 	"archive/tar"
 	"bytes"
+	"crypto/sha256"
 	"flag"
 	"fmt"
 	"io"
@@ -37,6 +40,7 @@ type config struct {
 	benchtime string  // how long each benchmark runs, as for go test
 	threshold float64 // the smallest change to report, a fraction
 	all       bool    // list every benchmark
+	identical bool    // run the packages whose test binary is the same too, to measure the noise
 }
 
 func main() {
@@ -61,6 +65,7 @@ func parseFlags(args []string, w io.Writer) (config, error) {
 	fs.StringVar(&c.benchtime, "benchtime", "200ms", "how long each benchmark runs, as for go test")
 	fs.Float64Var(&percent, "threshold", 3, "the smallest change to report, in percent")
 	fs.BoolVar(&c.all, "all", false, "list every benchmark, not only the ones that changed")
+	fs.BoolVar(&c.identical, "identical", false, "run the packages whose test binary is the same as the base's too, to measure the noise")
 	if err := fs.Parse(args); err != nil {
 		return c, err
 	}
@@ -70,11 +75,13 @@ func parseFlags(args []string, w io.Writer) (config, error) {
 
 // A unit is a package whose benchmarks are run.
 type unit struct {
-	short   string // for the report: the path without the module's
-	headBin string
-	headDir string
-	baseBin string // empty where the base has no such package
-	baseDir string
+	same       bool   // the test binary of the base is the same file as the head's: the same code
+	benchmarks int    // how many benchmarks the head has
+	short      string // for the report: the path without the module's
+	headBin    string
+	headDir    string
+	baseBin    string // empty where the base has no such package
+	baseDir    string
 }
 
 // run compares and reports, and returns the exit status.
@@ -108,8 +115,11 @@ func run(c config, stdout, stderr io.Writer) int {
 	if os.Getenv("GITHUB_ACTIONS") == "true" {
 		for _, e := range entries {
 			if e.o.regressed() {
-				fmt.Fprintf(stdout, "::warning title=benchmark regression::%s %s is %s (allocations %g -> %g)\n",
-					e.pkg, e.name, percent(e.o.delta), e.o.baseAllocs, e.o.headAllocs)
+				fmt.Fprintf(stdout, "::warning title=benchmark regression::%s %s is %s", e.pkg, e.name, percent(e.o.delta))
+				if e.o.allocsChanged() {
+					fmt.Fprintf(stdout, " (allocations %g -> %g)", e.o.baseAllocs, e.o.headAllocs)
+				}
+				fmt.Fprintln(stdout)
 			}
 		}
 	}
@@ -179,6 +189,11 @@ func measure(c config, stderr io.Writer) (map[key]*series, header, error) {
 	if err != nil {
 		return nil, h, err
 	}
+	for _, u := range units {
+		if u.same {
+			h.notRun = append(h.notRun, fmt.Sprintf("%s (%d)", u.short, u.benchmarks))
+		}
+	}
 
 	data := map[key]*series{}
 	at := func(pkg, name string) *series {
@@ -188,9 +203,16 @@ func measure(c config, stderr io.Writer) (map[key]*series, header, error) {
 		}
 		return data[k]
 	}
+	if !slices.ContainsFunc(units, func(u unit) bool { return !u.same }) {
+		h.rounds = 0        // none were run
+		return data, h, nil // the same code everywhere: nothing to run
+	}
 	for r := range c.rounds {
 		fmt.Fprintf(stderr, "round %d of %d\n", r+1, c.rounds)
 		for i, u := range units {
+			if u.same {
+				continue
+			}
 			for _, role := range order(r, i) {
 				bin, dir := u.baseBin, u.baseDir
 				if role == "head" {
@@ -276,13 +298,19 @@ func buildUnits(c config, root, baseRoot, tmp string, stderr io.Writer) ([]unit,
 		if err := build(root, f[0], u.headBin); err != nil {
 			return nil, err
 		}
-		if !hasBenchmarks(u.headBin, u.headDir) {
+		u.benchmarks = benchmarks(u.headBin, u.headDir)
+		if u.benchmarks == 0 {
 			continue
 		}
 		if _, err := os.Stat(u.baseDir); err == nil {
 			u.baseBin = filepath.Join(tmp, fmt.Sprintf("base-%d.test", len(units)))
 			if err := build(baseRoot, f[0], u.baseBin); err != nil {
 				return nil, fmt.Errorf("the base: %w", err)
+			}
+			if !c.identical {
+				if u.same, err = sameFile(u.baseBin, u.headBin); err != nil {
+					return nil, err
+				}
 			}
 		}
 		units = append(units, u)
@@ -303,12 +331,48 @@ func build(dir, path, out string) error {
 	return nil
 }
 
-// hasBenchmarks reports whether the test binary has any benchmark.
-func hasBenchmarks(bin, dir string) bool {
+// benchmarks returns how many benchmarks the test binary has, not counting their sub-benchmarks.
+func benchmarks(bin, dir string) int {
 	cmd := exec.Command(bin, "-test.run=^$", "-test.list=^Benchmark")
 	cmd.Dir = dir
 	b, err := cmd.Output()
-	return err == nil && strings.Contains(string(b), "Benchmark")
+	if err != nil {
+		return 0
+	}
+	n := 0
+	for _, line := range strings.Split(string(b), "\n") {
+		if strings.HasPrefix(line, "Benchmark") {
+			n++
+		}
+	}
+	return n
+}
+
+// sameFile reports whether two files have the same bytes.
+func sameFile(a, b string) (bool, error) {
+	sum := func(name string) ([sha256.Size]byte, error) {
+		var out [sha256.Size]byte
+		f, err := os.Open(name)
+		if err != nil {
+			return out, err
+		}
+		defer f.Close()
+		h := sha256.New()
+		if _, err := io.Copy(h, f); err != nil {
+			return out, err
+		}
+		copy(out[:], h.Sum(nil))
+		return out, nil
+	}
+	x, err := sum(a)
+	if err != nil {
+		return false, err
+	}
+	y, err := sum(b)
+	if err != nil {
+		return false, err
+	}
+	return x == y, nil
 }
 
 // runBench runs the benchmarks of a test binary once, in the package's directory.

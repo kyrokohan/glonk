@@ -93,16 +93,31 @@ func write(t *testing.T, dir, name, text string) {
 // counts and the noise of a busy machine cannot, and returns the status and what it wrote.
 func compare(t *testing.T, dir string) (int, string, string) {
 	t.Helper()
+	return compareWith(t, config{dir: dir, base: "HEAD", bench: ".", pkgs: "./...", rounds: 3, benchtime: "10ms", threshold: 0.4})
+}
+
+func compareWith(t *testing.T, c config) (int, string, string) {
+	t.Helper()
 	var stdout, stderr bytes.Buffer
-	c := config{dir: dir, base: "HEAD", bench: ".", pkgs: "./...", rounds: 3, benchtime: "10ms", threshold: 0.4}
 	code := run(c, &stdout, &stderr)
 	return code, stdout.String(), stderr.String()
 }
 
-func TestAnUnchangedTreeRegressesNothing(t *testing.T) {
+// A package whose test binary is the base's, since the code is the same, is not run: there is
+// nothing to compare, and a difference would be only noise.
+func TestAnUnchangedTreeIsNotRun(t *testing.T) {
 	dir := repo(t)
 	code, out, errs := compare(t, dir)
-	if code != 0 || !strings.Contains(out, "1 benchmarks compared: 0 slower, 0 faster, ") || !strings.Contains(out, "; 0 allocate more") {
+	if code != 0 || !strings.Contains(out, "not run, since their test binary is the same file as the base's, so it is the same code: . (1)") ||
+		!strings.Contains(out, "0 benchmarks compared") || strings.Contains(errs, "round 1") || strings.Contains(out, "rounds of") {
+		t.Errorf("wanted status 0, the package not run and no round, got %d\n%s\n%s", code, out, errs)
+	}
+}
+
+func TestAnUnchangedTreeRunWhenAskedRegressesNothing(t *testing.T) {
+	dir := repo(t)
+	code, out, errs := compareWith(t, config{dir: dir, base: "HEAD", bench: ".", pkgs: "./...", rounds: 3, benchtime: "10ms", threshold: 0.4, identical: true})
+	if code != 0 || !strings.Contains(out, "1 benchmarks compared: 0 slower, 0 faster, ") || !strings.Contains(out, "; 0 allocate more") || strings.Contains(out, "not run") {
 		t.Errorf("wanted status 0 and one benchmark neither slower nor faster, got %d\n%s\n%s", code, out, errs)
 	}
 	if !strings.Contains(out, "base: ") || !strings.Contains(out, "3 rounds of 10ms") || !strings.Contains(errs, "round 3 of 3") {
@@ -110,12 +125,39 @@ func TestAnUnchangedTreeRegressesNothing(t *testing.T) {
 	}
 }
 
+func TestSameFile(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "a", "same bytes")
+	write(t, dir, "b", "same bytes")
+	write(t, dir, "c", "same byteS")
+	write(t, dir, "d", "same bytes, and more")
+	for _, tt := range []struct {
+		a, b string
+		want bool
+	}{{"a", "b", true}, {"a", "a", true}, {"a", "c", false}, {"a", "d", false}} {
+		if got, err := sameFile(filepath.Join(dir, tt.a), filepath.Join(dir, tt.b)); err != nil || got != tt.want {
+			t.Errorf("%s and %s: wanted %v, got %v %v", tt.a, tt.b, tt.want, got, err)
+		}
+	}
+	if _, err := sameFile(filepath.Join(dir, "a"), filepath.Join(dir, "missing")); err == nil {
+		t.Errorf("wanted an error for a file that is not there")
+	}
+	if _, err := sameFile(filepath.Join(dir, "missing"), filepath.Join(dir, "a")); err == nil {
+		t.Errorf("wanted an error for a file that is not there")
+	}
+}
+
 func TestATreeThatDoesMoreWorkIsSlower(t *testing.T) {
 	dir := repo(t)
+	t.Setenv("GITHUB_ACTIONS", "true")
 	write(t, dir, "work.go", workSource(8000, false)) // four times as much, not committed
 	code, out, errs := compare(t, dir)
 	if code != 1 || !strings.Contains(out, "slower   .        BenchmarkWork") || !strings.Contains(out, "1 slower") {
 		t.Errorf("wanted status 1 and a slower benchmark, got %d\n%s\n%s", code, out, errs)
+	}
+	// In GitHub Actions a regression is also a warning, with no allocations to say where there are none.
+	if !strings.Contains(out, "::warning title=benchmark regression::. BenchmarkWork is +") || strings.Contains(out, "(allocations") {
+		t.Errorf("wanted a warning annotation without allocations, got\n%s", out)
 	}
 }
 
@@ -130,10 +172,14 @@ func TestATreeThatDoesLessWorkIsFaster(t *testing.T) {
 
 func TestATreeThatAllocatesMoreRegressesWhateverTheTime(t *testing.T) {
 	dir := repo(t)
+	t.Setenv("GITHUB_ACTIONS", "") // as on a developer's machine, not in the checks, where it is set
 	write(t, dir, "work.go", workSource(2000, true))
 	code, out, errs := compare(t, dir)
 	if code != 1 || !strings.Contains(out, "0 -> 1") || !strings.Contains(out, "1 allocate more") {
 		t.Errorf("wanted status 1 and an allocation, got %d\n%s\n%s", code, out, errs)
+	}
+	if strings.Contains(out, "::warning") {
+		t.Errorf("wanted no annotations outside GitHub Actions, got\n%s", out)
 	}
 }
 
@@ -215,8 +261,8 @@ func TestParseFlags(t *testing.T) {
 	if err != nil || c != want {
 		t.Errorf("wanted the defaults %+v, got %+v %v", want, c, err)
 	}
-	c, err = parseFlags([]string{"-base", "v0.8.0", "-bench", "Draw", "-pkgs", "./mesh", "-rounds", "9", "-benchtime", "1s", "-threshold", "2.5", "-all"}, os.Stderr)
-	want = config{dir: ".", base: "v0.8.0", bench: "Draw", pkgs: "./mesh", rounds: 9, benchtime: "1s", threshold: 0.025, all: true}
+	c, err = parseFlags([]string{"-base", "v0.8.0", "-bench", "Draw", "-pkgs", "./mesh", "-rounds", "9", "-benchtime", "1s", "-threshold", "2.5", "-all", "-identical"}, os.Stderr)
+	want = config{dir: ".", base: "v0.8.0", bench: "Draw", pkgs: "./mesh", rounds: 9, benchtime: "1s", threshold: 0.025, all: true, identical: true}
 	if err != nil || c != want {
 		t.Errorf("wanted %+v, got %+v %v", want, c, err)
 	}
@@ -237,5 +283,46 @@ func TestAddKeepsEachRoleApart(t *testing.T) {
 	if !slices.Equal(s.base, want.base) || !slices.Equal(s.control, want.control) || !slices.Equal(s.head, want.head) ||
 		!slices.Equal(s.baseAllocs, want.baseAllocs) || !slices.Equal(s.headAllocs, want.headAllocs) {
 		t.Errorf("wanted %+v, got %+v", want, s)
+	}
+}
+
+func TestAnAnnotationSaysWhichAllocationsChanged(t *testing.T) {
+	dir := repo(t)
+	t.Setenv("GITHUB_ACTIONS", "true")
+	write(t, dir, "work.go", workSource(2000, true))
+	if _, out, _ := compare(t, dir); !strings.Contains(out, "::warning title=benchmark regression::. BenchmarkWork is ") || !strings.Contains(out, "(allocations 0 -> 1)") {
+		t.Errorf("wanted an annotation with the allocations, got\n%s", out)
+	}
+}
+
+// git runs git in dir for a test.
+func git(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@example.com"}, args...)...)
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+}
+
+// With two packages and one changed, only that one is run and compared, and the other is said not to
+// have been.
+func TestOnlyAChangedPackageIsRun(t *testing.T) {
+	dir := repo(t)
+	if err := os.Mkdir(filepath.Join(dir, "other"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, dir, "other/other.go", "package other\n\nvar sink int\n\nfunc Spin() int {\n\ts := 0\n\tfor i := 0; i < 3000; i++ {\n\t\ts += i ^ (s >> 2)\n\t}\n\treturn s\n}\n")
+	write(t, dir, "other/other_test.go", "package other\n\nimport \"testing\"\n\nfunc BenchmarkSpin(b *testing.B) {\n\tfor b.Loop() {\n\t\tsink = Spin()\n\t}\n}\n\nfunc BenchmarkSpinTwice(b *testing.B) {\n\tfor b.Loop() {\n\t\tsink = Spin() + Spin()\n\t}\n}\n")
+	git(t, dir, "add", ".")
+	git(t, dir, "commit", "-q", "-m", "a second package")
+
+	write(t, dir, "work.go", workSource(8000, false)) // only the first package changes
+	code, out, errs := compare(t, dir)
+	if code != 1 || !strings.Contains(out, "1 benchmarks compared: 1 slower") || !strings.Contains(out, "same code: other (2)") {
+		t.Errorf("wanted the changed package compared and the other not run, got %d\n%s\n%s", code, out, errs)
+	}
+	if strings.Contains(out, "Spin") {
+		t.Errorf("wanted nothing of the package that was not run in the table, got\n%s", out)
 	}
 }

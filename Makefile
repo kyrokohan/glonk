@@ -11,7 +11,7 @@ help:
 	@echo "  vuln     - List known vulnerabilities in Go and our dependencies with govulncheck"
 	@echo "  fuzz     - Fuzz every fuzz test for FUZZTIME each (default 10s)"
 	@echo "  bench    - Run the benchmarks once, with allocations (BENCH= picks some)"
-	@echo "  benchcmp - Compare the benchmarks with those of BASE (default origin/main), a few minutes"
+	@echo "  benchcmp - Compare the benchmarks with those of BASE (default origin/main), the packages that differ"
 	@echo "  run      - Run an example (default bounce2d; EXAMPLE=./examples/cube3d; ARGS= passes arguments)"
 	@echo "  build    - Compile every package"
 	@echo "  check    - Check formatting, run tests and vet"
@@ -69,15 +69,17 @@ bench:
 
 # The benchmarks of the working tree against those of BASE (a commit, tag or branch), in
 # interleaved rounds with the base run twice as a control for noise: see internal/benchcmp. It
-# exits 1 for a change that is clearly slower or allocates more. It takes minutes; BENCH=Draw
-# ROUNDS=9 narrows it and looks closer.
+# exits 1 for a change that is clearly slower or allocates more. It runs only the packages whose
+# code differs from the base's, which can take minutes for a change to a package that others use;
+# BENCH=Draw ROUNDS=9 narrows it and looks closer, and FLAGS=-identical runs the rest too.
 BASE ?= origin/main
+FLAGS ?=
 ROUNDS ?= 5
 BENCHTIME ?= 200ms
 THRESHOLD ?= 3
 benchcmp:
 	@echo "Comparing the benchmarks with $(BASE)..."
-	go run ./internal/benchcmp -base '$(BASE)' -bench '$(BENCH)' -rounds $(ROUNDS) -benchtime $(BENCHTIME) -threshold $(THRESHOLD)
+	go run ./internal/benchcmp -base '$(BASE)' -bench '$(BENCH)' -rounds $(ROUNDS) -benchtime $(BENCHTIME) -threshold $(THRESHOLD) $(FLAGS)
 
 EXAMPLE ?= ./examples/bounce2d
 ARGS ?=
