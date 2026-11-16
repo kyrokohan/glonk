@@ -16,6 +16,7 @@ Website: [glonk.dev](https://glonk.dev)
 - **Widgets:** a label, a panel, a bar and a menu for a HUD or a pause screen, drawn in screen space. See [Widgets](#widgets).
 - **Input:** held keys, one-shot presses (`Input.Started`, which a repeat does not set off again) and key repeats (`Input.Pressed`), including arrows. Terminals with the [kitty keyboard protocol](https://sw.kovidgoyal.net/kitty/keyboard-protocol/) (Ghostty, kitty, WezTerm, foot, iTerm2, Alacritty) report real key releases, so you can hold several keys at once.
 - **Resizing:** the frame follows the terminal window, and a game with a `Resize(width, height int)` method is told its size.
+- **Frame numbers:** a game with a `Stats(engine.Stats)` method is told after every frame how it went: frames a second, the time of `Update`, `Draw` and the write to the terminal, and the bytes sent. See [Frame numbers](#frame-numbers).
 - **Testing:** `engine.Keyboard` presses keys for a game's `Update`, a `FrameBuffer` prints as text, and `Config.Input` and `Config.Output` let a whole `Run` be driven without a terminal. See [Testing a game](#testing-a-game).
 
 ## Install
@@ -394,6 +395,19 @@ func main() {
 ```
 
 `Run` owns the terminal. Each frame it calls `Update` (move things, read input) and then `Draw` (write cells into the `FrameBuffer`), then prints the frame. The terminal is restored when `Run` returns, and Ctrl-C, `kill` and a closing window (SIGINT, SIGTERM, SIGHUP) end it cleanly (`Run` returns `nil`), so the game needs no signal handler. When your `context` ends it, `Run` returns the context's error. The full API is in each package's documentation, with runnable examples: `go doc glonk.dev/engine`, or the package pages on pkg.go.dev.
+
+## Frame numbers
+
+A game that has a `Stats(engine.Stats)` method is called after every frame, once it has been written, with how that frame went:
+
+```go
+func (g *game) Stats(s engine.Stats) { g.stats = s }
+
+// in Draw:
+fb.DrawText(1, 1, fmt.Sprintf("%.0f fps  %d bytes", g.stats.FPS, g.stats.Bytes), engine.Color{})
+```
+
+`Stats` has `FPS` (frames a second, averaged over about the last ten), `Update`, `Draw` and `Write` (the time of each part of the frame; `Write` is working out which cells changed and writing them, which is where a slow terminal shows) and `Bytes` (what was sent for the frame, 0 when nothing on the screen changed). The bytes decide whether a program works over ssh: a moving 3D scene in half-block pixels is about 7 KB a frame, and a frame where every pixel changes is 66 KB in 256 colors and 110 KB in true color for 100 by 30 cells, so a program that can see the number can draw less on a slow link. A game without the method is not timed, so asking is the only way to pay for it. A headless `Run` gives the same numbers, with every frame sent whole, so a test can check the bytes of a frame; see `ExampleStatsReceiver`. `cube3d` and the viewer show them.
 
 ## Testing a game
 

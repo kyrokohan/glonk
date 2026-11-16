@@ -355,6 +355,8 @@ func Run(ctx context.Context, game Game, cfg Config) (err error) {
 	if resizer != nil {
 		resizer.Resize(nfb.Width(), nfb.Height())
 	}
+	receiver, _ := game.(StatsReceiver)
+	m := meter{on: receiver != nil}
 
 	// The window size the screen was last cleared for.
 	shownW, shownH := termW, termH
@@ -401,6 +403,7 @@ func Run(ctx context.Context, game Game, cfg Config) (err error) {
 			}
 
 			in.beginFrame(now)
+			m.start()
 			if err := game.Update(dt, in); err != nil {
 				if errors.Is(err, ErrQuit) {
 					return nil
@@ -408,11 +411,17 @@ func Run(ctx context.Context, game Game, cfg Config) (err error) {
 				return err
 			}
 			in.endFrame()
+			updateTime := m.lap()
 			nfb.Clear()
 			game.Draw(nfb)
+			drawTime := m.lap()
 			// A fixed-size frame can be larger than the window: show the part that fits.
 			if err := pres.present(tty.out, nfb, shownW, shownH); err != nil {
 				return err
+			}
+			writeTime := m.lap()
+			if receiver != nil {
+				receiver.Stats(Stats{FPS: m.rate(dt), Update: updateTime, Draw: drawTime, Write: writeTime, Bytes: pres.bytes})
 			}
 		case b, ok := <-input:
 			if !ok {

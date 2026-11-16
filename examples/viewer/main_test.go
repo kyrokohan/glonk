@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"glonk.dev/engine"
 	"glonk.dev/geometry"
@@ -249,6 +250,21 @@ func modelIndex(t *testing.T, models []model, name string) int {
 	}
 	t.Fatalf("wanted a model called %s", name)
 	return 0
+}
+
+// The numbers Run gives the viewer, frame by frame, are on the screen: the rate by the mode, and the
+// times and the bytes of the last frame above the help.
+func TestTheFrameNumbersAreOnTheScreen(t *testing.T) {
+	v := newViewer(loadSamples(t))
+	v.Stats(engine.Stats{FPS: 29.6, Update: 100 * time.Microsecond, Draw: 1200 * time.Microsecond, Write: 400 * time.Microsecond, Bytes: 7100})
+	fb := drawAll(t, v)
+
+	if got := hudText(fb, 2); !strings.Contains(got, "30 fps") {
+		t.Errorf("wanted the rate by the mode, got %q", got)
+	}
+	if got := hudText(fb, fb.Height()-4); !strings.Contains(got, "update 0.1  draw 1.2  write 0.4 ms  7.1 KB sent") {
+		t.Errorf("wanted the times and the bytes above the help, got %q", got)
+	}
 }
 
 func TestHUDNamesTheModelAndMode(t *testing.T) {

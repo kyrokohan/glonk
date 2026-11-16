@@ -31,6 +31,9 @@ type presenter struct {
 	valid        bool // prev is what the terminal shows
 
 	sb sequenceBuilder // kept between frames, so it stops allocating once it has grown
+
+	// bytes is how many bytes the last call of present sent.
+	bytes int
 }
 
 func newPresenter(changesOnly, trueColor bool) *presenter {
@@ -52,8 +55,10 @@ func (p *presenter) present(w io.Writer, fb *FrameBuffer, maxW, maxH int) error 
 
 	p.sb.reset()
 	p.sb.trueColor = p.trueColor
+	p.bytes = 0
 	if !p.changesOnly {
 		fb.appendFrame(&p.sb, width, height)
+		p.bytes = p.sb.Len()
 		return p.sb.Flush(w)
 	}
 
@@ -76,6 +81,7 @@ func (p *presenter) present(w io.Writer, fb *FrameBuffer, maxW, maxH int) error 
 		p.sb.ResetStyle() // leave nothing set, for the shell and for whatever draws next
 	}
 	p.sb.EndSynchronizedUpdate()
+	p.bytes = p.sb.Len()
 
 	if err := p.sb.Flush(w); err != nil {
 		p.valid = false // some of it may have arrived
