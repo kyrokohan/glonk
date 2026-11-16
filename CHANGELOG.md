@@ -4,6 +4,10 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-15
+
+On top of 0.7.0 this release adds pictures made in code and drawn in parts, mirrored, darker or in one color, a way to blend a color over the canvas, a kind for every tile of a tile map, line of sight and ray casts, and a way to walk to a target. A `Tile` has a new field, `Kind`, which `FromLines` fills, so a tile from it is no longer equal to the tile of its legend, and a `Tile` literal that lists its values without field names no longer compiles.
+
 ### Added
 
 - `Route` is the way to walk to a target over a `Map`, for the enemy that walks straight at the player and is stopped by the first wall between them. `Route.To(m, targets...)` searches the tiles that are not solid, breadth first, for how many steps each is from the nearest of one or more targets, `Route.Next(from)` gives the center of the neighbor tile that a mover at a point should step to, one step nearer, to steer to and `Map.Move`, and `Route.Steps(p)` is the number of steps. A step goes to any of the 8 neighbors of a tile, a diagonal one only if both tiles beside it are open, so that a mover does not cut through the corner of a wall, and a diagonal counts as one step, so the steps are not straight-line lengths; where several neighbors are one step nearer, a straight one is chosen before a diagonal one. A point is in the tile it floors to, as for `Solid`, and a target in a solid tile, outside the map, or NaN or infinite is left out. One `Route` serves every mover that wants the same target, so it is searched again when the target changes tile and not once a mover; it holds no pointer to the map, so it does not see tiles that change after the search, and it reuses its memory, so that a search allocates nothing once it has searched a map of that size. The work is a few steps for each tile at the most: a 400 by 200 map takes about 1.6 milliseconds with no walls and 2.8 with a fifth of it wall, a `Next` about 6 nanoseconds and a `Steps` about 4. Not included: tiles that cost more to cross, movers wider than a tile, obstacles that are not tiles, and a longest distance to search. The tests check every step against shortest paths found by Floyd and Warshall's algorithm over a graph built from the rule, and walk a box with `Map.Move` through mazes where one that goes straight at the target is stuck.
@@ -196,7 +200,8 @@ The first release. The API is pre-1.0 and may still change. The README lists the
 - Three example programs (`bounce2d`, `cube3d` and a model `viewer`), runnable examples in the package documentation, fuzz tests for the parsers, rasterizers and clipping, and a test that keeps the documentation complete.
 - Continuous integration (format, vet and race tests on Linux and macOS for Go 1.26 and 1.27, cross-compilation, 32-bit tests), Dependabot, a security policy and contributing notes.
 
-[Unreleased]: https://github.com/kyrokohan/glonk/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/kyrokohan/glonk/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/kyrokohan/glonk/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/kyrokohan/glonk/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/kyrokohan/glonk/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/kyrokohan/glonk/compare/v0.4.0...v0.5.0
