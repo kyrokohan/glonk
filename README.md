@@ -17,7 +17,7 @@ Website: [glonk.dev](https://glonk.dev)
 - **Input:** held keys, one-shot presses (`Input.Started`, which a repeat does not set off again) and key repeats (`Input.Pressed`), including arrows. Terminals with the [kitty keyboard protocol](https://sw.kovidgoyal.net/kitty/keyboard-protocol/) (Ghostty, kitty, WezTerm, foot, iTerm2, Alacritty) report real key releases, so you can hold several keys at once.
 - **Resizing:** the frame follows the terminal window, and a game with a `Resize(width, height int)` method is told its size.
 - **Frame numbers:** a game with a `Stats(engine.Stats)` method is told after every frame how it went: frames a second, the time of `Update`, `Draw` and the write to the terminal, and the bytes sent. See [Frame numbers](#frame-numbers).
-- **Testing:** `engine.Keyboard` presses keys for a game's `Update`, a `FrameBuffer` prints as text, and `Config.Input` and `Config.Output` let a whole `Run` be driven without a terminal. See [Testing a game](#testing-a-game).
+- **Testing:** `engine.Keyboard` presses keys for a game's `Update`, a `FrameBuffer` prints as text or draws as a picture, and `Config.Input` and `Config.Output` let a whole `Run` be driven without a terminal. See [Testing a game](#testing-a-game).
 
 ## Install
 
@@ -444,6 +444,26 @@ func TestTheDotMovesAcrossTheScreen(t *testing.T) {
 A `Keyboard` from `NewKeyboard` acts like a terminal that reports key releases: a key is down from `Press` until `Release`, `Input.Pressed` and `Input.Started` are true for one frame, and `EndFrame` ends that frame the way `Run` does. A `Press` of a key that is already down is a key repeat: `Pressed` is true again, `Started` is not, so a test can hold a key. Tests are exact and need no clock. `NewLegacyKeyboard` acts like a terminal that reports none, for a game that asks `Input.Exact` and changes what it does: a key stays held for about 150 ms after its last `Press`, `Release` does nothing, and `Advance` moves the clock so that a test can let a key go. `String` leaves off the trailing spaces of each line and shows characters only, not colors.
 
 To test a whole run (start-up, key bytes in, frames out), give `Config.Input` and `Config.Output` a reader and a writer that are not a terminal: `Run` then runs headless at the `Width` and `Height` you set. See `ExampleRun_headless`.
+
+A frame can also be a picture, which `String()` cannot show: colors, and the two pixels of every half-block cell. `fb.Image` returns an `*image.RGBA` that is `Width*Scale` by `2*Height*Scale` pixels, so a frame drawn with a `Canvas` comes out pixel for pixel at `Scale: 1`. A test can write it for a person to look at when it is asked to, and compare it with a picture it stored earlier:
+
+```go
+func TestSceneLooksRight(t *testing.T) {
+	g := newScene()
+	fb, _ := engine.NewFrameBuffer(40, 12)
+	g.Draw(fb)
+	img := fb.Image(engine.ImageOptions{Scale: 4})
+
+	if path := os.Getenv("GLONK_SCREENSHOT"); path != "" { // GLONK_SCREENSHOT=/tmp/scene.png go test
+		f, _ := os.Create(path)
+		defer f.Close()
+		png.Encode(f, img)
+	}
+	// Compare with a stored picture: decode it with png.Decode and check each pixel of img.
+}
+```
+
+What it draws: a half-block cell as its two pixels, a space as its background and `█` as its foreground. Any other character is a mark, a rectangle in its foreground color over the middle of the cell, which shows where text is and in what color but not what it says (`String()` says that). `Reverse` swaps a cell's colors; Bold, Dim and Underline are not drawn. The default colors of a terminal are its own, so a cell that leaves them out is light gray on black unless `ImageOptions.Foreground` and `Background` say otherwise, and `Colors: engine.Colors256` shows RGB as the nearest of the 256 palette colors, as a terminal without true color does. A picture of more than 4,194,304 pixels is not made. Pixels set on a `Canvas` are in the picture once `Compose` has put them in the cells. `ExampleFrameBuffer_Image` is a runnable version.
 
 ## Packages
 

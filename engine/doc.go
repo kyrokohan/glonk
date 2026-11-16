@@ -8,7 +8,7 @@
 // told after every frame how it went: its rate, the time of Update, Draw and the write, and the
 // bytes sent; see [Resizer] and [StatsReceiver].
 // To test a game, call Update with the Input of a [Keyboard] and read the frame as
-// text with [FrameBuffer.String]; given an input and output that are not terminals,
+// text with [FrameBuffer.String], or as a picture with [FrameBuffer.Image]; given an input and output that are not terminals,
 // Run runs headless, which tests a whole run.
 //
 // Draw writes [Cell] values into a [FrameBuffer], a grid with its origin at the top left,

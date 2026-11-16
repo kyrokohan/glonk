@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"image/png"
 	"os"
 	"strings"
 
@@ -106,6 +107,43 @@ func ExampleStatsReceiver() {
 	// error: <nil>
 	// the last frame was 18 bytes, of 54 in all
 	// the time of each part is known: true
+}
+
+// Image draws a frame as a picture, for a test to compare or a person to look at, where there is no
+// terminal: a half-block cell is its two pixels, and a letter is a mark in its color. A test that
+// wants to be looked at can write the picture when it is asked to, as this one does for the path in
+// GLONK_SCREENSHOT.
+func ExampleFrameBuffer_Image() {
+	fb, err := engine.NewFrameBuffer(12, 4)
+	if err != nil {
+		panic(err)
+	}
+	canvas := fb.Canvas()
+	canvas.FillRect(0, 0, 4, 5, engine.RGB(240, 140, 30)) // pixels: four across, five down
+	canvas.Compose()
+	fb.DrawText(5, 1, "score", engine.Palette(46))
+
+	img := fb.Image(engine.ImageOptions{Scale: 4})
+	fmt.Println("picture:", img.Bounds().Dx(), "by", img.Bounds().Dy(), "pixels")
+	fmt.Println("orange block:", img.RGBAAt(2, 2))
+	fmt.Println("mark of a letter:", img.RGBAAt(21, 10))
+	fmt.Println("behind the letter:", img.RGBAAt(20, 8))
+
+	if path := os.Getenv("GLONK_SCREENSHOT"); path != "" {
+		f, err := os.Create(path)
+		if err != nil {
+			panic(err)
+		}
+		defer f.Close()
+		if err := png.Encode(f, img); err != nil {
+			panic(err)
+		}
+	}
+	// Output:
+	// picture: 48 by 32 pixels
+	// orange block: {240 140 30 255}
+	// mark of a letter: {0 255 0 255}
+	// behind the letter: {0 0 0 255}
 }
 
 func ExampleFrameBuffer_DrawText() {
