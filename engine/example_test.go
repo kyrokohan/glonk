@@ -68,6 +68,46 @@ func ExampleRun_headless() {
 	// frames written: 2
 }
 
+// meterGame keeps the numbers Run gives it about each frame. A game with a Stats method is told how
+// every frame went, after it has been written, and shows the numbers in its next Draw.
+type meterGame struct {
+	frames int
+	last   engine.Stats
+}
+
+func (g *meterGame) Update(float64, *engine.Input) error {
+	if g.frames++; g.frames == 4 {
+		return engine.ErrQuit
+	}
+	return nil
+}
+
+func (g *meterGame) Draw(fb *engine.FrameBuffer) {
+	fb.DrawText(0, 0, fmt.Sprintf("%d bytes", g.last.Bytes), engine.Color{})
+}
+
+func (g *meterGame) Stats(s engine.Stats) { g.last = s }
+
+// A game with a Stats method learns how many bytes each frame took, and how long its Update, its
+// Draw and the write took. A headless Run sends every frame whole, so the bytes are the size of the frame.
+func ExampleStatsReceiver() {
+	g := &meterGame{}
+	var out bytes.Buffer
+	err := engine.Run(context.Background(), g, engine.Config{
+		Width: 12, Height: 1, FPS: 100,
+		Input:  strings.NewReader(""),
+		Output: &out,
+	})
+
+	fmt.Println("error:", err)
+	fmt.Println("the last frame was", g.last.Bytes, "bytes, of", out.Len(), "in all")
+	fmt.Println("the time of each part is known:", g.last.Update >= 0 && g.last.Draw >= 0 && g.last.Write >= 0)
+	// Output:
+	// error: <nil>
+	// the last frame was 18 bytes, of 54 in all
+	// the time of each part is known: true
+}
+
 func ExampleFrameBuffer_DrawText() {
 	fb, err := engine.NewFrameBuffer(16, 3)
 	if err != nil {

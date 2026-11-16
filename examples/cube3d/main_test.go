@@ -6,6 +6,7 @@ import (
 	"math"
 	"strings"
 	"testing"
+	"time"
 
 	"glonk.dev/engine"
 	"glonk.dev/geometry"
@@ -97,6 +98,22 @@ func TestSceneDrawsAndStartsWithGlyphs(t *testing.T) {
 	}
 	if drawn == 0 {
 		t.Errorf("wanted the floor and cubes on screen, got an empty scene")
+	}
+}
+
+// The numbers Run gives the game, frame by frame, are on the screen: the rate by the mode, and the
+// times and the bytes of the last frame above the help.
+func TestTheFrameNumbersAreOnTheScreen(t *testing.T) {
+	g := newCubeGame()
+	g.Stats(engine.Stats{FPS: 29.6, Update: 100 * time.Microsecond, Draw: 1200 * time.Microsecond, Write: 400 * time.Microsecond, Bytes: 7100})
+	fb := newFrame(t, 80, 24)
+	g.Draw(fb)
+
+	if got := row(fb, 1); !strings.Contains(got, "30 fps") {
+		t.Errorf("wanted the rate by the mode, got %q", got)
+	}
+	if got := row(fb, fb.Height()-4); !strings.Contains(got, "update 0.1  draw 1.2  write 0.4 ms  7.1 KB sent") {
+		t.Errorf("wanted the times and the bytes above the help, got %q", got)
 	}
 }
 

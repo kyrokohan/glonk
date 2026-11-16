@@ -1,6 +1,9 @@
 package engine
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 // ErrQuit, returned from Update, ends Run with a nil error, as the player quitting
 // does.
@@ -32,4 +35,41 @@ type Resizer interface {
 	// receives: Config.Width and Config.Height where they are set, the terminal's
 	// size on an axis left at 0.
 	Resize(width, height int)
+}
+
+// Stats is how a frame went, as Run measured it. A Game that has a Stats method is given
+// one after every frame; see StatsReceiver.
+type Stats struct {
+	// FPS is the frames a second Run is managing, averaged over about the last ten
+	// frames. It follows the dt that Update is given, so a stall of more than a quarter of
+	// a second counts as a quarter of a second.
+	FPS float64
+
+	// Update is how long this frame's Update took.
+	Update time.Duration
+
+	// Draw is how long this frame took to clear the FrameBuffer and run Draw.
+	Draw time.Duration
+
+	// Write is how long it took to get this frame to the terminal: working out which
+	// cells changed, and writing them. A terminal that cannot keep up makes the write
+	// block, so this is where a slow link shows.
+	Write time.Duration
+
+	// Bytes is how many bytes were sent for this frame: everything written, the
+	// sequences that move and set colors included. It is 0 when nothing on the
+	// screen changed. A headless Run sends every frame whole, so there it is the size
+	// of the frame.
+	Bytes int
+}
+
+// StatsReceiver is an optional part of a Game. A game that has a Stats method is told how
+// each frame went, and a game that does not is not timed at all, so asking is the only way
+// to pay for it.
+type StatsReceiver interface {
+	// Stats is called once after every frame has been written to the terminal, with that
+	// frame's numbers, from the goroutine that calls Update and Draw. A game keeps them
+	// and shows them in the next Draw. It is not called for a frame whose Update ends the
+	// run, or after Run has returned.
+	Stats(s Stats)
 }

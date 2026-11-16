@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"time"
 
 	"glonk.dev/engine"
 	"glonk.dev/geometry"
@@ -174,10 +175,10 @@ type viewer struct {
 	wire        bool
 	halfBlocks  bool
 	doubleSided bool
-	lamp        bool // lit by a lamp that follows the camera, not the sun
-	color       int  // the palette color, for a model without colors of its own and for the wireframe
-	ownColors   bool // a model that has colors of its own shows them, not the palette color
-	fps         float64
+	lamp        bool         // lit by a lamp that follows the camera, not the sun
+	color       int          // the palette color, for a model without colors of its own and for the wireframe
+	ownColors   bool         // a model that has colors of its own shows them, not the palette color
+	stats       engine.Stats // how the last frame went, given by Run after every frame
 
 	// flipEdges is set when B is pressed. The next half-block frame then switches the
 	// pixel edges between exact and solid. The engine keeps that setting from frame to
@@ -186,7 +187,7 @@ type viewer struct {
 }
 
 func newViewer(models []model) *viewer {
-	return &viewer{models: models, pitch: -0.5, dist: 5, spin: true, ownColors: true, fps: 30}
+	return &viewer{models: models, pitch: -0.5, dist: 5, spin: true, ownColors: true}
 }
 
 func (v *viewer) Update(dt float64, in *engine.Input) error {
@@ -258,9 +259,16 @@ func (v *viewer) Update(dt float64, in *engine.Input) error {
 	}
 	v.dist = max(2.2, min(14, v.dist))
 
-	v.fps = 0.9*v.fps + 0.1*(1/dt)
 	return nil
 }
+
+var _ engine.StatsReceiver = (*viewer)(nil)
+
+// Stats keeps how the last frame went, for the lines at the top and the bottom.
+func (v *viewer) Stats(s engine.Stats) { v.stats = s }
+
+// ms is a duration in milliseconds.
+func ms(d time.Duration) float64 { return float64(d) / float64(time.Millisecond) }
 
 // nextColor is C: the next palette color. A model with colors of its own goes from them
 // to the first palette color and, after the last, back to them.
@@ -375,7 +383,8 @@ func (v *viewer) Draw(fb *engine.FrameBuffer) {
 	cur := v.models[v.current]
 	fb.DrawBox(0, 0, fb.Width(), fb.Height(), engine.Color{})
 	fb.DrawText(1, 1, fmt.Sprintf("%s (%d/%d)  %d vertices, %d faces", cur.name, v.current+1, len(v.models), cur.verts, cur.faces), engine.Color{})
-	fb.DrawText(1, 2, fmt.Sprintf("%.0f fps  %s", v.fps, mode), engine.Color{})
+	fb.DrawText(1, 2, fmt.Sprintf("%.0f fps  %s", v.stats.FPS, mode), engine.Color{})
+	fb.DrawText(1, fb.Height()-4, fmt.Sprintf("update %.1f  draw %.1f  write %.1f ms  %.1f KB sent", ms(v.stats.Update), ms(v.stats.Draw), ms(v.stats.Write), float64(v.stats.Bytes)/1000), engine.Color{})
 	fb.DrawText(1, fb.Height()-3, "arrows orbit  +/- zoom  R spin  N next model  Esc quit", engine.Color{})
 	fb.DrawText(1, fb.Height()-2, "V wire/solid  M blocks  B edges  D two-sided  C color  F smooth  L lamp", engine.Color{})
 }

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"time"
 	"unicode"
 
 	"glonk.dev/bitmap"
@@ -94,8 +95,8 @@ type cubeGame struct {
 	cam   mesh.Camera
 	floor mesh.Mesh
 	cubes []mesh.Mesh
-	ghost mesh.Mesh // a cube drawn as a wireframe (pixel lines in half-block mode), partly hidden by the solid ones in front of it
-	fps   float64
+	ghost mesh.Mesh    // a cube drawn as a wireframe (pixel lines in half-block mode), partly hidden by the solid ones in front of it
+	stats engine.Stats // how the last frame went, given by Run after every frame
 
 	// halfBlocks draws the cubes as pixels, two per cell, shaded by color. Off, they
 	// are drawn one per cell, shaded by character. M toggles it.
@@ -181,9 +182,16 @@ func (g *cubeGame) Update(dt float64, in *engine.Input) error {
 	}
 	g.cam.Pitch = max(-maxPitch, min(maxPitch, g.cam.Pitch))
 
-	g.fps = 0.9*g.fps + 0.1*(1/dt)
 	return nil
 }
+
+var _ engine.StatsReceiver = (*cubeGame)(nil)
+
+// Stats keeps how the last frame went, for the lines at the top and the bottom.
+func (g *cubeGame) Stats(s engine.Stats) { g.stats = s }
+
+// ms is a duration in milliseconds.
+func ms(d time.Duration) float64 { return float64(d) / float64(time.Millisecond) }
 
 func (g *cubeGame) Draw(fb *engine.FrameBuffer) {
 	// The floor is wireframe and ignores depth, so draw it first; the cubes then
@@ -220,10 +228,11 @@ func (g *cubeGame) Draw(fb *engine.FrameBuffer) {
 	}
 
 	fb.DrawBox(0, 0, fb.Width(), fb.Height(), engine.Color{})
-	fb.DrawText(1, 1, fmt.Sprintf("%.0f fps  %s", g.fps, mode), engine.Color{})
+	fb.DrawText(1, 1, fmt.Sprintf("%.0f fps  %s", g.stats.FPS, mode), engine.Color{})
 	if g.noReleases {
 		fb.DrawText(1, 2, "no key releases here: one key at a time", engine.Color{})
 	}
+	fb.DrawText(1, fb.Height()-4, fmt.Sprintf("update %.1f  draw %.1f  write %.1f ms  %.1f KB sent", ms(g.stats.Update), ms(g.stats.Draw), ms(g.stats.Write), float64(g.stats.Bytes)/1000), engine.Color{})
 	fb.DrawText(1, fb.Height()-3, "WASD move  Q/E turn  arrows look", engine.Color{})
 	fb.DrawText(1, fb.Height()-2, "M mode  B edges  Esc quit", engine.Color{})
 }
@@ -268,7 +277,6 @@ func newCubeGame() *cubeGame {
 			newCube(1, -6, -8, engine.Palette(118)),
 		},
 		ghost: newCube(2.6, 1.6, 8.6, engine.Palette(51)), // clear of every solid, partly behind the orange one from the start
-		fps:   30,
 		tree:  newTree(),
 	}
 }

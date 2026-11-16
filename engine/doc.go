@@ -4,6 +4,9 @@
 // A program implements [Game] and gives it to [Run]. Run owns the terminal: it
 // switches to the alternate screen, reads the keyboard into an [Input], calls Update
 // and then Draw at a fixed frame rate, and puts the terminal back when it returns.
+// A game with a Resize method is told the size of its frame, and one with a Stats method is
+// told after every frame how it went: its rate, the time of Update, Draw and the write, and the
+// bytes sent; see [Resizer] and [StatsReceiver].
 // To test a game, call Update with the Input of a [Keyboard] and read the frame as
 // text with [FrameBuffer.String]; given an input and output that are not terminals,
 // Run runs headless, which tests a whole run.
