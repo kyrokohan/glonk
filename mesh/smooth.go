@@ -116,15 +116,18 @@ type shadedTriangle struct {
 	// A smooth triangle is lit at every cell, from its corners' places in the world
 	// and the way the surface faces there (unit vectors, or zero).
 	world, normal [3]geometry.Vector3
+
+	// lights are the ones that can reach the mesh the triangle belongs to.
+	lights []Light
 }
 
 // brightnessAt is the brightness of a smooth triangle at the point with corner
 // weights b0, b1 and b2 (see engine.FrameBuffer.FillTriangleFunc).
-func (t *shadedTriangle) brightnessAt(lights []Light, b0, b1, b2 float64) float64 {
+func (t *shadedTriangle) brightnessAt(b0, b1, b2 float64) float64 {
 	point := t.world[0].Scale(b0).Add(t.world[1].Scale(b1)).Add(t.world[2].Scale(b2))
 	// Blending unit vectors gives a shorter one; lights are promised a unit normal.
 	normal := t.normal[0].Scale(b0).Add(t.normal[1].Scale(b1)).Add(t.normal[2].Scale(b2)).Normalize()
-	return Brightness(lights, point, normal)
+	return Brightness(t.lights, point, normal)
 }
 
 // depthAt is how deep the triangle is at the point with corner weights b0, b1 and b2. The
@@ -206,12 +209,12 @@ func cornerNormal(vertex, face geometry.Vector3, front bool) geometry.Vector3 {
 
 // fillTinted draws a triangle that has vertex colors into cells. Every cell has a color of
 // its own, so, flat or smooth, each is asked for. The color fades in fog, if there is any.
-func fillTinted(fb *engine.FrameBuffer, t *shadedTriangle, ramp []rune, lights []Light, fog *Fog) {
+func fillTinted(fb *engine.FrameBuffer, t *shadedTriangle, ramp []rune, fog *Fog) {
 	c := &t.corners
 	fb.FillTriangleFunc(c[0].x, c[0].y, c[0].z, c[1].x, c[1].y, c[1].z, c[2].x, c[2].y, c[2].z, func(b0, b1, b2 float64) engine.Cell {
 		intensity := t.intensity
 		if t.smooth {
-			intensity = t.brightnessAt(lights, b0, b1, b2)
+			intensity = t.brightnessAt(b0, b1, b2)
 		}
 		color := t.colorAt(b0, b1, b2)
 		if fog != nil {
@@ -223,12 +226,12 @@ func fillTinted(fb *engine.FrameBuffer, t *shadedTriangle, ramp []rune, lights [
 
 // fillTintedPixels is fillTinted for a Canvas, where brightness is a shade of the color, and
 // the shaded color fades in fog.
-func fillTintedPixels(c *engine.Canvas, t *shadedTriangle, lights []Light, fog *Fog) {
+func fillTintedPixels(c *engine.Canvas, t *shadedTriangle, fog *Fog) {
 	p := &t.corners
 	c.FillTriangleFunc(p[0].x, 2*p[0].y, p[0].z, p[1].x, 2*p[1].y, p[1].z, p[2].x, 2*p[2].y, p[2].z, func(b0, b1, b2 float64) engine.Color {
 		intensity := t.intensity
 		if t.smooth {
-			intensity = t.brightnessAt(lights, b0, b1, b2)
+			intensity = t.brightnessAt(b0, b1, b2)
 		}
 		color := engine.Shade(t.colorAt(b0, b1, b2), intensity)
 		if fog != nil {
@@ -241,12 +244,12 @@ func fillTintedPixels(c *engine.Canvas, t *shadedTriangle, lights []Light, fog *
 // fillFogged draws a triangle without vertex colors into cells, flat or smooth, in fog. A flat
 // face is one color without fog, but with it every cell is a different depth, so each is asked
 // for. The character shows the brightness as it does without fog, and the color fades.
-func fillFogged(fb *engine.FrameBuffer, t *shadedTriangle, ramp []rune, lights []Light, fog *Fog) {
+func fillFogged(fb *engine.FrameBuffer, t *shadedTriangle, ramp []rune, fog *Fog) {
 	c := &t.corners
 	fb.FillTriangleFunc(c[0].x, c[0].y, c[0].z, c[1].x, c[1].y, c[1].z, c[2].x, c[2].y, c[2].z, func(b0, b1, b2 float64) engine.Cell {
 		intensity := t.intensity
 		if t.smooth {
-			intensity = t.brightnessAt(lights, b0, b1, b2)
+			intensity = t.brightnessAt(b0, b1, b2)
 		}
 		return engine.Cell{Character: shadeChar(ramp, intensity), Foreground: fog.Apply(t.color, t.depthAt(b0, b1, b2))}
 	})
@@ -254,12 +257,12 @@ func fillFogged(fb *engine.FrameBuffer, t *shadedTriangle, ramp []rune, lights [
 
 // fillFoggedPixels is fillFogged for a Canvas: the color is shaded by the brightness, and then
 // fades.
-func fillFoggedPixels(c *engine.Canvas, t *shadedTriangle, lights []Light, fog *Fog) {
+func fillFoggedPixels(c *engine.Canvas, t *shadedTriangle, fog *Fog) {
 	p := &t.corners
 	c.FillTriangleFunc(p[0].x, 2*p[0].y, p[0].z, p[1].x, 2*p[1].y, p[1].z, p[2].x, 2*p[2].y, p[2].z, func(b0, b1, b2 float64) engine.Color {
 		intensity := t.intensity
 		if t.smooth {
-			intensity = t.brightnessAt(lights, b0, b1, b2)
+			intensity = t.brightnessAt(b0, b1, b2)
 		}
 		return fog.Apply(engine.Shade(t.color, intensity), t.depthAt(b0, b1, b2))
 	})
