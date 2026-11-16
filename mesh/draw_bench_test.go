@@ -294,8 +294,11 @@ func BenchmarkDrawFog(b *testing.B) {
 
 // BenchmarkDrawBig draws one big smooth sphere (about 16 thousand faces) where it is
 // all in view, where half of it is off the right edge, and where it is behind the
-// camera, as a wireframe and shaded. A model that is fully in view must not get slower
-// for the sake of one that is not.
+// camera, as a wireframe and shaded; and the same sphere with its vertices written where
+// they are in the world, as a level built in place is, behind the camera, with the bounds that
+// UpdateBounds keeps and without them. A model that is fully in view must not get slower
+// for the sake of one that is not, and one written in the world should be as cheap to skip
+// as one that is placed.
 func BenchmarkDrawBig(b *testing.B) {
 	cam := Camera{FOV: math.Pi / 2, Near: 0.1}
 	lights := []Light{Ambient{Level: 0.2}, Directional{Direction: geometry.Vector3{X: 0.4, Y: -1, Z: 0.6}}}
@@ -316,6 +319,30 @@ func BenchmarkDrawBig(b *testing.B) {
 		ball.Transform.Position = where.at
 		for _, mode := range []string{"wireframe", "shaded"} {
 			b.Run(where.name+" "+mode, func(b *testing.B) {
+				b.ReportAllocs()
+				for b.Loop() {
+					fb.Clear()
+					if mode == "wireframe" {
+						ball.Draw(fb, cam, engine.Cell{Character: '#'})
+					} else {
+						ball.DrawShaded(fb, cam, lights...)
+					}
+				}
+			})
+		}
+	}
+
+	// Written in the world, behind the camera: a Transform of nothing, the vertices in place.
+	written := atTheWorld(Sphere(3, 128, 64), geometry.Vector3{Z: -10})
+	for _, kept := range []bool{true, false} {
+		ball := written
+		name := "behind the camera, written in the world, without bounds"
+		if kept {
+			ball.UpdateBounds()
+			name = "behind the camera, written in the world, with bounds"
+		}
+		for _, mode := range []string{"wireframe", "shaded"} {
+			b.Run(name+" "+mode, func(b *testing.B) {
 				b.ReportAllocs()
 				for b.Loop() {
 					fb.Clear()

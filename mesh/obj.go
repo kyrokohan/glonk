@@ -384,6 +384,7 @@ func readOBJ(r io.Reader, limit int64, lib *materialLibrary) (Mesh, error) {
 		return Mesh{}, errors.New("obj: no faces or lines")
 	}
 	sm.finish(&m, normals)
+	m.UpdateBounds()
 	return m, nil
 }
 

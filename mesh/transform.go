@@ -33,6 +33,14 @@ type Transform struct {
 
 // valid reports whether the transform can be applied: every number finite, and a
 // Scale that does not turn the model inside out.
+// scale is the Scale, where 0, the default, is 1.
+func (t Transform) scale() float64 {
+	if t.Scale == 0 {
+		return 1
+	}
+	return t.Scale
+}
+
 func (t Transform) valid() bool {
 	return finite(t.Position.X, t.Position.Y, t.Position.Z, t.Yaw, t.Pitch, t.Roll, t.Scale) && t.Scale >= 0
 }
