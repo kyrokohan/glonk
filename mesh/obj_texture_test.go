@@ -12,6 +12,7 @@ import (
 	"testing/fstest"
 
 	"glonk.dev/engine"
+	"glonk.dev/geometry"
 )
 
 // loadTextured loads m.obj from a file system with it, m.mtl and the given images.
@@ -40,6 +41,10 @@ func checkFaceColors(t testing.TB, m Mesh) {
 	}
 	if err := m.Validate(); err != nil {
 		t.Fatalf("wanted a valid mesh, got %v", err)
+	}
+	// Coordinates come with a picture to look them up in, and a triple for every face.
+	if (m.FaceTexCoords != nil) != (m.Material.Texture != nil) || (m.FaceTexCoords != nil && len(m.FaceTexCoords) != len(m.Faces)) {
+		t.Fatalf("wanted coordinates for each of %d faces with a picture, or neither, got %d and a picture: %v", len(m.Faces), len(m.FaceTexCoords), m.Material.Texture != nil)
 	}
 }
 
@@ -118,6 +123,14 @@ func TestTexturedCoordinatesInEveryFormKeepLaterIndicesRight(t *testing.T) {
 	if !slices.Equal(m.FaceColors, want) {
 		t.Errorf("wanted %v, got %v", want, m.FaceColors)
 	}
+
+	// The same coordinates in the mesh's own terms, v from the top: those that are not numbers, and
+	// the ones with nothing in them, are a zero triple.
+	same := func(u, v float64) [3]geometry.Vector2 { return [3]geometry.Vector2{uv(u, v), uv(u, v), uv(u, v)} }
+	wantUV := [][3]geometry.Vector2{{}, same(0.125, 1), same(0.625, 0.25), {}, same(0.875, 0.75), {}, {}}
+	if !slices.Equal(m.FaceTexCoords, wantUV) {
+		t.Errorf("wanted the coordinates %v, got %v", wantUV, m.FaceTexCoords)
+	}
 }
 
 func TestTexturedFaceColorsStartAtTheFirstColoredFace(t *testing.T) {
@@ -157,6 +170,11 @@ func TestTexturedModelWithNormalsKeepsItsSplitVertices(t *testing.T) {
 	}
 	if want := []engine.Color{gridColors[1][0], gridColors[0][3], none}; !slices.Equal(m.FaceColors, want) {
 		t.Errorf("wanted %v, got %v", want, m.FaceColors)
+	}
+	// The coordinates follow the faces too, and the third face has none.
+	a, b := uv(0.125, 0.75), uv(0.875, 0.25)
+	if want := [][3]geometry.Vector2{{a, a, a}, {b, b, b}, {}}; !slices.Equal(m.FaceTexCoords, want) {
+		t.Errorf("wanted the coordinates %v, got %v", want, m.FaceTexCoords)
 	}
 }
 
@@ -220,7 +238,8 @@ func TestATexturedMaterialWithAHugeImageStillLoads(t *testing.T) {
 type texturedTrial struct {
 	obj, mtl string
 	want     []engine.Color
-	sampled  int // how many of them came from the texture
+	wantUV   [][3]geometry.Vector2 // for every triangle, a zero triple for one with none
+	sampled  int                   // how many of them came from the texture
 }
 
 // texturedTrialFrom builds a random model whose expected colors are worked out here, in a
@@ -247,6 +266,7 @@ func texturedTrialFrom(rng *rand.Rand, w, h int) texturedTrial {
 	}
 
 	var want []engine.Color
+	var wantUV [][3]geometry.Vector2
 	sampled := 0
 	material := 0
 	for range 1 + rng.IntN(10) {
@@ -283,16 +303,22 @@ func texturedTrialFrom(rng *rand.Rand, w, h int) texturedTrial {
 
 		for i := 1; i+1 < corners; i++ {
 			c := kd[material]
+			var corners [3]geometry.Vector2
 			if textured[material] && uv[0] != nil && uv[i] != nil && uv[i+1] != nil {
 				u := (uv[0][0] + uv[i][0] + uv[i+1][0]) / 3
 				v := (uv[0][1] + uv[i][1] + uv[i+1][1]) / 3
 				c = engine.RGB(uint8(20+30*texelIndex(u, w)), uint8(20+30*(h-1-texelIndex(v, h))), 7)
 				sampled++
+				// The face lists its corners backwards, and counts v from the top.
+				for k, p := range [3]*[2]float64{uv[0], uv[i+1], uv[i]} {
+					corners[k] = geometry.Vector2{X: p[0], Y: 1 - p[1]}
+				}
 			}
 			want = append(want, c)
+			wantUV = append(wantUV, corners)
 		}
 	}
-	return texturedTrial{obj: sb.String(), mtl: mtl, want: want, sampled: sampled}
+	return texturedTrial{obj: sb.String(), mtl: mtl, want: want, wantUV: wantUV, sampled: sampled}
 }
 
 // texelIndex says which of n equal slices of the repeating range [0, 1) a coordinate
@@ -307,6 +333,52 @@ func texelIndex(c float64, n int) int {
 		i++
 	}
 	return i
+}
+
+// checkTexturedPicture holds the picture and the coordinates a loaded model keeps to what the
+// trial worked out: a list only if some triangle has coordinates, one triple for every
+// triangle, each corner's own with v turned over, and the picture, which has the pixels of the
+// image the trial made. And its coordinates, looked up in that picture, are the one color that
+// each triangle has in FaceColors, so the two ways of reading a picture agree.
+func checkTexturedPicture(t *testing.T, m Mesh, tt texturedTrial, w, h int) {
+	t.Helper()
+	wantUV := tt.wantUV
+	if !slices.ContainsFunc(wantUV, func(c [3]geometry.Vector2) bool { return c != ([3]geometry.Vector2{}) }) {
+		wantUV = nil
+	}
+	if !slices.Equal(m.FaceTexCoords, wantUV) {
+		t.Fatalf("wanted texture coordinates %v, got %v\n%s", wantUV, m.FaceTexCoords, tt.obj)
+	}
+	pic := m.Material.Texture
+	if (wantUV == nil) != (pic == nil) {
+		t.Fatalf("wanted a picture only with coordinates, got %v for %d triples\n%s", pic != nil, len(wantUV), tt.obj)
+	}
+	if pic == nil {
+		return
+	}
+	if pic.Width() != w || pic.Height() != h {
+		t.Fatalf("wanted a picture of %d by %d, got %d by %d", w, h, pic.Width(), pic.Height())
+	}
+	for y := range h {
+		for x := range w {
+			if want := engine.RGB(uint8(20+30*x), uint8(20+30*y), 7); pic.At(x, y) != want {
+				t.Fatalf("pixel (%d, %d): wanted %v, got %v", x, y, want, pic.At(x, y))
+			}
+		}
+	}
+	for i, c := range m.FaceTexCoords {
+		if c == ([3]geometry.Vector2{}) {
+			continue
+		}
+		u := (c[0].X + c[1].X + c[2].X) / 3
+		v := (c[0].Y + c[1].Y + c[2].Y) / 3
+		if nearBoundary(math.Mod(u, 1)*float64(w)) || nearBoundary(math.Mod(v, 1)*float64(h)) {
+			continue // the centroid is worked out in another order there, and may fall either side
+		}
+		if got := texel(pic, u, v); got != m.FaceColors[i] {
+			t.Fatalf("triangle %d: wanted the picture at %v, %v to be its color %v, got %v\n%s", i, u, v, m.FaceColors[i], got, tt.obj)
+		}
+	}
 }
 
 func TestTexturedModelsMatchAnIndependentSampler(t *testing.T) {
@@ -341,6 +413,7 @@ func TestTexturedModelsMatchAnIndependentSampler(t *testing.T) {
 		if !slices.Equal(m.FaceColors, want) {
 			t.Fatalf("trial %d: wanted colors %v, got %v\n%s", trial, want, m.FaceColors, tt.obj)
 		}
+		checkTexturedPicture(t, m, tt, w, h)
 
 		plain, err := LoadOBJ(strings.NewReader(tt.obj))
 		if err != nil || !sameGeometry(m, plain) {

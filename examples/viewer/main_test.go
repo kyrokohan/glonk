@@ -1,8 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"maps"
 	"math"
 	"os"
@@ -1696,5 +1700,56 @@ func TestWireframeAndHalfBlocksAloneAreAsTheyWere(t *testing.T) {
 	v.wire = false
 	if solid := len(pixelsOf(drawAll(t, v))); solid < 2*lines || lines < 40 {
 		t.Errorf("wanted shaded half blocks alone to fill far more pixels than their wireframe, got %d against %d", solid, lines)
+	}
+}
+
+// A model whose material has a picture is drawn in it, on every face, and C puts it aside for the
+// palette like any other color of the model's own, and brings it back.
+func TestATexturedModelShowsItsPictureAndCPutsItAside(t *testing.T) {
+	dir := t.TempDir()
+	// Each side of a cube holds the whole of a picture of four colors.
+	obj := "mtllib cube.mtl\nv -1 -1 -1\nv 1 -1 -1\nv 1 1 -1\nv -1 1 -1\nv -1 -1 1\nv 1 -1 1\nv 1 1 1\nv -1 1 1\n" +
+		"vt 0 0\nvt 1 0\nvt 1 1\nvt 0 1\nusemtl t\n" +
+		"f 5/1 6/2 7/3 8/4\nf 2/1 1/2 4/3 3/4\nf 6/1 2/2 3/3 7/4\nf 1/1 5/2 8/3 4/4\nf 8/1 7/2 3/3 4/4\nf 1/1 2/2 6/3 5/4\n"
+	img := image.NewNRGBA(image.Rect(0, 0, 2, 2))
+	four := []color.NRGBA{{R: 255, A: 255}, {G: 255, A: 255}, {B: 255, A: 255}, {R: 255, G: 255, A: 255}}
+	for i, c := range four {
+		img.SetNRGBA(i%2, i/2, c)
+	}
+	var data bytes.Buffer
+	if err := png.Encode(&data, img); err != nil {
+		t.Fatal(err)
+	}
+	for name, content := range map[string][]byte{"cube.obj": []byte(obj), "cube.mtl": []byte("newmtl t\nmap_Kd t.png\n"), "t.png": data.Bytes()} {
+		if err := os.WriteFile(filepath.Join(dir, name), content, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	models, err := loadModels([]string{filepath.Join(dir, "cube.obj")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if models[0].mesh.Material.Texture == nil || !models[0].colored {
+		t.Fatalf("wanted a model with a picture and colors of its own, got %+v", models[0])
+	}
+
+	v := newViewer(models)
+	v.spin = false
+	got := foregrounds(drawAll(t, v))
+	for _, c := range four {
+		if want := engine.RGB(c.R, c.G, c.B); !got[want] {
+			t.Errorf("wanted %v of the picture on the screen, got %v", want, got)
+		}
+	}
+	if got[palette[0]] {
+		t.Errorf("wanted the palette color kept out of it, got %v", got)
+	}
+
+	kb := engine.NewKeyboard()
+	kb.Press('c')
+	step(v, kb, 0.1)
+	kb.Release('c')
+	if got := foregrounds(drawAll(t, v)); len(got) != 1 || !got[palette[0]] {
+		t.Errorf("wanted only %v once C put the picture aside, got %v", palette[0], got)
 	}
 }

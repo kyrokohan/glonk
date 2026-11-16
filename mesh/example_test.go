@@ -5,6 +5,7 @@ import (
 	"math"
 	"strings"
 
+	"glonk.dev/bitmap"
 	"glonk.dev/engine"
 	"glonk.dev/geometry"
 	"glonk.dev/mesh"
@@ -236,6 +237,39 @@ func ExampleMaterial() {
 	// │              OO            │
 	// │                            │
 	// └────────────────────────────┘
+}
+
+// A picture on a wall: Material.Texture is the picture and Mesh.FaceTexCoords says which place in
+// it each corner of each face is pinned to, so two triangles show a picture of any size, and every
+// cell takes the color of the picture where it is.
+func ExampleMaterial_texture() {
+	// A picture of two pixels side by side, red and blue.
+	flag := bitmap.New(2, 1)
+	flag.Set(0, 0, engine.RGB(255, 0, 0))
+	flag.Set(1, 0, engine.RGB(0, 0, 255))
+
+	// (0, 0) is the top left of the picture and (1, 1) the bottom right.
+	wall := mesh.Mesh{
+		Vertices: []geometry.Vector3{{X: -2, Y: -1}, {X: -2, Y: 1}, {X: 2, Y: 1}, {X: 2, Y: -1}},
+		Faces:    [][3]int{{0, 1, 2}, {0, 2, 3}},
+		FaceTexCoords: [][3]geometry.Vector2{
+			{{X: 0, Y: 1}, {X: 0, Y: 0}, {X: 1, Y: 0}},
+			{{X: 0, Y: 1}, {X: 1, Y: 0}, {X: 1, Y: 1}},
+		},
+		Material: mesh.Material{Texture: flag},
+	}
+	wall.Transform.Position = geometry.Vector3{Z: 3}
+
+	fb, err := engine.NewFrameBuffer(40, 12)
+	if err != nil {
+		panic(err)
+	}
+	wall.DrawShaded(fb, mesh.Camera{}, mesh.Ambient{Level: 1})
+
+	// The left half of the wall is the red pixel and the right half the blue one.
+	fmt.Println(fb.At(14, 5).Foreground, fb.At(25, 5).Foreground)
+	// Output:
+	// #ff0000 #0000ff
 }
 
 // spot is a light of your own: a spotlight, which lights what is inside a cone from

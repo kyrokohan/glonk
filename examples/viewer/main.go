@@ -333,7 +333,7 @@ func (v *viewer) Draw(fb *engine.FrameBuffer) {
 	// The palette color also covers any face the file gave no color.
 	m.Material.Color = color
 	if !v.showsModelColors() {
-		m.FaceColors, m.VertexColors = nil, nil
+		m.FaceColors, m.VertexColors, m.Material.Texture = nil, nil, nil
 	}
 
 	mode := "characters"

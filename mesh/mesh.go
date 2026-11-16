@@ -76,6 +76,28 @@ type Mesh struct {
 	// LoadOBJ reads them from lines of the form "v x y z r g b".
 	VertexColors []engine.Color
 
+	// FaceTexCoords are the places in Material.Texture that the three corners of each face
+	// are pinned to, in the order of Faces: a triple for each face, corner k of the triple
+	// for corner k of the face, or none. Each cell or pixel of a face with coordinates takes
+	// the color of the picture where its own place is, worked out from the corners with the
+	// same perspective-correct weights as smooth shading: the nearest pixel, with no blending.
+	// (0, 0) is the top left of the picture and (1, 1) the bottom right, as Bitmap.At counts,
+	// and the picture repeats beyond that, so 2 is the picture twice over. The coordinates
+	// belong to the corners of a face and not to the vertices, so a wall that shares its
+	// corners with the ones next to it can be textured as it is.
+	//
+	// The picture's color is the color of the surface, in place of the face's FaceColors or
+	// Material.Color, and is lit as they are: brightness is still shown by the character or
+	// the shade, and it fades in fog. A vertex color tints it, each channel multiplied, and
+	// a corner without one leaves it as it is. A pixel of the picture that is see-through
+	// shows the face as it would be without a picture. A zero triple means "none here", and
+	// that face is drawn without one; so is every face of a mesh with no Material.Texture, or
+	// an empty one. A list of any other length than Faces is not used, and a face with a
+	// coordinate that is not finite shows its own color all over, as without a picture;
+	// Validate reports both. Wireframes (Draw, DrawDepth) ignore them. LoadOBJFS fills it
+	// from a model's texture.
+	FaceTexCoords [][3]geometry.Vector2
+
 	// Transform places the model in the world.
 	Transform Transform
 
@@ -153,9 +175,10 @@ func Cube(size float64) Mesh {
 }
 
 // Clone returns a copy of the mesh that shares nothing with it, so changing the
-// copy's Vertices, Edges, Faces, Normals, FaceColors or VertexColors leaves the original alone.
-// Assigning a Mesh to a new variable copies the struct but not these lists, which
-// both would still share.
+// copy's Vertices, Edges, Faces, Normals, FaceColors, VertexColors or FaceTexCoords leaves the
+// original alone. Assigning a Mesh to a new variable copies the struct but not these lists,
+// which both would still share. The picture, Material.Texture, is not copied: the clone draws
+// the same one, and Set on it changes both.
 func (m Mesh) Clone() Mesh {
 	out := m
 	out.Vertices = slices.Clone(m.Vertices)
@@ -164,6 +187,7 @@ func (m Mesh) Clone() Mesh {
 	out.Normals = slices.Clone(m.Normals)
 	out.FaceColors = slices.Clone(m.FaceColors)
 	out.VertexColors = slices.Clone(m.VertexColors)
+	out.FaceTexCoords = slices.Clone(m.FaceTexCoords)
 	// The sphere holds the same vertices, which are now these ones; a stale one means nothing.
 	out.bounds = nil
 	if b := m.currentBounds(); b != nil {

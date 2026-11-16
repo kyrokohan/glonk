@@ -3,6 +3,7 @@ package mesh
 import (
 	"math"
 
+	"glonk.dev/bitmap"
 	"glonk.dev/engine"
 	"glonk.dev/geometry"
 )
@@ -105,9 +106,17 @@ type shadedTriangle struct {
 	color engine.Color
 
 	// tinted is set when a corner has a vertex color: the triangle is drawn in the
-	// blend of rgb, each corner's red, green and blue from 0 to 255, in place of color.
+	// blend of rgb, each corner's red, green and blue from 0 to 255, in place of color. If
+	// the face has a picture too, rgb is how much of the picture's color each corner lets
+	// through, 255 for all of it, and the blend multiplies the picture's color.
 	tinted bool
 	rgb    [3]geometry.Vector3
+
+	// tex is the picture the face's color comes from, or nil: each cell takes it from the
+	// picture at the blend of uv, the places in it that the corners are pinned to, and color
+	// is what shows where the picture is see-through.
+	tex *bitmap.Bitmap
+	uv  [3]geometry.Vector2
 
 	// A flat triangle is lit once, as a whole.
 	smooth    bool
@@ -137,11 +146,32 @@ func (t *shadedTriangle) depthAt(b0, b1, b2 float64) float64 {
 	return b0*t.corners[0].z + b1*t.corners[1].z + b2*t.corners[2].z
 }
 
-// colorAt is the color of the cell at weights b0, b1 and b2 of the three corners: their
-// colors blended with the weights, rounded to whole numbers from 0 to 255.
+// colorAt is the color of the cell at weights b0, b1 and b2 of the three corners. With a
+// picture it is the picture's color at the blend of the corners' places in it, or color where
+// that is see-through; the corners' colors, if they have any, multiply it. Without, it is the
+// corners' colors blended with the weights. The blend is rounded to whole numbers from 0 to 255.
 func (t *shadedTriangle) colorAt(b0, b1, b2 float64) engine.Color {
+	if t.tex == nil {
+		c := t.rgb[0].Scale(b0).Add(t.rgb[1].Scale(b1)).Add(t.rgb[2].Scale(b2))
+		return engine.RGB(channel(c.X), channel(c.Y), channel(c.Z))
+	}
+	uv := t.uv[0].Scale(b0).Add(t.uv[1].Scale(b1)).Add(t.uv[2].Scale(b2))
+	surface := texel(t.tex, uv.X, uv.Y)
+	if surface.IsDefault() {
+		surface = t.color
+	}
+	if !t.tinted {
+		return surface
+	}
+	s := colorVector(surface)
 	c := t.rgb[0].Scale(b0).Add(t.rgb[1].Scale(b1)).Add(t.rgb[2].Scale(b2))
-	return engine.RGB(channel(c.X), channel(c.Y), channel(c.Z))
+	return engine.RGB(channel(s.X*c.X/255), channel(s.Y*c.Y/255), channel(s.Z*c.Z/255))
+}
+
+// varies reports whether the cells of the triangle are not all one color, so that each has to
+// be asked for: it has a picture, or corners with colors.
+func (t *shadedTriangle) varies() bool {
+	return t.tinted || t.tex != nil
 }
 
 // channel rounds v to a whole number from 0 to 255. NaN and anything below 0 give 0.
@@ -171,21 +201,31 @@ func cornerColor(vertex, base engine.Color, hasFaceColor bool) geometry.Vector3 
 	return geometry.Vector3{X: v.X * f.X / 255, Y: v.Y * f.Y / 255, Z: v.Z * f.Z / 255}
 }
 
-// colorAtPoint is the color at p, a point on the triangle v0, v1, v2 in view space, of
-// a triangle whose corners have the colors corner: the corners' colors blended with the
-// barycentric weights of p. Color changes linearly across a face in space, so this is
-// the color it had before the triangle was cut, whatever the cut.
-func colorAtPoint(corner [3]geometry.Vector3, v0, v1, v2, p geometry.Vector3) geometry.Vector3 {
+// pointWeights returns the barycentric weights of the point p of the triangle v0, v1, v2 in view
+// space: p is v0*w0 + v1*w1 + v2*w2, and the weights sum to 1. Anything that changes linearly
+// across a face in space, as a color or a texture coordinate does, is the weights' blend of its
+// values at the corners, whatever way the face has since been cut. A triangle with no area has no
+// cells, and gives all of the weight to its first corner.
+func pointWeights(v0, v1, v2, p geometry.Vector3) (w0, w1, w2 float64) {
 	e1, e2, e3 := v1.Sub(v0), v2.Sub(v0), p.Sub(v0)
 	d11, d12, d22 := e1.Dot(e1), e1.Dot(e2), e2.Dot(e2)
 	d31, d32 := e3.Dot(e1), e3.Dot(e2)
 	denom := d11*d22 - d12*d12
 	if denom == 0 {
-		return corner[0] // a triangle with no area: it has no cells either
+		return 1, 0, 0
 	}
-	w1 := (d22*d31 - d12*d32) / denom
-	w2 := (d11*d32 - d12*d31) / denom
-	return corner[0].Scale(1 - w1 - w2).Add(corner[1].Scale(w1)).Add(corner[2].Scale(w2))
+	w1 = (d22*d31 - d12*d32) / denom
+	w2 = (d11*d32 - d12*d31) / denom
+	return 1 - w1 - w2, w1, w2
+}
+
+// colorAtPoint is the color at p, a point on the triangle v0, v1, v2 in view space, of
+// a triangle whose corners have the colors corner: the corners' colors blended with the
+// barycentric weights of p. Color changes linearly across a face in space, so this is
+// the color it had before the triangle was cut, whatever the cut.
+func colorAtPoint(corner [3]geometry.Vector3, v0, v1, v2, p geometry.Vector3) geometry.Vector3 {
+	w0, w1, w2 := pointWeights(v0, v1, v2, p)
+	return corner[0].Scale(w0).Add(corner[1].Scale(w1)).Add(corner[2].Scale(w2))
 }
 
 // colorVector is c as red, green and blue from 0 to 255.
@@ -207,7 +247,7 @@ func cornerNormal(vertex, face geometry.Vector3, front bool) geometry.Vector3 {
 	return vertex
 }
 
-// fillTinted draws a triangle that has vertex colors into cells. Every cell has a color of
+// fillTinted draws a triangle that has vertex colors or a picture into cells. Every cell has a color of
 // its own, so, flat or smooth, each is asked for. The color fades in fog, if there is any.
 func fillTinted(fb *engine.FrameBuffer, t *shadedTriangle, ramp []rune, fog *Fog) {
 	c := &t.corners

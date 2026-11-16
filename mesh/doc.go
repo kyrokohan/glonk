@@ -27,8 +27,14 @@
 // each face, which replaces the material's for that face and is still lit. [LoadOBJFS]
 // fills it from the materials of a model, reading the MTL files beside the OBJ from
 // an [io/fs.FS]: the diffuse color of each, or the color of its texture picture (JPEG or
-// PNG) at the face's texture coordinates, one color for each triangle. [LoadOBJ] skips
-// materials.
+// PNG) at the middle of the face's texture coordinates, one color for each triangle.
+// [LoadOBJ] skips materials.
+//
+// A face can have a picture instead: [Material.Texture] is a [bitmap.Bitmap], and
+// [Mesh.FaceTexCoords] pins the three corners of a face to places in it, so that every cell
+// or pixel of the face takes the color of the picture where it is, seen with perspective, and
+// a wall of two triangles shows a picture of any size. The picture's color is lit as a face
+// color is, and vertex colors tint it. [LoadOBJFS] fills both from a model's texture.
 //
 // [Mesh.VertexColors] gives each vertex a color, and a face fades from one corner's color
 // to the next, blended at every cell with the same perspective-correct weights as smooth
