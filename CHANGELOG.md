@@ -4,6 +4,10 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+### Added
+
+- `make bench` runs every benchmark once with allocations, and `make benchcmp` compares the benchmarks of the working tree with those of a base commit, tag or branch (`BASE=`, `origin/main` unless said), for a change that might have made drawing, loading or searching slower, which was a check made by hand. It builds the test binaries of both without file paths, so that identical code is an identical binary, and runs them in rounds: the base, the base again and the head one after the other in an order that turns, so that a computer that warms up or gets busy affects all alike. The base run twice is a control for noise, which is about 0.3 percent for most benchmarks. A benchmark is reported as slower or faster only if both its best run and its typical run changed by more than a threshold (`THRESHOLD=`, 3 percent) and its best run by more than twice its noise; one whose noise alone is beyond the threshold is marked noisy; and any rise in allocations is a regression, since several benchmarks promise none, but for one of a thousandth or less in a benchmark that allocates hundreds of thousands of times. On identical code it flagged nothing in 151 benchmarks, and found a change of 5 percent in 147 of them. It takes about two minutes a round, ten for everything at the default 5 rounds, and exits 1 for a regression and 2 if it could not run. The tool is `internal/benchcmp` and needs only Go and git.
+
 ## [0.8.0] - 2026-11-15
 
 On top of 0.7.0 this release adds pictures made in code and drawn in parts, mirrored, darker or in one color, a way to blend a color over the canvas, a kind for every tile of a tile map, line of sight and ray casts, and a way to walk to a target. A `Tile` has a new field, `Kind`, which `FromLines` fills, so a tile from it is no longer equal to the tile of its legend, and a `Tile` literal that lists its values without field names no longer compiles.
