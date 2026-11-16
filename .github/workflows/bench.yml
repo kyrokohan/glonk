@@ -1,0 +1,48 @@
+name: bench
+
+# Compares the benchmarks of a branch with those of a base commit, branch or tag, by hand: from
+# the Actions tab, Run workflow. It is not run for pull requests: a shared runner is noisy and the
+# comparison takes minutes, and nothing waits for it. The tool is internal/benchcmp, the same as
+# `make benchcmp`, which is the everyday way to use it. The run turns red when something is clearly
+# slower or allocates more, and the table is in the summary of the run.
+on:
+  workflow_dispatch:
+    inputs:
+      base:
+        description: The commit, tag or branch to compare the selected one with
+        default: origin/main
+      rounds:
+        description: How many rounds to run
+        default: "5"
+
+permissions:
+  contents: read
+
+# Never download a different Go than the one a job asked for, as for the checks.
+env:
+  GOTOOLCHAIN: local
+
+jobs:
+  bench:
+    name: bench
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      # The whole history, so that any commit, tag or branch of the base can be found.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27"
+      - name: compare the benchmarks
+        env:
+          BASE: ${{ inputs.base }}
+          ROUNDS: ${{ inputs.rounds }}
+        run: |
+          status=0
+          go run ./internal/benchcmp -base "$BASE" -rounds "$ROUNDS" > bench.txt || status=$?
+          cat bench.txt
+          { echo '```'; grep -v '^::warning' bench.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
