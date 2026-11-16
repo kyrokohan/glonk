@@ -17,6 +17,16 @@ import (
 // that meets a face squarely at 1 give 1, and two lights of 0.5 give 0.75. The order
 // does not matter. With no lights, every face is as dark as can be shown. [Brightness]
 // adds lights up this way for a program that lights things of its own.
+//
+// A light that reaches only so far can say so with a method Reach() (center
+// geometry.Vector3, radius float64): it gives nothing outside the ball with that center and
+// radius, in world space, and a negative or NaN radius is not believed. Drawing then leaves
+// it out for a mesh that is wholly beyond the ball, so a scene can have many lamps and each
+// mesh asks only the few that reach it. The mesh must have its bounds ([Mesh.UpdateBounds];
+// the shapes and models the package makes do), and a light that does not have the method is
+// always asked. [Point] has it. A Reach that promises too little loses light, and a picture
+// that is wrong, so promise only what the light gives: 1e-9 of the size of the numbers is
+// allowed for rounding.
 type Light interface {
 	// Brightness returns how bright this light makes a surface, from 0 (dark) to 1
 	// (fully lit). point and normal are in world space, and normal is a unit vector
@@ -200,6 +210,8 @@ func (m Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(t
 	var tris [2][3]clipVert
 	tri := &s.tri // in the scratch, because a pointer handed to fn would move a local to the heap
 	tri.smooth = smooth
+	lit := s.lightsReaching(m, place, lights) // not assigned to lights: that would make the caller's list escape
+	tri.lights = lit
 	faceColors := len(m.FaceColors) == len(m.Faces) // otherwise they are not used
 	vertexColors := len(m.VertexColors) == len(m.Vertices) && len(m.Vertices) > 0
 	tri.tinted = false
@@ -257,7 +269,7 @@ func (m Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(t
 			c.normal = cornerNormal(normals[f[2]], normal, front)
 		} else {
 			center := w0.Add(w1).Add(w2).Scale(1.0 / 3)
-			tri.intensity = Brightness(lights, center, normal)
+			tri.intensity = Brightness(lit, center, normal)
 		}
 
 		n := clipTriangleNear(a, b, c, cam.Near, smooth, &tris)
@@ -307,11 +319,11 @@ func (m Mesh) DrawShaded(fb *engine.FrameBuffer, cam Camera, lights ...Light) {
 	m.eachShadedTriangle(cam, lights, fb.Width(), fb.Height(), func(t *shadedTriangle) {
 		c := &t.corners
 		if t.tinted {
-			fillTinted(fb, t, ramp, lights, fog)
+			fillTinted(fb, t, ramp, fog)
 			return
 		}
 		if fog != nil {
-			fillFogged(fb, t, ramp, lights, fog)
+			fillFogged(fb, t, ramp, fog)
 			return
 		}
 		if !t.smooth {
@@ -320,7 +332,7 @@ func (m Mesh) DrawShaded(fb *engine.FrameBuffer, cam Camera, lights ...Light) {
 			return
 		}
 		fb.FillTriangleFunc(c[0].x, c[0].y, c[0].z, c[1].x, c[1].y, c[1].z, c[2].x, c[2].y, c[2].z, func(b0, b1, b2 float64) engine.Cell {
-			return engine.Cell{Character: shadeChar(ramp, t.brightnessAt(lights, b0, b1, b2)), Foreground: t.color}
+			return engine.Cell{Character: shadeChar(ramp, t.brightnessAt(b0, b1, b2)), Foreground: t.color}
 		})
 	})
 }
@@ -336,11 +348,11 @@ func (m Mesh) DrawShadedPixels(c *engine.Canvas, cam Camera, lights ...Light) {
 	m.eachShadedTriangle(cam, lights, c.Width(), c.Height()/2, func(t *shadedTriangle) {
 		p := &t.corners
 		if t.tinted {
-			fillTintedPixels(c, t, lights, fog)
+			fillTintedPixels(c, t, fog)
 			return
 		}
 		if fog != nil {
-			fillFoggedPixels(c, t, lights, fog)
+			fillFoggedPixels(c, t, fog)
 			return
 		}
 		if !t.smooth {
@@ -348,7 +360,7 @@ func (m Mesh) DrawShadedPixels(c *engine.Canvas, cam Camera, lights ...Light) {
 			return
 		}
 		c.FillTriangleFunc(p[0].x, 2*p[0].y, p[0].z, p[1].x, 2*p[1].y, p[1].z, p[2].x, 2*p[2].y, p[2].z, func(b0, b1, b2 float64) engine.Color {
-			return engine.Shade(t.color, t.brightnessAt(lights, b0, b1, b2))
+			return engine.Shade(t.color, t.brightnessAt(b0, b1, b2))
 		})
 	})
 }

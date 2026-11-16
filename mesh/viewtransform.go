@@ -82,6 +82,7 @@ type scratch struct {
 	ramp   []rune
 	tri    shadedTriangle // the triangle being handed to the fill
 	far    [4][3]clipVert // the pieces of a face cut at the far plane
+	lit    []Light        // the lights that reach the mesh, when some are left out
 }
 
 var scratchPool = sync.Pool{New: func() any { return new(scratch) }}
@@ -96,6 +97,8 @@ func getScratch(n int) *scratch {
 }
 
 func (s *scratch) release() {
+	clear(s.lit) // the pool must not keep a program's lights alive
+	s.lit = s.lit[:0]
 	scratchPool.Put(s)
 }
 

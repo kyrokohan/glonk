@@ -43,6 +43,9 @@
 // origin with Yaw and Pitch 0 looks down +z. Angles are in radians. OBJ files are
 // right-handed and look down -z; LoadOBJ converts them.
 //
+// A light that reaches only so far can say so, with a method Reach, and is then not asked about
+// a mesh that is wholly beyond it; [Point] does. See [Light].
+//
 // Drawing skips a mesh that cannot be on screen, by a sphere that holds its vertices. The
 // shapes and models this package makes have it; a mesh built by hand with its vertices where
 // they are in the world, as a level built in place is, calls [Mesh.UpdateBounds] once after

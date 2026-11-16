@@ -356,3 +356,60 @@ func BenchmarkDrawBig(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkDrawLamps draws a corridor of ten smooth floor chunks, every cell lit, by sixteen lamps
+// along it: lamps that each reach only the chunks near them, as a level of many lamps has, and lamps
+// that reach every chunk, where nothing can be left out. "no bounds" is the same chunks without the
+// bounds that UpdateBounds keeps, which asks every lamp about every chunk, as it was before lights were
+// left out. With the bounds the first should cost much less, and the second no more.
+func BenchmarkDrawLamps(b *testing.B) {
+	cam := Camera{Position: geometry.Vector3{Y: 2}, Pitch: -0.3, FOV: 1.4, Near: 0.1}
+	fb, err := engine.NewFrameBuffer(80, 24)
+	if err != nil {
+		b.Fatal(err)
+	}
+	for _, reach := range []struct {
+		name string
+		rng  float64
+	}{{"each reaching few chunks", 6}, {"each reaching every chunk", 1000}} {
+		var lights []Light
+		for i := range 16 {
+			lights = append(lights, Point{Position: geometry.Vector3{X: float64(i%2*2 - 1), Y: 2, Z: 2 + float64(i)*4}, Range: reach.rng})
+		}
+		for _, bounds := range []bool{true, false} {
+			var chunks []Mesh
+			for i := range 10 {
+				c := Plane(6, 6)
+				c.Transform.Position = geometry.Vector3{Z: 3 + float64(i)*6}
+				c.Material.Color = engine.Palette(33)
+				if !bounds {
+					c.bounds = nil
+				}
+				chunks = append(chunks, c)
+			}
+			name := reach.name + ", bounds"
+			if !bounds {
+				name = reach.name + ", no bounds"
+			}
+			for _, pixels := range []bool{false, true} {
+				kind := "cells"
+				if pixels {
+					kind = "pixels"
+				}
+				b.Run(name+" "+kind, func(b *testing.B) {
+					b.ReportAllocs()
+					for b.Loop() {
+						fb.Clear()
+						for _, c := range chunks {
+							if pixels {
+								c.DrawShadedPixels(fb.Canvas(), cam, lights...)
+							} else {
+								c.DrawShaded(fb, cam, lights...)
+							}
+						}
+					}
+				})
+			}
+		}
+	}
+}
