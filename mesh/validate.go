@@ -6,7 +6,8 @@ import "fmt"
 // error describing the first problem: a Transform that cannot be applied (a number
 // that is not finite, or a negative Scale), a vertex that is not a finite number,
 // a vertex outside the bounds that UpdateBounds kept, normals that are not one per vertex or not finite numbers, face colors that are not
-// one per face, or an edge or face that names a vertex the mesh does not have.
+// one per face, texture coordinates that are not one triple per face or not finite numbers,
+// or an edge or face that names a vertex the mesh does not have.
 //
 // Drawing skips edges and faces with a bad index instead of failing, so Validate is
 // how to find out that a mesh is broken. Meshes from LoadOBJ, Cube and Grid are
@@ -41,6 +42,14 @@ func (m Mesh) Validate() error {
 	}
 	if len(m.FaceColors) != 0 && len(m.FaceColors) != len(m.Faces) {
 		return fmt.Errorf("mesh: %d face colors for %d faces: wanted none, or one for each face", len(m.FaceColors), len(m.Faces))
+	}
+	if len(m.FaceTexCoords) != 0 && len(m.FaceTexCoords) != len(m.Faces) {
+		return fmt.Errorf("mesh: %d texture coordinate triples for %d faces: wanted none, or one for each face", len(m.FaceTexCoords), len(m.Faces))
+	}
+	for i, t := range m.FaceTexCoords {
+		if !finite(t[0].X, t[0].Y, t[1].X, t[1].Y, t[2].X, t[2].Y) {
+			return fmt.Errorf("mesh: the texture coordinates of face %d are not finite numbers: %v", i, t)
+		}
 	}
 	if len(m.VertexColors) != 0 && len(m.VertexColors) != n {
 		return fmt.Errorf("mesh: %d vertex colors for %d vertices: wanted none, or one for each vertex", len(m.VertexColors), n)

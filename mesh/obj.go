@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"glonk.dev/bitmap"
 	"glonk.dev/engine"
 	"glonk.dev/geometry"
 )
@@ -102,17 +103,23 @@ func LoadOBJLimit(r io.Reader, maxBytes int64) (Mesh, error) {
 // Everything else about a material is skipped. Colors are used as they are, with no
 // gamma conversion. A polygon cut into triangles gives them all its color.
 //
-// A picture colors a triangle through the texture coordinates (vt) of its corners: the
-// color is that of the nearest pixel of the picture at the middle of the three. The
-// coordinates are as an OBJ gives them, (0, 0) at the bottom left and (1, 1) at the top
-// right, and the picture repeats beyond that. The picture's own transparency is ignored.
-// A triangle takes the picture's color where a corner is missing its coordinates (or
-// they are not numbers, or name none that was read), the picture could not be had or the
-// material has none, and then the Kd of the material, if it has one, so a material with
-// both shows the picture where it can. One color for each triangle means a large
-// triangle is one flat color, however fine the picture. The coordinates are read as the
-// file comes, so an mtllib and the vt lines must come before the faces that use them, and
-// a mtllib before the usemtl that uses it.
+// A picture is used through the texture coordinates (vt) of a triangle's corners, in two ways.
+// FaceColors gets the color of the nearest pixel of the picture at the middle of the three,
+// one color for each triangle, as an OBJ gives the coordinates: (0, 0) at the bottom left and
+// (1, 1) at the top right, and the picture repeats beyond that. And the picture itself becomes
+// Material.Texture, with the three coordinates of each corner in Mesh.FaceTexCoords (turned
+// over, as a mesh counts from the top), so that drawing shows the picture at every cell or pixel
+// of a triangle and a large triangle is not one flat color. A triangle with no coordinates, for
+// a corner that is missing them (or they are not numbers, or name none that was read), has a
+// zero triple there and keeps its one color, and so does a triangle of a material whose picture
+// could not be had. A mesh has one picture, the first that a triangle has coordinates in, and
+// the triangles of a material with another picture keep their one color. The picture's
+// transparency is kept: a pixel with an alpha under 128 is see-through, as bitmap.Decode reads
+// it, and shows the triangle's one color; the one color itself ignores it. A triangle takes the
+// picture's color where it can, and then the Kd of the material, if it has one, so a material
+// with both shows the picture where it can. The coordinates are read as the file comes, so an
+// mtllib and the vt lines must come before the faces that use them, and a mtllib before the
+// usemtl that uses it.
 //
 // Vertex colors (see LoadOBJ) are read as well and kept apart from these: they are in
 // Mesh.VertexColors and tint the color a face gets here, as that field says.
@@ -130,7 +137,9 @@ func LoadOBJLimit(r io.Reader, maxBytes int64) (Mesh, error) {
 // and 8 pictures are read per OBJ, and 10,000 materials kept. The memory of LoadOBJLimit
 // grows by at most about 10 MiB for the MTL files, and by a decoded picture while the
 // model loads, up to 128 MiB for the largest allowed, and the 16 bytes of each vt line,
-// which are freed with the load. Pictures are read when the first face that uses one
+// which are freed with the load. The mesh keeps the picture it uses as a Bitmap, 4 bytes for
+// each pixel (64 MiB at the most, made when the load ends, while the decoded picture is
+// still held), and 48 bytes for each triangle for its coordinates. Pictures are read when the first face that uses one
 // comes, once. An mtllib is read where it stands. A file name with a space in it cannot
 // be used for an mtllib, for spaces separate the names. os.DirFS follows symbolic links
 // inside its folder, so give it a folder you trust.
@@ -196,6 +205,7 @@ func readOBJ(r io.Reader, limit int64, lib *materialLibrary) (Mesh, error) {
 		mat        material           // the usemtl in effect; zero for none
 		tex        *texture           // mat's image, once it has been asked for
 		texAsked   bool               // tex has been asked for since mat last changed
+		picture    *texture           // the first image that a face was given coordinates in: the model's own
 	)
 
 	// The scanner reads through lr. When the limit is hit it sees a read error, which
@@ -301,6 +311,16 @@ func readOBJ(r io.Reader, limit int64, lib *materialLibrary) (Mesh, error) {
 			for i := 1; i+1 < len(corners); i++ {
 				m.Faces = append(m.Faces, [3]int{corners[0].vertex, corners[i+1].vertex, corners[i].vertex})
 
+				// A mesh has one picture, the first that a face has coordinates in; a face that
+				// uses another has its one color only. The coordinates go in the face's own corner
+				// order, the reverse of the fan's.
+				var uv [3]geometry.Vector2
+				if tex != nil && (picture == nil || tex == picture) {
+					if got, ok := faceUVs(uvs, corners[0], corners[i+1], corners[i]); ok {
+						uv, picture = got, tex
+					}
+				}
+
 				c := mat.color
 				if tex != nil {
 					if t := tex.at(uvCentroid(uvs, corners[0], corners[i], corners[i+1])); !t.IsDefault() {
@@ -314,6 +334,13 @@ func readOBJ(r io.Reader, limit int64, lib *materialLibrary) (Mesh, error) {
 				}
 				if m.FaceColors != nil {
 					m.FaceColors = append(m.FaceColors, c)
+				}
+				// FaceTexCoords starts at the first face with coordinates, the same way.
+				if m.FaceTexCoords == nil && uv != ([3]geometry.Vector2{}) {
+					m.FaceTexCoords = make([][3]geometry.Vector2, len(m.Faces)-1)
+				}
+				if m.FaceTexCoords != nil {
+					m.FaceTexCoords = append(m.FaceTexCoords, uv)
 				}
 			}
 
@@ -384,6 +411,9 @@ func readOBJ(r io.Reader, limit int64, lib *materialLibrary) (Mesh, error) {
 		return Mesh{}, errors.New("obj: no faces or lines")
 	}
 	sm.finish(&m, normals)
+	if m.FaceTexCoords != nil {
+		m.Material.Texture = bitmap.FromImage(picture.img)
+	}
 	m.UpdateBounds()
 	return m, nil
 }
@@ -547,6 +577,24 @@ func uvCentroid(uvs [][2]float64, a, b, c objCorner) (u, v float64) {
 	}
 	p, q, r := uvs[a.texture], uvs[b.texture], uvs[c.texture]
 	return (p[0] + q[0] + r[0]) / 3, (p[1] + q[1] + r[1]) / 3
+}
+
+// faceUVs is the texture coordinates of the corners a, b and c of a face, for Mesh.FaceTexCoords,
+// and whether all three have usable ones: the file's v runs up from the bottom of the picture,
+// and the mesh's runs down from the top, so each is 1 - v. A corner that has none, or whose are
+// not numbers, makes the face have none.
+func faceUVs(uvs [][2]float64, a, b, c objCorner) (uv [3]geometry.Vector2, ok bool) {
+	for i, corner := range [3]objCorner{a, b, c} {
+		if corner.texture < 0 {
+			return uv, false
+		}
+		p := uvs[corner.texture]
+		if math.IsNaN(p[0]) || math.IsNaN(p[1]) {
+			return uv, false
+		}
+		uv[i] = geometry.Vector2{X: p[0], Y: 1 - p[1]}
+	}
+	return uv, true
 }
 
 // smoothing turns the corners of faces that have normals into vertices. A Mesh has

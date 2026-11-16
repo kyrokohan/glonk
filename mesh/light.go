@@ -214,8 +214,10 @@ func (m Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(t
 	tri.lights = lit
 	faceColors := len(m.FaceColors) == len(m.Faces) // otherwise they are not used
 	vertexColors := len(m.VertexColors) == len(m.Vertices) && len(m.Vertices) > 0
-	tri.tinted = false
+	pictured := len(m.FaceTexCoords) == len(m.Faces) && m.Material.Texture.Width() > 0
+	tri.tinted, tri.tex = false, nil
 	var corner [3]geometry.Vector3 // the colors of the corners of the face being drawn, if it has any
+	var faceUV [3]geometry.Vector2 // the places of the picture its corners are pinned to, if it has one
 	for i, f := range m.Faces {
 		if !validIndex(f[0], len(view)) || !validIndex(f[1], len(view)) || !validIndex(f[2], len(view)) {
 			continue
@@ -250,16 +252,33 @@ func (m Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(t
 			tri.color = m.FaceColors[i]
 		}
 
-		var cut bool // the near or the far plane crosses a tinted triangle
+		varying := false // the face has colors or a picture of its own, so every cell is asked for its color
+		if pictured {
+			tri.tex = nil
+			// A coordinate that is not finite makes every cell of the face none, which shows the face's own
+			// color. The triple is compared a corner at a time, through a pointer: comparing the array as
+			// a whole costs every mesh, picture or not, 9% on a mesh of many flat faces.
+			if p := &m.FaceTexCoords[i]; p[0] != (geometry.Vector2{}) || p[1] != (geometry.Vector2{}) || p[2] != (geometry.Vector2{}) {
+				tri.tex, faceUV, varying = m.Material.Texture, *p, true
+			}
+		}
 		if vertexColors {
 			vc := [3]engine.Color{m.VertexColors[f[0]], m.VertexColors[f[1]], m.VertexColors[f[2]]}
 			if tri.tinted = !vc[0].IsDefault() || !vc[1].IsDefault() || !vc[2].IsDefault(); tri.tinted {
+				varying = true
 				for k := range corner {
-					corner[k] = cornerColor(vc[k], tri.color, hasFaceColor)
+					if tri.tex != nil {
+						// A corner without a color lets all of the picture through.
+						corner[k] = cornerColor(vc[k], engine.RGB(255, 255, 255), true)
+					} else {
+						corner[k] = cornerColor(vc[k], tri.color, hasFaceColor)
+					}
 				}
-				cut = crossesFar || v0.Z < cam.Near || v1.Z < cam.Near || v2.Z < cam.Near
 			}
 		}
+		// The near or the far plane crosses a triangle that has colors or a picture of its own to
+		// give its new corners.
+		cut := varying && (crossesFar || v0.Z < cam.Near || v1.Z < cam.Near || v2.Z < cam.Near)
 
 		a, b, c := clipVert{view: v0}, clipVert{view: v1}, clipVert{view: v2}
 		if smooth {
@@ -284,14 +303,22 @@ func (m Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(t
 				if smooth {
 					tri.world[i], tri.normal[i] = v.world, v.normal
 				}
+				if !varying {
+					continue
+				}
+				// An uncut triangle comes out with its corners as they went in. A cut one has
+				// corners on the near or far plane, given the color and the place in the picture
+				// that the face has there.
+				if !cut {
+					tri.rgb[i], tri.uv[i] = corner[i], faceUV[i]
+					continue
+				}
 				if tri.tinted {
-					// An uncut triangle comes out with its corners as they went in. A cut
-					// one has corners on the near or far plane, given the color at that place.
-					if cut {
-						tri.rgb[i] = colorAtPoint(corner, v0, v1, v2, v.view)
-					} else {
-						tri.rgb[i] = corner[i]
-					}
+					tri.rgb[i] = colorAtPoint(corner, v0, v1, v2, v.view)
+				}
+				if tri.tex != nil {
+					p0, p1, p2 := pointWeights(v0, v1, v2, v.view)
+					tri.uv[i] = faceUV[0].Scale(p0).Add(faceUV[1].Scale(p1)).Add(faceUV[2].Scale(p2))
 				}
 			}
 			fn(tri)
@@ -308,6 +335,10 @@ func (m Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(t
 // A mesh without Normals is shaded flat, each face lit as a whole. One with Normals
 // is shaded smooth, every cell lit on its own; see Mesh.Normals.
 //
+// A face with texture coordinates takes the color of each cell from the Material.Texture at
+// that place on the face (see Mesh.FaceTexCoords), and a face with vertex colors fades from one
+// to the next, or both, the colors tinting the picture.
+//
 // Brightness is shown by the character: a ramp from dim to bright, Material.Ramp. A camera
 // with a Fog fades the color of each cell toward the fog's, by how deep the cell is, and the
 // character stays.
@@ -318,7 +349,7 @@ func (m Mesh) DrawShaded(fb *engine.FrameBuffer, cam Camera, lights ...Light) {
 	fog := cam.Fog
 	m.eachShadedTriangle(cam, lights, fb.Width(), fb.Height(), func(t *shadedTriangle) {
 		c := &t.corners
-		if t.tinted {
+		if t.varies() {
 			fillTinted(fb, t, ramp, fog)
 			return
 		}
@@ -341,13 +372,15 @@ func (m Mesh) DrawShaded(fb *engine.FrameBuffer, cam Camera, lights ...Light) {
 // clipping, depth and smoothing rules, but brightness is shown by the color (a darker
 // or lighter shade of Material.Color) and there are twice as many rows, so edges are
 // finer. Call Canvas.Compose afterwards to put the pixels into the FrameBuffer. A camera with
-// a Fog fades the shaded color of each pixel toward the fog's, by how deep the pixel is.
+// a Fog fades the shaded color of each pixel toward the fog's, by how deep the pixel is. A face
+// with texture coordinates is drawn in the pixels of its picture, one for each pixel of the
+// canvas, so a picture of 16 by 16 on a wall that fills a screen is seen as 16 by 16 blocks.
 func (m Mesh) DrawShadedPixels(c *engine.Canvas, cam Camera, lights ...Light) {
 	// Project onto the cell grid the canvas belongs to, then stretch y to pixel rows.
 	fog := cam.Fog
 	m.eachShadedTriangle(cam, lights, c.Width(), c.Height()/2, func(t *shadedTriangle) {
 		p := &t.corners
-		if t.tinted {
+		if t.varies() {
 			fillTintedPixels(c, t, fog)
 			return
 		}

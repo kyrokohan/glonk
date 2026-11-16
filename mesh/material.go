@@ -3,6 +3,7 @@ package mesh
 import (
 	"math"
 
+	"glonk.dev/bitmap"
 	"glonk.dev/engine"
 )
 
@@ -12,6 +13,16 @@ type Material struct {
 	// color the characters are drawn in. The zero Color is the terminal's default.
 	// Mesh.FaceColors replaces it for the faces that have a color of their own.
 	Color engine.Color
+
+	// Texture is a picture for the faces that have Mesh.FaceTexCoords: they take the color
+	// of the surface from it, as Color is for the others. Nil, or a picture with no pixels,
+	// is none. A mesh has one picture; for two, make a mesh for each, or put both in one
+	// picture and give each face the coordinates of its part. A view from Bitmap.Sub is a
+	// picture of its own, and repeats inside itself. The colors are the ones Bitmap.At gives,
+	// so a Shaded or Tinted view is drawn as the picture it is a view of. Drawing reads the
+	// picture and does not copy it, so it is not to be changed by another goroutine while
+	// the mesh is drawn.
+	Texture *bitmap.Bitmap
 
 	// Ramp is the characters that show brightness in DrawShaded, from the darkest to
 	// the brightest. An empty Ramp means ".:-=+*#%@", plain ASCII that renders in any

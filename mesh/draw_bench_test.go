@@ -6,6 +6,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"glonk.dev/bitmap"
 	"glonk.dev/engine"
 	"glonk.dev/geometry"
 )
@@ -406,6 +407,82 @@ func BenchmarkDrawLamps(b *testing.B) {
 							} else {
 								c.DrawShaded(fb, cam, lights...)
 							}
+						}
+					}
+				})
+			}
+		}
+	}
+}
+
+// BenchmarkDrawTextured draws a wall that shows a picture of 16 by 16 pixels: as two triangles
+// with the picture on them, and as the grid of 512 small triangles, one for each pixel, that a wall
+// had to be made of when a face had one color. Both show the same picture; the first should cost
+// much less.
+func BenchmarkDrawTextured(b *testing.B) {
+	rng := rand.New(rand.NewPCG(31, 7))
+	pic := bitmap.New(16, 16)
+	for y := range 16 {
+		for x := range 16 {
+			pic.Set(x, y, engine.RGB(uint8(40+rng.IntN(200)), uint8(40+rng.IntN(200)), uint8(40+rng.IntN(200))))
+		}
+	}
+	const wallW, wallH = 3.2, 2.0
+
+	// The wall as two triangles with the picture on them.
+	two := Mesh{
+		Vertices: []geometry.Vector3{{X: -wallW / 2, Y: -wallH / 2}, {X: -wallW / 2, Y: wallH / 2}, {X: wallW / 2, Y: wallH / 2}, {X: wallW / 2, Y: -wallH / 2}},
+		Faces:    [][3]int{{0, 1, 2}, {0, 2, 3}},
+		FaceTexCoords: [][3]geometry.Vector2{
+			{{X: 0, Y: 1}, {X: 0, Y: 0}, {X: 1, Y: 0}},
+			{{X: 0, Y: 1}, {X: 1, Y: 0}, {X: 1, Y: 1}},
+		},
+		Material: Material{Texture: pic},
+	}
+	two.UpdateBounds()
+
+	// The wall as a grid of faces, each with the color of one pixel.
+	grid := Mesh{}
+	for y := 0; y <= 16; y++ {
+		for x := 0; x <= 16; x++ {
+			grid.Vertices = append(grid.Vertices, geometry.Vector3{X: -wallW/2 + wallW*float64(x)/16, Y: wallH/2 - wallH*float64(y)/16})
+		}
+	}
+	for y := range 16 {
+		for x := range 16 {
+			a, d := y*17+x, (y+1)*17+x // the top left and the bottom left of the pixel
+			grid.Faces = append(grid.Faces, [3]int{d, a, a + 1}, [3]int{d, a + 1, d + 1})
+			grid.FaceColors = append(grid.FaceColors, pic.At(x, y), pic.At(x, y))
+		}
+	}
+	grid.UpdateBounds()
+
+	cam := Camera{FOV: math.Pi / 2, Near: 0.1}
+	lights := []Light{Ambient{Level: 0.2}, Directional{Direction: geometry.Vector3{X: 0.4, Y: -1, Z: 0.6}}}
+	for _, size := range []struct{ w, h int }{{80, 24}, {200, 60}} {
+		fb, err := engine.NewFrameBuffer(size.w, size.h)
+		if err != nil {
+			b.Fatal(err)
+		}
+		for _, wall := range []struct {
+			name string
+			m    Mesh
+		}{{"textured", two}, {"grid of faces", grid}} {
+			m := wall.m
+			m.Transform.Position = geometry.Vector3{Z: 3}
+			for _, pixels := range []bool{false, true} {
+				kind := "cells"
+				if pixels {
+					kind = "pixels"
+				}
+				b.Run(fmt.Sprintf("%s %s %dx%d", wall.name, kind, size.w, size.h), func(b *testing.B) {
+					b.ReportAllocs()
+					for b.Loop() {
+						fb.Clear()
+						if pixels {
+							m.DrawShadedPixels(fb.Canvas(), cam, lights...)
+						} else {
+							m.DrawShaded(fb, cam, lights...)
 						}
 					}
 				})
