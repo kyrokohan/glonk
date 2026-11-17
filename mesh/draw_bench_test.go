@@ -490,3 +490,107 @@ func BenchmarkDrawTextured(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkDrawSeeThrough draws a fence, a wall that shows a picture of 16 by 16 pixels, half of
+// them holes in alternate columns, as two triangles with the picture on them, and as the faces that
+// such a wall had to be cut into when a face had one color: one for each pixel that is not a hole.
+// And a pane of glass in front of a solid wall, against the same pane solid. The fence should cost
+// much less cut as two triangles, and glass should cost about what a solid does.
+func BenchmarkDrawSeeThrough(b *testing.B) {
+	rng := rand.New(rand.NewPCG(51, 7))
+	pic := bitmap.New(16, 16)
+	for y := range 16 {
+		for x := 0; x < 16; x += 2 { // the odd columns stay see-through
+			pic.Set(x, y, engine.RGB(uint8(40+rng.IntN(200)), uint8(40+rng.IntN(200)), uint8(40+rng.IntN(200))))
+		}
+	}
+	const wallW, wallH = 3.2, 2.0
+
+	fence := Mesh{
+		Vertices: []geometry.Vector3{{X: -wallW / 2, Y: -wallH / 2}, {X: -wallW / 2, Y: wallH / 2}, {X: wallW / 2, Y: wallH / 2}, {X: wallW / 2, Y: -wallH / 2}},
+		Faces:    [][3]int{{0, 1, 2}, {0, 2, 3}},
+		FaceTexCoords: [][3]geometry.Vector2{
+			{{X: 0, Y: 1}, {X: 0, Y: 0}, {X: 1, Y: 0}},
+			{{X: 0, Y: 1}, {X: 1, Y: 0}, {X: 1, Y: 1}},
+		},
+		Material: Material{Texture: pic},
+	}
+	fence.UpdateBounds()
+
+	cut := Mesh{} // a face for each pixel that is there
+	for y := 0; y <= 16; y++ {
+		for x := 0; x <= 16; x++ {
+			cut.Vertices = append(cut.Vertices, geometry.Vector3{X: -wallW/2 + wallW*float64(x)/16, Y: wallH/2 - wallH*float64(y)/16})
+		}
+	}
+	for y := range 16 {
+		for x := 0; x < 16; x += 2 {
+			a, d := y*17+x, (y+1)*17+x
+			cut.Faces = append(cut.Faces, [3]int{d, a, a + 1}, [3]int{d, a + 1, d + 1})
+			cut.FaceColors = append(cut.FaceColors, pic.At(x, y), pic.At(x, y))
+		}
+	}
+	cut.UpdateBounds()
+
+	// Glass in front of a wall, and the same pane solid.
+	wall := Mesh{
+		Vertices: []geometry.Vector3{{X: -6, Y: -4, Z: 6}, {X: -6, Y: 4, Z: 6}, {X: 6, Y: 4, Z: 6}, {X: 6, Y: -4, Z: 6}},
+		Faces:    [][3]int{{0, 1, 2}, {0, 2, 3}},
+		Material: Material{Color: engine.RGB(200, 120, 60)},
+	}
+	wall.UpdateBounds()
+	pane := Mesh{
+		Vertices: []geometry.Vector3{{X: -wallW / 2, Y: -wallH / 2, Z: 3}, {X: -wallW / 2, Y: wallH / 2, Z: 3}, {X: wallW / 2, Y: wallH / 2, Z: 3}, {X: wallW / 2, Y: -wallH / 2, Z: 3}},
+		Faces:    [][3]int{{0, 1, 2}, {0, 2, 3}},
+		Material: Material{Color: engine.RGB(0, 100, 240), Opacity: 0.4},
+	}
+	pane.UpdateBounds()
+	solid := pane
+	solid.Material.Opacity = 0
+
+	cam := Camera{FOV: math.Pi / 2, Near: 0.1}
+	lights := []Light{Ambient{Level: 0.2}, Directional{Direction: geometry.Vector3{X: 0.4, Y: -1, Z: 0.6}}}
+	for _, size := range []struct{ w, h int }{{80, 24}, {200, 60}} {
+		fb, err := engine.NewFrameBuffer(size.w, size.h)
+		if err != nil {
+			b.Fatal(err)
+		}
+		for _, scene := range []struct {
+			name   string
+			meshes []Mesh
+		}{
+			{"fence", []Mesh{fence}},
+			{"fence cut in faces", []Mesh{cut}},
+			{"glass over a wall", []Mesh{wall, pane}},
+			{"solid over a wall", []Mesh{wall, solid}},
+		} {
+			meshes := make([]Mesh, len(scene.meshes))
+			for i, m := range scene.meshes {
+				m.Transform.Position = geometry.Vector3{Z: 0}
+				if scene.name == "fence" || scene.name == "fence cut in faces" {
+					m.Transform.Position = geometry.Vector3{Z: 3}
+				}
+				meshes[i] = m
+			}
+			for _, pixels := range []bool{false, true} {
+				kind := "cells"
+				if pixels {
+					kind = "pixels"
+				}
+				b.Run(fmt.Sprintf("%s %s %dx%d", scene.name, kind, size.w, size.h), func(b *testing.B) {
+					b.ReportAllocs()
+					for b.Loop() {
+						fb.Clear()
+						for _, m := range meshes {
+							if pixels {
+								m.DrawShadedPixels(fb.Canvas(), cam, lights...)
+							} else {
+								m.DrawShaded(fb, cam, lights...)
+							}
+						}
+					}
+				})
+			}
+		}
+	}
+}

@@ -205,7 +205,7 @@ func (c *Canvas) FillTriangleOver(x0, y0, z0, x1, y1, z1, x2, y2, z2 float64, ov
 	if over == nil {
 		return
 	}
-	scanTriangle(c.width, c.height, x0, y0, z0, x1, y1, z1, x2, y2, z2, func(x, y int, z, p0, p1, p2 float64) {
+	scanTriangleOnce(c.width, c.height, x0, y0, z0, x1, y1, z1, x2, y2, z2, func(x, y int, z, p0, p1, p2 float64) {
 		i := y*c.width + x
 		if !(z < c.depth[i]) {
 			return

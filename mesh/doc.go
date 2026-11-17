@@ -34,7 +34,13 @@
 // [Mesh.FaceTexCoords] pins the three corners of a face to places in it, so that every cell
 // or pixel of the face takes the color of the picture where it is, seen with perspective, and
 // a wall of two triangles shows a picture of any size. The picture's color is lit as a face
-// color is, and vertex colors tint it. [LoadOBJFS] fills both from a model's texture.
+// color is, and vertex colors tint it. A see-through pixel of the picture is a hole, where nothing
+// is drawn and what is behind shows, as in a fence. [LoadOBJFS] fills both from a model's texture.
+//
+// A mesh can also be seen through as a whole: [Material.Opacity] is the part of its color that shows,
+// and it is mixed over what is already drawn, as glass, water or a ghost is. Such a mesh is tested
+// against depth and does not store it, so the solid meshes are drawn first and then the see-through
+// ones, from far to near; nothing is sorted for you.
 //
 // [Mesh.VertexColors] gives each vertex a color, and a face fades from one corner's color
 // to the next, blended at every cell with the same perspective-correct weights as smooth

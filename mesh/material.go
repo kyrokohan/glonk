@@ -26,6 +26,28 @@ type Material struct {
 	// the mesh is drawn.
 	Texture *bitmap.Bitmap
 
+	// Opacity is the part of the surface's color that shows, from 0 to 1, for a mesh that can be
+	// seen through: glass, water, smoke, a ghost. Each cell or pixel of one of its faces is mixed
+	// over what is already there, as engine.Mix does, by this part: Opacity 0.25 is a quarter of
+	// its color and three quarters of what is behind it. The color is lit and faded in fog first,
+	// and is the picture's or the vertex colors' where it has them; a hole in a picture is still a
+	// hole. 0, the default, means 1, as Light.Intensity: the mesh is solid. So does anything
+	// that is not between 0 and 1, NaN included.
+	//
+	// Such a face is tested against depth, so a solid in front of it hides it, but does not store
+	// it, so a see-through face behind it is still seen: draw the solid meshes first, and then the
+	// see-through ones from far to near. glonk does not sort, between meshes or the faces of one: they
+	// are mixed in the order they are drawn, the faces in the order of Mesh.Faces. A face seen from
+	// behind is skipped unless Mesh.DoubleSided, as a solid's is, and then a closed shape such as a
+	// glass ball is mixed in face order, so list the faces of its far side first or make two meshes.
+	//
+	// Over a pixel that is empty, or a cell that has nothing in it, the color is mixed with black,
+	// as engine.Mix and engine.Shade read the default color, so a ghost shows against the empty
+	// background; fill the canvas first to have another. In half-block pixels the pixel is mixed. In
+	// cells the character and attributes of the cell behind stay, and its foreground and its
+	// background are each mixed, so glass over a blank cell is a block of its color.
+	Opacity float64
+
 	// Ramp is the characters that show brightness in DrawShaded, from the darkest to
 	// the brightest. An empty Ramp means ".:-=+*#%@", plain ASCII that renders in any
 	// terminal and has no space, so a lit face never vanishes into the background. A
@@ -33,6 +55,15 @@ type Material struct {
 	// rules as everywhere in the engine: only one-column characters are drawn as they
 	// are. DrawShadedPixels shows brightness by color and ignores Ramp.
 	Ramp string
+}
+
+// seeThrough returns the part of the color that shows, if the material can be seen through, and 0
+// for a solid one: see Opacity.
+func (m Material) seeThrough() float64 {
+	if o := m.Opacity; o > 0 && o < 1 {
+		return o
+	}
+	return 0
 }
 
 // defaultRamp is what an empty Material.Ramp stands for.

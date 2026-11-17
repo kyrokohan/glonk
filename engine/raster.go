@@ -279,6 +279,12 @@ const (
 // drawn, because over says FillSkip, or says something that is not a Fill, keeps what it
 // had, depth too. A nil over draws nothing.
 //
+// A cell whose centre is exactly on an edge of the triangle is covered if the edge is on its left
+// or top, and not if it is on its right or bottom, so two triangles that share an edge cover each
+// cell on it once between them: a surface made of triangles that is drawn over what is behind it, and
+// does not store depth, is mixed once there and not twice. FillTriangleFunc covers such a cell for
+// both sides, which leaves no gap, and does no harm when the depth is stored.
+//
 // It is for a surface that can be seen through: holes (FillSkip where the surface is not
 // there, FillSolid where it is) and glass (FillOver, with a cell made from the one behind
 // it). The weights are those of FillTriangleFunc, and the depth test comes first in the
@@ -288,7 +294,7 @@ func (fb *FrameBuffer) FillTriangleOver(x0, y0, z0, x1, y1, z1, x2, y2, z2 float
 	if over == nil {
 		return
 	}
-	scanTriangle(fb.width, fb.height, x0, y0, z0, x1, y1, z1, x2, y2, z2, func(x, y int, z, p0, p1, p2 float64) {
+	scanTriangleOnce(fb.width, fb.height, x0, y0, z0, x1, y1, z1, x2, y2, z2, func(x, y int, z, p0, p1, p2 float64) {
 		i := y*fb.width + x
 		if !(z < fb.depth[i]) {
 			return
@@ -345,6 +351,61 @@ func scanTriangle(w, h int, x0, y0, z0, x1, y1, z1, x2, y2, z2 float64, plot fun
 
 			// 1/z is the quantity that varies linearly across the screen, so
 			// interpolate it and invert; interpolating z itself would skew depth.
+			p0, p1, p2 := w0/z0, w1/z1, w2/z2
+			plot(x, y, 1/(p0+p1+p2), p0, p1, p2)
+		}
+	}
+}
+
+// scanTriangleOnce is scanTriangle for a fill that must not draw a cell twice where two triangles
+// meet, as a surface that is mixed over what is behind it would. scanTriangle counts a cell whose
+// centre is on an edge for the triangles on both sides of it, which leaves no gap, and which is
+// harmless for a fill that stores depth, since the second finds the first there. Here such a cell
+// belongs to one side: the top-left rule, by which an edge counts for a triangle if the inside of
+// the triangle is to its right, or, for a level edge, below it. Two triangles that share an edge
+// have it on opposite sides, so each cell on it is visited once, and no cell is left out.
+//
+// It does what scanTriangle does otherwise; the walk is copied, and not shared, because
+// scanTriangle is the hot loop of every fill and is left as it is.
+func scanTriangleOnce(w, h int, x0, y0, z0, x1, y1, z1, x2, y2, z2 float64, plot func(x, y int, z, p0, p1, p2 float64)) {
+	if !(z0 > 0 && z1 > 0 && z2 > 0) {
+		return
+	}
+	area := (x1-x0)*(y2-y0) - (x2-x0)*(y1-y0)
+	if !(math.Abs(area) > 0) {
+		return
+	}
+
+	// Which way each weight grows across the screen, as (gx, gy): it grows toward the corner it
+	// belongs to, and the edge that it is 0 on is on the left or top of the triangle if that is
+	// right or down. A cell within triangleEps of an edge is on it.
+	bias := func(gx, gy float64) float64 {
+		if gx > 0 || (gx == 0 && gy > 0) {
+			return -triangleEps // counts: on the edge is inside
+		}
+		return triangleEps // does not: on the edge is outside
+	}
+	e0 := bias((y1-y2)/area, (x2-x1)/area)
+	e1 := bias((y2-y0)/area, (x0-x2)/area)
+	e2 := bias((y0-y1)/area, (x1-x0)/area)
+
+	fw, fh := float64(w), float64(h)
+	left := int(max(0, min(math.Floor(min(x0, x1, x2)), fw)))
+	right := int(max(-1, min(math.Ceil(max(x0, x1, x2)), fw-1)))
+	top := int(max(0, min(math.Floor(min(y0, y1, y2)), fh)))
+	bottom := int(max(-1, min(math.Ceil(max(y0, y1, y2)), fh-1)))
+
+	for y := top; y <= bottom; y++ {
+		for x := left; x <= right; x++ {
+			px, py := float64(x)+0.5, float64(y)+0.5
+
+			w0 := ((x1-px)*(y2-py) - (x2-px)*(y1-py)) / area
+			w1 := ((x2-px)*(y0-py) - (x0-px)*(y2-py)) / area
+			w2 := ((x0-px)*(y1-py) - (x1-px)*(y0-py)) / area
+			if w0 < e0 || w1 < e1 || w2 < e2 {
+				continue
+			}
+
 			p0, p1, p2 := w0/z0, w1/z1, w2/z2
 			plot(x, y, 1/(p0+p1+p2), p0, p1, p2)
 		}
