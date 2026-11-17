@@ -214,8 +214,8 @@ func validIndex(i, n int) bool {
 //
 // Draw ignores depth: the lines land on top of whatever is already drawn, so a
 // wireframe shows through solids, and it neither hides nor is hidden by anything drawn
-// after it. Use DrawDepth for lines that are hidden by nearer surfaces, and DrawPixels
-// for lines of half-block pixels.
+// after it. Use DrawDepth for lines that are hidden by nearer surfaces, DrawOnSurface for
+// lines that lie on one, and DrawPixels for lines of half-block pixels.
 func (m Mesh) Draw(fb *engine.FrameBuffer, cam Camera, cell engine.Cell) {
 	m.eachEdge(cam, fb.Width(), fb.Height(), func(ax, ay, _, bx, by, _ float64) {
 		drawEdge(fb, ax, ay, bx, by, cell)
@@ -231,9 +231,9 @@ func (m Mesh) Draw(fb *engine.FrameBuffer, cam Camera, cell engine.Cell) {
 // The depth of each cell is perspective-correct along the edge (see
 // FrameBuffer.DrawLineDepth), and the edges are stored with their depth, so a farther
 // solid drawn later does not cover them. A tie keeps what is there, so a line lying
-// exactly on a surface, a grid on a floor, flickers between the two: lift it a little.
-// Edges drawn over the mesh's own faces are best drawn with Draw, which does not depend
-// on how those cells happen to compare.
+// exactly on a surface, a grid on a floor, the edges of a mesh over its own faces, is broken
+// where it is a hair behind it, which across a surface seen at a low angle is half of it, and
+// no lift is right at every distance. Use DrawOnSurface for a line that lies on a surface.
 func (m Mesh) DrawDepth(fb *engine.FrameBuffer, cam Camera, cell engine.Cell) {
 	m.eachEdge(cam, fb.Width(), fb.Height(), func(ax, ay, za, bx, by, zb float64) {
 		drawEdgeDepth(fb, ax, ay, za, bx, by, zb, cell)
@@ -266,6 +266,38 @@ func (m Mesh) DrawPixels(c *engine.Canvas, cam Camera, color engine.Color) {
 func (m Mesh) DrawDepthPixels(c *engine.Canvas, cam Camera, color engine.Color) {
 	m.eachEdge(cam, c.Width(), c.Height()/2, func(ax, ay, za, bx, by, zb float64) {
 		drawEdgeDepthPixels(c, ax, ay, za, bx, by, zb, color)
+	})
+}
+
+// DrawOnSurface is DrawDepth for edges that lie on a surface that is already drawn: a grid on a
+// floor, a box round the thing that is selected, a mark on a wall, the edges of a mesh over its own
+// faces. DrawDepth hides such a line wherever it is a hair behind the surface, which across a floor
+// seen at a low angle is half of it or all of it, whatever it is lifted by. DrawOnSurface draws a cell
+// of an edge if it is no farther than what is there plus the slope of that surface across a cell,
+// read from the depths around it, so the line is whole at any distance and any angle, and it is still
+// hidden by what is nearer: a solid in front of it, and the faces of a mesh in front of its own far
+// edges. A line well behind a surface is hidden; the most that is let through is a quarter of the
+// depth there. A line that is in front of the surface keeps its depth, as DrawDepth's does, and one
+// that lies on it leaves the surface's depth as it is.
+//
+// The surface has to be drawn first, since its depth is what the line is measured against, into
+// the same FrameBuffer, or into the same Canvas for DrawOnSurfacePixels. The edges, the cutting
+// at the near and far planes and the skipping of what is off screen are those of DrawDepth, and with
+// nothing drawn it draws what DrawDepth does. Only the mesh's Edges are drawn, not every side of every
+// triangle. A line that is a hair behind a surface that is seen edge-on shows, as it does with any
+// depth bias: no depth test can tell them apart. See engine.FrameBuffer.DrawLineOnSurface.
+func (m Mesh) DrawOnSurface(fb *engine.FrameBuffer, cam Camera, cell engine.Cell) {
+	m.eachEdge(cam, fb.Width(), fb.Height(), func(ax, ay, za, bx, by, zb float64) {
+		drawEdgeOnSurface(fb, ax, ay, za, bx, by, zb, cell)
+	})
+}
+
+// DrawOnSurfacePixels is DrawOnSurface for a pixel Canvas: the same edges, as lines of pixels, twice as
+// fine from top to bottom, on the solids drawn into the same canvas, to the pixel. Call Canvas.Compose
+// afterwards. See Canvas.DrawLineOnSurface.
+func (m Mesh) DrawOnSurfacePixels(c *engine.Canvas, cam Camera, color engine.Color) {
+	m.eachEdge(cam, c.Width(), c.Height()/2, func(ax, ay, za, bx, by, zb float64) {
+		drawEdgeOnSurfacePixels(c, ax, ay, za, bx, by, zb, color)
 	})
 }
 
@@ -407,6 +439,30 @@ func drawEdgeDepth(fb *engine.FrameBuffer, ax, ay, za, bx, by, zb float64, cell 
 		int(math.Floor(cx0)), int(math.Floor(cy0)), z0,
 		int(math.Floor(cx1)), int(math.Floor(cy1)), z1,
 		cell)
+}
+
+// drawEdgeOnSurface is drawEdgeDepth for a line that lies on a surface; see engine's DrawLineOnSurface.
+func drawEdgeOnSurface(fb *engine.FrameBuffer, ax, ay, za, bx, by, zb float64, cell engine.Cell) {
+	cx0, cy0, z0, cx1, cy1, z1, ok := trimEdgeDepth(fb.Width(), fb.Height(), ax, ay, za, bx, by, zb)
+	if !ok {
+		return
+	}
+	fb.DrawLineOnSurface(
+		int(math.Floor(cx0)), int(math.Floor(cy0)), z0,
+		int(math.Floor(cx1)), int(math.Floor(cy1)), z1,
+		cell)
+}
+
+// drawEdgeOnSurfacePixels is drawEdgeDepthPixels for a line that lies on a surface.
+func drawEdgeOnSurfacePixels(c *engine.Canvas, ax, ay, za, bx, by, zb float64, color engine.Color) {
+	cx0, cy0, z0, cx1, cy1, z1, ok := trimEdgeDepth(c.Width(), c.Height()/2, ax, ay, za, bx, by, zb)
+	if !ok {
+		return
+	}
+	c.DrawLineOnSurface(
+		int(math.Floor(cx0)), int(math.Floor(2*cy0)), z0,
+		int(math.Floor(cx1)), int(math.Floor(2*cy1)), z1,
+		color)
 }
 
 // drawEdgePixels is drawEdge for the pixels of a Canvas. The edge is given on the grid of

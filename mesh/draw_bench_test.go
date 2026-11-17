@@ -594,3 +594,41 @@ func BenchmarkDrawSeeThrough(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkDrawOnSurface draws the edges of a cube that stands on a floor, over the floor and the cube
+// drawn solid, with DrawDepth, which hides a line that ties with a surface, and with DrawOnSurface, which
+// reads the slope of the surface from the depths around each cell of a line. The second costs more for what
+// it reads; it should not cost much more.
+func BenchmarkDrawOnSurface(b *testing.B) {
+	floor, cube, cam := cubeOnAFloor()
+	light := Ambient{Level: 1}
+	mark := engine.Cell{Character: 'X', Foreground: engine.RGB(255, 0, 255)}
+	for _, size := range []struct{ w, h int }{{80, 24}, {200, 60}} {
+		fb, err := engine.NewFrameBuffer(size.w, size.h)
+		if err != nil {
+			b.Fatal(err)
+		}
+		floor.DrawShaded(fb, cam, light)
+		cube.DrawShaded(fb, cam, light)
+		canvas := fb.Canvas()
+		floor.DrawShadedPixels(canvas, cam, light)
+		cube.DrawShadedPixels(canvas, cam, light)
+
+		for _, tt := range []struct {
+			name string
+			draw func()
+		}{
+			{"depth cells", func() { cube.DrawDepth(fb, cam, mark) }},
+			{"on surface cells", func() { cube.DrawOnSurface(fb, cam, mark) }},
+			{"depth pixels", func() { cube.DrawDepthPixels(canvas, cam, mark.Foreground) }},
+			{"on surface pixels", func() { cube.DrawOnSurfacePixels(canvas, cam, mark.Foreground) }},
+		} {
+			b.Run(fmt.Sprintf("%s %dx%d", tt.name, size.w, size.h), func(b *testing.B) {
+				b.ReportAllocs()
+				for b.Loop() {
+					tt.draw()
+				}
+			})
+		}
+	}
+}

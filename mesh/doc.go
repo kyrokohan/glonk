@@ -12,7 +12,10 @@
 // of each edge a depth instead, so nearer surfaces hide it and it hides farther ones, in
 // whatever order things are drawn. [Mesh.DrawPixels] and [Mesh.DrawDepthPixels] draw the
 // same edges into a half-block pixel Canvas, as lines twice as fine from top to bottom;
-// call Canvas.Compose afterwards.
+// call Canvas.Compose afterwards. A line that lies on a surface already drawn, a grid on a
+// floor or a box round the thing that is selected, ties with it under DrawDepth and is broken;
+// [Mesh.DrawOnSurface] and [Mesh.DrawOnSurfacePixels] draw it whole, and still hidden by what
+// is nearer.
 //
 // A mesh with no [Mesh.Normals] is lit face by face, one brightness for each, so a
 // round shape shows its facets. Give it a normal for each vertex and every cell is lit
