@@ -91,6 +91,16 @@
 // picture, and a tie keeps what is there. The depth and the pixel to draw at come from
 // mesh.Camera.ProjectPixels, from the pixels of the foot and the top of the thing.
 //
+// # Over cells
+//
+// The canvas is under the cells until [engine.Canvas.Compose] puts it down, so a picture drawn on
+// it is covered by a filled panel drawn after. To show a picture over cells that are already in
+// the frame, draw it and put its rectangle down with [engine.Canvas.ComposeRect]. A see-through
+// pixel then shows what the cell showed, as far as half a cell can.
+//
+//	logo.Draw(canvas, x, y)
+//	canvas.ComposeRect(x, y, logo.Width(), logo.Height())
+//
 // # Limits
 //
 // [DecodeLimit] sets the most bytes and the most pixels a picture may have; Decode allows

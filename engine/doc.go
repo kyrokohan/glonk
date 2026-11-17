@@ -21,4 +21,6 @@
 // rectangles and circles can be drawn into it, and the bitmap package draws pictures.
 // [Canvas.DrawText] draws text into it in a small pixel font, at any whole multiple of its size, and
 // [PixelTextWidth] says how wide that is; [FrameBuffer.DrawText] draws text into cells.
+// [Canvas.ComposeRect] puts a part of the canvas down over cells that are already in the frame,
+// for a picture inside a filled panel.
 package engine

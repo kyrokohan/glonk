@@ -45,4 +45,18 @@
 // A [Panel] fills its inside with Fill. A Fill that is blank, with no background and no
 // attributes, as the zero Cell is, is a hole: the inside is left alone and shows what is
 // under it, as a see-through sprite does.
+//
+// # A picture in a panel
+//
+// The pixels of an [engine.Canvas] are under every cell until [engine.Canvas.Compose] puts them
+// down, so a picture drawn on the canvas is covered by the panel's fill. Draw the panel, then the
+// picture, then put that rectangle of the canvas down over the cells with
+// [engine.Canvas.ComposeRect]. A cell is one pixel across and two down, so pixel row 2 is cell
+// row 1, and where the picture is see-through the fill shows:
+//
+//	widget.Panel{Title: "coins", Fill: fill}.Draw(fb, 0, 0, 20, 5)
+//	canvas := fb.Canvas()
+//	coin.Draw(canvas, 2, 2) // a bitmap.Bitmap, at pixel (2, 2): inside the panel
+//	canvas.ComposeRect(2, 2, coin.Width(), coin.Height())
+//	widget.Label{Text: "12"}.Draw(fb, 9, 2, 4) // beside it, in cells
 package widget

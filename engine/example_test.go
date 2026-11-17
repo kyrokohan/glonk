@@ -456,3 +456,65 @@ func ExampleCanvas_DrawText() {
 	// ...#...#..###....#......
 	// ........................
 }
+
+// Canvas.ComposeRect puts one rectangle of the canvas down over cells that are already in the frame, so a
+// picture, a shape or pixel text can sit inside a filled panel: Compose would put the whole canvas down, and
+// the fill of a panel drawn after it would cover the picture. The panel and its label are cells; the coin is
+// pixels, a circle here, and where it is see-through the panel shows. This prints the pixels of the coin's
+// side of the frame, and writes a picture of the whole frame to the path in GLONK_SCREENSHOT, if there is one.
+func ExampleCanvas_ComposeRect() {
+	fb, err := engine.NewFrameBuffer(12, 4) // 12 by 8 pixels
+	if err != nil {
+		panic(err)
+	}
+	panel, gold := engine.Palette(236), engine.RGB(255, 200, 0)
+	for y := range 4 {
+		for x := range 12 {
+			fb.Set(x, y, engine.Cell{Background: panel}) // a filled panel, in cells
+		}
+	}
+	for i, r := range "x 3" {
+		fb.Set(7+i, 1, engine.Cell{Character: r, Foreground: engine.Palette(15), Background: panel})
+	}
+
+	canvas := fb.Canvas()
+	canvas.FillCircle(3, 4, 2, gold)               // a coin in pixels: 5 across, from pixel row 2 to 6
+	canvas.ComposeRect(1, 2, 5, 5)                 // put down over the panel: only the cells it touches
+	img := fb.Image(engine.ImageOptions{Scale: 1}) // one pixel for each pixel of the canvas
+	for y := range 8 {
+		row := make([]byte, 7)
+		for x := range row {
+			switch img.RGBAAt(x, y) {
+			case img.RGBAAt(3, 4): // the middle of the coin
+				row[x] = '#'
+			case img.RGBAAt(0, 0): // the panel
+				row[x] = '.'
+			default:
+				row[x] = '?'
+			}
+		}
+		fmt.Println(string(row))
+	}
+	fmt.Printf("the label is still there: %c%c%c\n", fb.At(7, 1).Character, fb.At(8, 1).Character, fb.At(9, 1).Character)
+
+	if path := os.Getenv("GLONK_SCREENSHOT"); path != "" {
+		f, err := os.Create(path)
+		if err != nil {
+			panic(err)
+		}
+		defer f.Close()
+		if err := png.Encode(f, fb.Image(engine.ImageOptions{Scale: 16})); err != nil {
+			panic(err)
+		}
+	}
+	// Output:
+	// .......
+	// .......
+	// ...#...
+	// ..###..
+	// .#####.
+	// ..###..
+	// ...#...
+	// .......
+	// the label is still there: x 3
+}
