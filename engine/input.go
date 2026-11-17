@@ -24,6 +24,12 @@ const holdTimeout = 150 * time.Millisecond
 // IsDown is for keys held to keep something going, Started for keys that switch something
 // once, and Pressed for keys whose auto-repeat should act again.
 //
+// [Input.KeyEvents] and [Input.Text] are for what IsDown, Pressed and Started do not say: which
+// modifiers were held with a key, the keys of a frame in the order they came, and the characters
+// that were typed, for a text field or a shortcut. IsDown, Pressed and Started never see a chord,
+// a character key with Ctrl, Alt or Super held, such as Ctrl+W: it is not the key itself, and a
+// terminal may mean it for something else.
+//
 // To test a game's Update, build an Input with a [Keyboard].
 type Input struct {
 	now      time.Time
@@ -32,6 +38,9 @@ type Input struct {
 	held     map[Key]bool
 	pressed  map[Key]bool
 	started  map[Key]bool // the pressed keys that were not already down
+
+	events []KeyEvent // this frame's key events, in order
+	text   []byte     // this frame's typed text
 }
 
 // newInput returns an Input with no keys held. exact says whether the terminal
@@ -49,19 +58,47 @@ func newInput(exact bool) *Input {
 // event records a key event at the given time.
 func (in *Input) event(e keyEvent, at time.Time) {
 	switch e.kind {
-	case kindRelease:
-		delete(in.held, e.key)
 	case kindFocusLost, kindReset:
 		in.releaseAll()
+		return
 	case kindFocusGained:
-		// Nothing to do: keys held across a focus change send fresh repeats.
-	default:
-		if in.beginsHold(e, at) {
-			in.started[e.key] = true
-		}
-		in.lastSeen[e.key] = at
-		in.held[e.key] = true
-		in.pressed[e.key] = true
+		return // nothing to do: keys held across a focus change send fresh repeats
+	}
+
+	in.list(e)
+	if e.chord {
+		return // not the plain key: only the list above sees it, release included
+	}
+	if e.kind == kindRelease {
+		delete(in.held, e.key)
+		return
+	}
+	if in.beginsHold(e, at) {
+		in.started[e.key] = true
+	}
+	in.lastSeen[e.key] = at
+	in.held[e.key] = true
+	in.pressed[e.key] = true
+}
+
+// list adds a key event to this frame's KeyEvents, and the characters it typed to its Text. Both
+// stop growing at their limits, so input nobody reads cannot fill the memory.
+func (in *Input) list(e keyEvent) {
+	if e.key == KeyCtrlC {
+		return // Run's, never the game's: a press ends the run, and a release of it comes here
+	}
+	if e.kind == kindRelease && !in.exact {
+		return // no release is ever reported there: a Keyboard's Release does nothing either
+	}
+	if len(in.events) < maxFrameEvents {
+		in.events = append(in.events, KeyEvent{Key: e.key, Mods: e.mods, Action: actionOf(e.kind)})
+	}
+	text := e.text
+	if text == "" {
+		text = textOf(e)
+	}
+	if len(in.text)+len(text) <= maxFrameText {
+		in.text = append(in.text, text...)
 	}
 }
 
@@ -96,6 +133,41 @@ func (in *Input) beginFrame(now time.Time) {
 func (in *Input) endFrame() {
 	clear(in.pressed)
 	clear(in.started)
+	in.events = in.events[:0]
+	in.text = in.text[:0]
+}
+
+// KeyEvents returns what happened to the keys since the previous frame, in the order it happened: each
+// press, repeat and release, with the modifiers the terminal said were held. A text field, a shortcut
+// such as Ctrl+S, or Shift+Tab reads it; IsDown, Pressed and Started are for keys held to play.
+//
+// Chords are here and nowhere else (see [Input]). Special keys carry their modifiers too, and are also
+// in IsDown, Pressed and Started whatever those are. Ctrl-C and Ctrl-Z are Run's and are never here.
+// Where the terminal reports no releases there are no ActionRelease and no ActionRepeat, only presses.
+//
+// What a terminal says of the modifiers depends on it. With the kitty keyboard protocol they are exact.
+// Without it, Shift is the case of a letter and not a modifier of it, Alt arrives as Escape and the key
+// (so a quick Escape then a key reads as Alt+key), Ctrl and a letter arrive as a control byte (so Ctrl+I
+// is Tab, Ctrl+M is Enter and Ctrl+H is Backspace), and the arrows, Home, End, Page Up and Down, Insert,
+// Delete and F1 to F12 carry their modifiers in the sequence. Hyper and Meta chords are not read.
+//
+// At most 256 events are kept for a frame; the rest are dropped. The slice is valid until Update returns:
+// copy what is to be kept.
+func (in *Input) KeyEvents() []KeyEvent {
+	return in.events
+}
+
+// Text returns the characters typed since the previous frame, in order, as a text field wants them: the
+// characters the keys type, not the keys. A special key such as Enter or Backspace, a release and a
+// paste type nothing here, and neither does a chord, unless the terminal says it typed something (Option
+// and a is a with a ring on a Mac, and the kitty protocol sends the text of it).
+//
+// A terminal with the kitty keyboard protocol sends the text of each key, so Shift, the layout and
+// compose keys are right. Without it, or with it but not its text flag, the text is the printable
+// characters as they arrived, which is right on a terminal that sends the character itself, or the key
+// with Shift applied to the ASCII letters only. At most 4,096 bytes are kept for a frame.
+func (in *Input) Text() string {
+	return string(in.text)
 }
 
 // IsDown reports whether k is held. Where the terminal reports releases this is

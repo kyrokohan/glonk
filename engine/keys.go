@@ -11,7 +11,8 @@ import (
 // The function keys and Home, End, Page Up, Page Down, Insert and Delete are read in the forms
 // that xterm, rxvt and the kitty keyboard protocol send them in. A terminal that sends one in
 // another form sends nothing that glonk reads. A modifier held with one of them, as with an
-// arrow, is not looked at: Ctrl+PageDown is PageDown.
+// arrow, is not looked at by IsDown, Pressed and Started: Ctrl+PageDown is PageDown there, and
+// Input.KeyEvents says Ctrl was held.
 type Key rune
 
 // Special keys. Negative values so they can never collide with a real rune.
@@ -101,18 +102,21 @@ const (
 type keyEvent struct {
 	key  Key
 	kind keyKind
+
+	// mods are the modifiers the terminal said were held, and chord is whether this is a shortcut (see
+	// chordOf), which only Input.KeyEvents sees. text is what a terminal with the kitty keyboard protocol said
+	// the key typed; where it is empty, Input works it out from the key (see textOf).
+	mods  Mods
+	chord bool
+	text  string
 }
 
-// Kitty keyboard protocol modifier bits, after subtracting the protocol's +1 offset.
-// Shift and the lock keys are deliberately absent: they do not make a shortcut.
+// Kitty keyboard protocol modifier bits that are not read, after subtracting the protocol's +1 offset: a
+// chord with Hyper or Meta is dropped, as every chord was before there was an API for them. Shift, Alt, Ctrl
+// and Super are Mods, and the lock keys are not modifiers of a shortcut.
 const (
-	modAlt   = 1 << 1
-	modCtrl  = 1 << 2
-	modSuper = 1 << 3
 	modHyper = 1 << 4
 	modMeta  = 1 << 5
-
-	shortcutMods = modAlt | modCtrl | modSuper | modHyper | modMeta
 )
 
 // privateUseStart is where the protocol puts keys with no character, such as a
@@ -205,7 +209,7 @@ func parseEvents(b []byte) []keyEvent {
 // chords, and reading them as Escape then x would make Alt+anything press Escape,
 // so they are dropped, as the kitty protocol path already does.
 func parse(b []byte, final bool) (events []keyEvent, consumed int) {
-	press := func(k Key) { events = append(events, keyEvent{k, kindPress}) }
+	press := func(k Key) { events = append(events, keyEvent{key: k, kind: kindPress}) }
 
 	i := 0
 	for i < len(b) {
@@ -233,7 +237,7 @@ func parse(b []byte, final bool) (events []keyEvent, consumed int) {
 					if !final {
 						return events, i
 					}
-					events = append(events, keyEvent{KeyUnknown, kindReset})
+					events = append(events, keyEvent{key: KeyUnknown, kind: kindReset})
 					i = len(b)
 					continue
 				}
@@ -263,13 +267,19 @@ func parse(b []byte, final bool) (events []keyEvent, consumed int) {
 				press(KeyEscape) // the first of two; the second is read next
 				i++
 
-			default: // Alt chord
-				size := 1
+			default: // Alt chord: ESC and a key
+				r, size := rune(next), 1
 				if next >= utf8.RuneSelf {
 					if !final && !utf8.FullRune(b[i+1:]) {
 						return events, i
 					}
-					_, size = utf8.DecodeRune(b[i+1:])
+					r, size = utf8.DecodeRune(b[i+1:])
+				}
+				switch {
+				case next == 0x7f:
+					events = append(events, keyEvent{key: KeyBackspace, kind: kindPress, mods: ModAlt, chord: true})
+				case r >= ' ' && !(r == utf8.RuneError && size == 1):
+					events = append(events, keyEvent{key: Key(r), kind: kindPress, mods: ModAlt, chord: true})
 				}
 				i += 1 + size
 			}
@@ -287,6 +297,12 @@ func parse(b []byte, final bool) (events []keyEvent, consumed int) {
 			i++
 		case c == '\t':
 			press(KeyTab)
+			i++
+		case c >= 0x01 && c <= 0x1a:
+			// Ctrl and a letter arrive as the control byte, 1 for a to 26 for z. The ones that are
+			// also a key of their own, Ctrl-C and Ctrl-Z above, Ctrl-H, Ctrl-I and Ctrl-M, are read
+			// as that key; Ctrl-J, a newline, is Ctrl and j.
+			events = append(events, keyEvent{key: Key('a' + c - 1), kind: kindPress, mods: ModCtrl, chord: true})
 			i++
 		case c < 0x20:
 			i++
@@ -326,7 +342,7 @@ func (p *keyParser) Feed(b []byte) []keyEvent {
 	rest := data[n:]
 	if len(rest) > maxPendingInput {
 		// No key sequence is this long, so this is garbage that would only grow.
-		events = append(events, keyEvent{KeyUnknown, kindReset})
+		events = append(events, keyEvent{key: KeyUnknown, kind: kindReset})
 		rest = nil
 	}
 	p.pending = append(p.pending[:0], rest...)
@@ -358,9 +374,9 @@ func appendCSI(events []keyEvent, params []byte, final byte) []keyEvent {
 	if len(params) == 0 {
 		switch final {
 		case 'I':
-			return append(events, keyEvent{KeyUnknown, kindFocusGained})
+			return append(events, keyEvent{key: KeyUnknown, kind: kindFocusGained})
 		case 'O':
-			return append(events, keyEvent{KeyUnknown, kindFocusLost})
+			return append(events, keyEvent{key: KeyUnknown, kind: kindFocusLost})
 		}
 	}
 
@@ -368,8 +384,9 @@ func appendCSI(events []keyEvent, params []byte, final byte) []keyEvent {
 
 	switch {
 	case final >= 'A' && final <= 'D':
-		// Arrows ignore modifiers so ctrl+right still turns right, and so do the keys below.
-		return append(events, keyEvent{arrow(final), eventKind(fields)})
+		// The modifiers are kept for Input.KeyEvents and are not looked at by IsDown, Pressed and
+		// Started, so ctrl+right still turns right, and so do the keys below.
+		return appendCSIKey(events, arrow(final), fields)
 	case final == 'H' || final == 'F' || (final >= 'P' && final <= 'S'):
 		// Home, End and F1 to F4 are CSI 1 ; modifiers X, or a bare CSI X. Another first
 		// parameter is not one of them: CSI row ; column R, for one, is a cursor position
@@ -377,10 +394,10 @@ func appendCSI(events []keyEvent, params []byte, final byte) []keyEvent {
 		if len(params) > 0 && param(fields, 0, 0) != 1 {
 			return events
 		}
-		return append(events, keyEvent{ss3Key(final), eventKind(fields)})
+		return appendCSIKey(events, ss3Key(final), fields)
 	case final == '~':
 		if key := tildeKey(param(fields, 0, 0)); key != KeyUnknown {
-			return append(events, keyEvent{key, eventKind(fields)})
+			return appendCSIKey(events, key, fields)
 		}
 	case final == 'u':
 		return appendKitty(events, fields)
@@ -388,20 +405,37 @@ func appendCSI(events []keyEvent, params []byte, final byte) []keyEvent {
 	return events
 }
 
-// appendKitty decodes a kitty keyboard protocol key event: CSI code ; mods:event u.
+// appendCSIKey appends the key a CSI sequence named, with the modifiers its second parameter says:
+// 1 plus the bits, as in the kitty protocol and in xterm (CSI 1 ; 5 C is Ctrl and the right arrow).
+func appendCSIKey(events []keyEvent, key Key, fields [][]int) []keyEvent {
+	mods := modsOf(max(param(fields, 1, 0), 1) - 1)
+	return append(events, keyEvent{key: key, kind: eventKind(fields), mods: mods, chord: chordOf(key, mods)})
+}
+
+// modsOf is the Mods of the protocol's modifier bits: shift, alt, ctrl and super, with the lock keys and
+// anything else left out. A number that is not a plausible set, from a damaged sequence, is no modifiers.
+func modsOf(bits int) Mods {
+	if bits < 0 || bits > 0xff {
+		return 0
+	}
+	return Mods(bits) & modsMask
+}
+
+// appendKitty decodes a kitty keyboard protocol key event: CSI code ; mods:event ; text u.
 func appendKitty(events []keyEvent, fields [][]int) []keyEvent {
 	code := param(fields, 0, 0)
 	// The protocol sends modifiers as 1 plus their bits; absent means none.
-	mods := max(param(fields, 1, 0), 1) - 1
+	raw := max(param(fields, 1, 0), 1) - 1
+	mods := modsOf(raw)
 
 	var key Key
 	switch {
-	case mods&shortcutMods == modCtrl && code == 'c':
+	case mods&chordMods == ModCtrl && code == 'c' && raw&(modHyper|modMeta) == 0:
 		key = KeyCtrlC
-	case mods&shortcutMods == modCtrl && code == 'z':
+	case mods&chordMods == ModCtrl && code == 'z' && raw&(modHyper|modMeta) == 0:
 		key = keyCtrlZ
-	case mods&shortcutMods != 0:
-		return events // a shortcut like ctrl+w is not a game key
+	case raw&(modHyper|modMeta) != 0:
+		return events // a Hyper or Meta chord is not read
 	case code == 27:
 		key = KeyEscape
 	case code == 13:
@@ -415,7 +449,32 @@ func appendKitty(events []keyEvent, fields [][]int) []keyEvent {
 	default:
 		return events
 	}
-	return append(events, keyEvent{key, eventKind(fields)})
+
+	if key == KeyCtrlC || key == keyCtrlZ {
+		// The key is the chord: Run's, with no modifiers to report.
+		return append(events, keyEvent{key: key, kind: eventKind(fields)})
+	}
+	e := keyEvent{key: key, kind: eventKind(fields), mods: mods, chord: chordOf(key, mods)}
+	if e.kind != kindRelease {
+		e.text = kittyText(fields)
+	}
+	return append(events, e)
+}
+
+// kittyText is the text a key event carries in its third field, which the terminal sends when it was
+// asked for it (flag 16): the code points of the characters, joined by colons. Anything that is not a
+// character to show, a control character or a code that is not one, is left out.
+func kittyText(fields [][]int) string {
+	if len(fields) < 3 {
+		return ""
+	}
+	var text []rune
+	for _, cp := range fields[2] {
+		if r := rune(cp); cp >= ' ' && !(cp >= 0x7f && cp < 0xa0) && utf8.ValidRune(r) && len(text) < 16 {
+			text = append(text, r)
+		}
+	}
+	return string(text)
 }
 
 // eventKind reads the event type from the second sub-value of the modifiers field.

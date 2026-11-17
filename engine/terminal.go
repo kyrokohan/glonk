@@ -10,8 +10,10 @@ import (
 
 // keyboardFlags is what we ask of the kitty keyboard protocol: 1 disambiguate
 // escape codes, 2 report press/repeat/release, 8 report all keys as escape codes
-// (without it letters send no release events).
-const keyboardFlags = 1 | 2 | 8
+// (without it letters send no release events), 16 report the text each key types,
+// which Input.Text reads, so that Shift and the layout are right. A terminal that
+// does not know a flag ignores it, and Input then works the text out from the key.
+const keyboardFlags = 1 | 2 | 8 | 16
 
 type terminal struct {
 	fd       int

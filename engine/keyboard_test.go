@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -354,5 +356,173 @@ func TestKeyboardPressesFunctionAndNavigationKeys(t *testing.T) {
 				t.Errorf("%s: key %d: wanted a new frame to forget the press", name, k)
 			}
 		}
+	}
+}
+
+func TestKeyboardPressWith(t *testing.T) {
+	kb := NewKeyboard()
+	kb.PressWith(ModCtrl, 's')
+	kb.PressWith(ModShift, 'a')
+	kb.PressWith(ModCtrl|ModAlt, KeyRight)
+	in := kb.Input()
+
+	want := []KeyEvent{
+		{Key: 's', Mods: ModCtrl, Action: ActionPress},
+		{Key: 'a', Mods: ModShift, Action: ActionPress},
+		{Key: KeyRight, Mods: ModCtrl | ModAlt, Action: ActionPress},
+	}
+	if got := in.KeyEvents(); !slices.Equal(got, want) {
+		t.Errorf("wanted %v, got %v", want, got)
+	}
+	if got := in.Text(); got != "A" {
+		t.Errorf("wanted Shift and a to type A, and a chord and an arrow to type nothing, got %q", got)
+	}
+	if in.IsDown('s') || in.Pressed('s') || in.Started('s') {
+		t.Errorf("wanted Ctrl+S, a chord, not to be the key s")
+	}
+	if !in.IsDown('a') || !in.IsDown(KeyRight) || !in.Started(KeyRight) {
+		t.Errorf("wanted Shift and a to be a, and Ctrl+Alt and the arrow still to be the arrow")
+	}
+
+	kb.EndFrame()
+	if len(in.KeyEvents()) != 0 || in.Text() != "" {
+		t.Errorf("wanted a new frame to forget the events and the text")
+	}
+}
+
+func TestKeyboardPressWithKeepsOnlyTheModifiersThereAre(t *testing.T) {
+	kb := NewKeyboard()
+	kb.PressWith(Mods(0xff), 'x')
+	if got := kb.Input().KeyEvents(); len(got) != 1 || got[0].Mods != modsMask {
+		t.Errorf("wanted shift, alt, ctrl and super and nothing else, got %v", got)
+	}
+}
+
+func TestKeyboardType(t *testing.T) {
+	kb := NewKeyboard()
+	kb.Type("Hi!\n\tok\x01\x7f\xffé")
+	in := kb.Input()
+
+	if got, want := in.Text(), "Hi!oké"; got != want {
+		t.Errorf("wanted %q, got %q: Enter and Tab and the control characters type nothing", want, got)
+	}
+	var keys []Key
+	pairs := 0
+	for _, e := range in.KeyEvents() {
+		if e.Action == ActionPress {
+			keys = append(keys, e.Key)
+		} else {
+			pairs++
+		}
+	}
+	if want := []Key{'H', 'i', '!', KeyEnter, KeyTab, 'o', 'k', 'é'}; !slices.Equal(keys, want) {
+		t.Errorf("wanted the keys %v, got %v", want, keys)
+	}
+	if pairs != len(keys) {
+		t.Errorf("wanted every key let go, %d releases for %d presses", pairs, len(keys))
+	}
+	for _, k := range keys {
+		if in.held[k] {
+			t.Errorf("wanted key %v not to be held after being typed", k)
+		}
+	}
+}
+
+func TestKeyboardTypeOnALegacyKeyboard(t *testing.T) {
+	kb := NewLegacyKeyboard()
+	kb.Type("ab")
+	in := kb.Input()
+	if in.Text() != "ab" {
+		t.Errorf("wanted ab typed, got %q", in.Text())
+	}
+	if got := in.KeyEvents(); len(got) != 2 || got[0].Action != ActionPress || got[1].Action != ActionPress {
+		t.Errorf("wanted two presses and no release, got %v", got)
+	}
+	kb.EndFrame()
+	kb.Advance(100 * time.Millisecond)
+	if !in.IsDown('a') {
+		t.Errorf("wanted a typed key to count as held for about 150 ms, as after any Press")
+	}
+	kb.Advance(100 * time.Millisecond)
+	if in.IsDown('a') {
+		t.Errorf("wanted it let go after that")
+	}
+}
+
+// The simulator and a real run agree on what the frame's events and text are, for the same typing.
+func TestKeyboardMatchesTheEventsAndTextOfARealRun(t *testing.T) {
+	type step struct {
+		name  string
+		press func(*Keyboard)
+		bytes string
+	}
+	typed := func(s string) step {
+		var b strings.Builder
+		for _, r := range s {
+			fmt.Fprintf(&b, "\x1b[%d;;%du\x1b[%d;1:3u", r, r, r)
+		}
+		return step{"type " + s, func(kb *Keyboard) { kb.Type(s) }, b.String()}
+	}
+	steps := []step{
+		typed("hi"),
+		typed("é"),
+		{"ctrl+w", func(kb *Keyboard) { kb.PressWith(ModCtrl, 'w') }, "\x1b[119;5u"},
+		{"alt+x", func(kb *Keyboard) { kb.PressWith(ModAlt, 'x') }, "\x1b[120;3u"},
+		{"super+k", func(kb *Keyboard) { kb.PressWith(ModSuper, 'k') }, "\x1b[107;9u"},
+		{"shift+a", func(kb *Keyboard) { kb.PressWith(ModShift, 'a') }, "\x1b[97;2;65u"},
+		{"ctrl+shift+z", func(kb *Keyboard) { kb.PressWith(ModCtrl|ModShift, 'q') }, "\x1b[113;6u"},
+		{"ctrl+right", func(kb *Keyboard) { kb.PressWith(ModCtrl, KeyRight) }, "\x1b[1;5C"},
+		{"shift+f5", func(kb *Keyboard) { kb.PressWith(ModShift, KeyF5) }, "\x1b[15;2~"},
+		{"alt+page down", func(kb *Keyboard) { kb.PressWith(ModAlt, KeyPageDown) }, "\x1b[6;3~"},
+		{"f1", func(kb *Keyboard) { kb.Press(KeyF1) }, "\x1b[1P"},
+		{"enter", func(kb *Keyboard) { kb.Press(KeyEnter) }, "\x1b[13u"},
+		{"release", func(kb *Keyboard) { kb.Release('z') }, "\x1b[122;1:3u"},
+	}
+
+	// Each step alone in a frame, and all of them in one.
+	check := func(t *testing.T, chosen []step) {
+		t.Helper()
+		kb := NewKeyboard()
+		real := newInput(true)
+		feed := newInputFeed(real)
+		for _, s := range chosen {
+			s.press(kb)
+			feed.feed([]byte(s.bytes), time.Unix(0, 0))
+		}
+		if got, want := kb.Input().KeyEvents(), real.KeyEvents(); !slices.Equal(got, want) {
+			t.Errorf("events: keyboard %v, real %v", got, want)
+		}
+		if got, want := kb.Input().Text(), real.Text(); got != want {
+			t.Errorf("text: keyboard %q, real %q", got, want)
+		}
+	}
+	for _, s := range steps {
+		t.Run(s.name, func(t *testing.T) { check(t, []step{s}) })
+	}
+	t.Run("all in one frame", func(t *testing.T) { check(t, steps) })
+}
+
+// Pressing a key that is down is a repeat where releases are reported, as the kitty protocol says it, and
+// still not a new start.
+func TestKeyboardPressOfAHeldKeyIsARepeatInKeyEvents(t *testing.T) {
+	kb := NewKeyboard()
+	kb.Press('a')
+	kb.EndFrame()
+	kb.Press('a')
+	kb.Press('b')
+	got := kb.Input().KeyEvents()
+	want := []KeyEvent{{Key: 'a', Action: ActionRepeat}, {Key: 'b', Action: ActionPress}}
+	if !slices.Equal(got, want) {
+		t.Errorf("wanted %v, got %v", want, got)
+	}
+	if kb.Input().Started('a') || !kb.Input().Pressed('a') {
+		t.Errorf("wanted the repeat pressed and not started")
+	}
+
+	legacy := NewLegacyKeyboard()
+	legacy.Press('a')
+	legacy.Press('a')
+	if got := legacy.Input().KeyEvents(); len(got) != 2 || got[1].Action != ActionPress {
+		t.Errorf("wanted two presses where repeats cannot be told, got %v", got)
 	}
 }

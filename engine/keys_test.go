@@ -9,9 +9,19 @@ import (
 func presses(keys ...Key) []keyEvent {
 	events := make([]keyEvent, len(keys))
 	for i, k := range keys {
-		events[i] = keyEvent{k, kindPress}
+		events[i] = keyEvent{key: k, kind: kindPress}
 	}
 	return events
+}
+
+// chord is a character key with modifiers held that make it a shortcut, which only KeyEvents sees.
+func chord(k Key, mods Mods) keyEvent {
+	return keyEvent{key: k, kind: kindPress, mods: mods, chord: true}
+}
+
+// modded is a special key with modifiers held, which IsDown, Pressed and Started see whatever they are.
+func modded(k Key, kind keyKind, mods Mods) keyEvent {
+	return keyEvent{key: k, kind: kind, mods: mods}
 }
 
 type keyCase struct {
@@ -29,15 +39,17 @@ var legacyKeyCases = []keyCase{
 	{"ss3 arrow", "\x1bOB", presses(KeyDown)},
 	{"ss3 all four arrows", "\x1bOA\x1bOB\x1bOC\x1bOD", presses(KeyUp, KeyDown, KeyRight, KeyLeft)},
 	{"ss3 just past the arrows", "\x1bOE", nil},
-	{"modified arrow", "\x1b[1;5C", presses(KeyRight)},
+	{"modified arrow keeps its modifier and is no chord", "\x1b[1;5C", []keyEvent{modded(KeyRight, kindPress, ModCtrl)}},
 	{"unknown csi skipped", "\x1b[16~x", presses('x')},
 	{"lone escape", "\x1b", presses(KeyEscape)},
-	{"alt chord is dropped, not escape then key", "\x1bx", nil},
-	{"truncated csi is dropped and reported as a reset", "\x1b[", []keyEvent{{KeyUnknown, kindReset}}},
+	{"alt and a key, not escape then key", "\x1bx", []keyEvent{chord('x', ModAlt)}},
+	{"truncated csi is dropped and reported as a reset", "\x1b[", []keyEvent{{key: KeyUnknown, kind: kindReset}}},
 	{"controls", "\x03\r\x7f\t", presses(KeyCtrlC, KeyEnter, KeyBackspace, KeyTab)},
 	{"ctrl-z", "\x1a", presses(keyCtrlZ)},
 	{"ctrl-z among keys", "a\x1ab", presses('a', keyCtrlZ, 'b')},
-	{"other control dropped", "\x01", nil},
+	{"ctrl and a letter", "\x01\x17\x0a", []keyEvent{chord('a', ModCtrl), chord('w', ModCtrl), chord('j', ModCtrl)}},
+	{"other controls dropped", "\x00\x1c\x1d\x1e\x1f", nil},
+	{"ctrl-h ctrl-i ctrl-m are backspace, tab, enter", "\x08\x09\x0d", presses(KeyBackspace, KeyTab, KeyEnter)},
 	{"utf-8", "é", presses('é')},
 	{"invalid byte dropped", "\xff", nil},
 	{"empty", "", nil},
@@ -51,9 +63,16 @@ var legacyKeyCases = []keyCase{
 		presses(KeyHome, KeyInsert, KeyDelete, KeyEnd, KeyPageUp, KeyPageDown, KeyHome, KeyEnd)},
 	{"tilde function keys", "\x1b[11~\x1b[12~\x1b[13~\x1b[14~\x1b[15~\x1b[17~\x1b[18~\x1b[19~\x1b[20~\x1b[21~\x1b[23~\x1b[24~",
 		presses(KeyF1, KeyF2, KeyF3, KeyF4, KeyF5, KeyF6, KeyF7, KeyF8, KeyF9, KeyF10, KeyF11, KeyF12)},
-	{"csi f1 to f4 with a modifier", "\x1b[1;2P\x1b[1;5Q\x1b[1;3R\x1b[1;6S", presses(KeyF1, KeyF2, KeyF3, KeyF4)},
-	{"modified home and end", "\x1b[1;5H\x1b[1;2F", presses(KeyHome, KeyEnd)},
-	{"modified tilde keys", "\x1b[5;5~\x1b[15;2~\x1b[3;3~", presses(KeyPageUp, KeyF5, KeyDelete)},
+	{"csi f1 to f4 with a modifier", "\x1b[1;2P\x1b[1;5Q\x1b[1;3R\x1b[1;6S",
+		[]keyEvent{modded(KeyF1, kindPress, ModShift), modded(KeyF2, kindPress, ModCtrl), modded(KeyF3, kindPress, ModAlt), modded(KeyF4, kindPress, ModCtrl|ModShift)}},
+	{"modified home and end", "\x1b[1;5H\x1b[1;2F", []keyEvent{modded(KeyHome, kindPress, ModCtrl), modded(KeyEnd, kindPress, ModShift)}},
+	{"modified tilde keys", "\x1b[5;5~\x1b[15;2~\x1b[3;3~",
+		[]keyEvent{modded(KeyPageUp, kindPress, ModCtrl), modded(KeyF5, kindPress, ModShift), modded(KeyDelete, kindPress, ModAlt)}},
+	{"every modifier of a legacy sequence", "\x1b[1;2A\x1b[1;3A\x1b[1;4A\x1b[1;5A\x1b[1;8A\x1b[1;9A\x1b[1;16A",
+		[]keyEvent{modded(KeyUp, kindPress, ModShift), modded(KeyUp, kindPress, ModAlt), modded(KeyUp, kindPress, ModAlt|ModShift),
+			modded(KeyUp, kindPress, ModCtrl), modded(KeyUp, kindPress, ModCtrl|ModAlt|ModShift), modded(KeyUp, kindPress, ModSuper),
+			modded(KeyUp, kindPress, ModSuper|ModCtrl|ModAlt|ModShift)}},
+	{"a modifier that is not a number is none", "\x1b[1;;A\x1b[1;0A\x1b[1;99999999999999999999A", presses(KeyUp, KeyUp, KeyUp)},
 	{"tilde numbers that are no key", "\x1b[0~\x1b[9~\x1b[10~\x1b[16~\x1b[22~\x1b[25~\x1b[99~", nil},
 	{"cursor position report is not f3", "\x1b[12;40R\x1b[24;80R", nil},
 	{"cursor position is not home", "\x1b[5;10H\x1b[2;7F", nil},
@@ -62,11 +81,13 @@ var legacyKeyCases = []keyCase{
 	{"alt+o then a plain key", "\x1bO1", presses('1')},
 	{"double escape", "\x1b\x1b", presses(KeyEscape, KeyEscape)},
 	{"escape then an arrow", "\x1b\x1b[A", presses(KeyEscape, KeyUp)},
-	{"alt chord with a non-ascii key", "\x1bé", nil},
+	{"alt chord with a non-ascii key", "\x1bé", []keyEvent{chord('é', ModAlt)}},
 	{"alt+enter", "\x1b\r", nil},
-	{"alt+backspace", "\x1b\x7f", nil},
-	{"alt chord then a key", "\x1bxw", presses('w')},
-	{"key then alt chord", "w\x1bx", presses('w')},
+	{"alt+backspace", "\x1b\x7f", []keyEvent{chord(KeyBackspace, ModAlt)}},
+	{"alt chord then a key", "\x1bxw", []keyEvent{chord('x', ModAlt), {key: 'w', kind: kindPress}}},
+	{"key then alt chord", "w\x1bx", []keyEvent{{key: 'w', kind: kindPress}, chord('x', ModAlt)}},
+	{"alt and a space", "\x1b ", []keyEvent{chord(' ', ModAlt)}},
+	{"alt and a control byte is dropped", "\x1b\x01\x1b\x00", nil},
 	{"alt chord with an invalid byte", "\x1b\xff", nil},
 	{"backspace ctrl-h", "\x08", presses(KeyBackspace)},
 }
@@ -88,48 +109,67 @@ func TestParseEvents(t *testing.T) {
 var kittyKeyCases = []keyCase{
 	{"letter press", "\x1b[119u", presses('w')},
 	{"letter press explicit", "\x1b[119;1:1u", presses('w')},
-	{"letter repeat", "\x1b[119;1:2u", []keyEvent{{'w', kindRepeat}}},
-	{"letter release", "\x1b[119;1:3u", []keyEvent{{'w', kindRelease}}},
-	{"shift stays unshifted", "\x1b[119;2u", presses('w')},
-	{"shift release", "\x1b[119;2:3u", []keyEvent{{'w', kindRelease}}},
+	{"letter repeat", "\x1b[119;1:2u", []keyEvent{{key: 'w', kind: kindRepeat}}},
+	{"letter release", "\x1b[119;1:3u", []keyEvent{{key: 'w', kind: kindRelease}}},
+	{"shift is a modifier and the key stays w", "\x1b[119;2u", []keyEvent{{key: 'w', kind: kindPress, mods: ModShift}}},
+	{"shift release", "\x1b[119;2:3u", []keyEvent{{key: 'w', kind: kindRelease, mods: ModShift}}},
 	{"caps lock ignored", "\x1b[119;65u", presses('w')},
 	{"num lock ignored", "\x1b[119;129u", presses('w')},
-	{"shift and caps lock", "\x1b[119;66u", presses('w')},
-	{"two events in one read", "\x1b[119;1:3u\x1b[101u", []keyEvent{{'w', kindRelease}, {'e', kindPress}}},
+	{"shift and caps lock", "\x1b[119;66u", []keyEvent{{key: 'w', kind: kindPress, mods: ModShift}}},
+	{"two events in one read", "\x1b[119;1:3u\x1b[101u", []keyEvent{{key: 'w', kind: kindRelease}, {key: 'e', kind: kindPress}}},
 	{"escape", "\x1b[27u", presses(KeyEscape)},
 	{"enter", "\x1b[13u", presses(KeyEnter)},
 	{"tab", "\x1b[9u", presses(KeyTab)},
 	{"backspace", "\x1b[127u", presses(KeyBackspace)},
-	{"enter release", "\x1b[13;1:3u", []keyEvent{{KeyEnter, kindRelease}}},
+	{"enter release", "\x1b[13;1:3u", []keyEvent{{key: KeyEnter, kind: kindRelease}}},
 	{"ctrl-c", "\x1b[99;5u", presses(KeyCtrlC)},
 	{"ctrl-c with caps lock", "\x1b[99;69u", presses(KeyCtrlC)},
-	{"ctrl-c release", "\x1b[99;5:3u", []keyEvent{{KeyCtrlC, kindRelease}}},
+	{"ctrl-c release", "\x1b[99;5:3u", []keyEvent{{key: KeyCtrlC, kind: kindRelease}}},
 	{"ctrl-z", "\x1b[122;5u", presses(keyCtrlZ)},
 	{"ctrl-z with caps lock", "\x1b[122;69u", presses(keyCtrlZ)},
-	{"ctrl-z repeat", "\x1b[122;5:2u", []keyEvent{{keyCtrlZ, kindRepeat}}},
-	{"ctrl-z release", "\x1b[122;5:3u", []keyEvent{{keyCtrlZ, kindRelease}}},
+	{"ctrl-z repeat", "\x1b[122;5:2u", []keyEvent{{key: keyCtrlZ, kind: kindRepeat}}},
+	{"ctrl-z release", "\x1b[122;5:3u", []keyEvent{{key: keyCtrlZ, kind: kindRelease}}},
 	{"plain z", "\x1b[122u", presses('z')},
-	{"alt-z dropped", "\x1b[122;3u", nil},
-	{"ctrl-w dropped", "\x1b[119;5u", nil},
-	{"alt-w dropped", "\x1b[119;3u", nil},
-	{"super-w dropped", "\x1b[119;9u", nil},
-	{"ctrl-alt-c dropped", "\x1b[99;7u", nil},
+	{"alt-z is a chord", "\x1b[122;3u", []keyEvent{chord('z', ModAlt)}},
+	{"ctrl-w is a chord", "\x1b[119;5u", []keyEvent{chord('w', ModCtrl)}},
+	{"alt-w is a chord", "\x1b[119;3u", []keyEvent{chord('w', ModAlt)}},
+	{"super-w is a chord", "\x1b[119;9u", []keyEvent{chord('w', ModSuper)}},
+	{"ctrl-alt-c is a chord, not ctrl-c", "\x1b[99;7u", []keyEvent{chord('c', ModCtrl|ModAlt)}},
+	{"ctrl-shift-w with caps and num lock", "\x1b[119;198u", []keyEvent{chord('w', ModCtrl|ModShift)}},
+	{"hyper chord dropped", "\x1b[119;17u", nil},
+	{"meta chord dropped", "\x1b[119;33u", nil},
+	{"hyper with ctrl-c dropped", "\x1b[99;21u", nil},
+	{"ctrl-w release is a chord release", "\x1b[119;5:3u", []keyEvent{{key: 'w', kind: kindRelease, mods: ModCtrl, chord: true}}},
+	{"ctrl-enter is a chord", "\x1b[13;5u", []keyEvent{chord(KeyEnter, ModCtrl)}},
+	{"alt-escape is a chord", "\x1b[27;3u", []keyEvent{chord(KeyEscape, ModAlt)}},
+	{"shift-tab is no chord", "\x1b[9;2u", []keyEvent{{key: KeyTab, kind: kindPress, mods: ModShift}}},
+	{"text of a plain key", "\x1b[97;;97u", []keyEvent{{key: 'a', kind: kindPress, text: "a"}}},
+	{"text of a space", "\x1b[32;;32u", []keyEvent{{key: ' ', kind: kindPress, text: " "}}},
+	{"text of an alt chord is believed", "\x1b[97;3;229u", []keyEvent{{key: 'a', kind: kindPress, mods: ModAlt, chord: true, text: "å"}}},
+	{"text of a shifted key", "\x1b[97;2;65u", []keyEvent{{key: 'a', kind: kindPress, mods: ModShift, text: "A"}}},
+	{"text of a repeat", "\x1b[97;1:2;97u", []keyEvent{{key: 'a', kind: kindRepeat, text: "a"}}},
+	{"no text on a release", "\x1b[97;1:3;97u", []keyEvent{{key: 'a', kind: kindRelease}}},
+	{"text of several code points", "\x1b[97;;97:98u", []keyEvent{{key: 'a', kind: kindPress, text: "ab"}}},
+	{"text of a non-ascii key", "\x1b[233;;233u", []keyEvent{{key: 'é', kind: kindPress, text: "é"}}},
+	{"control characters are not text", "\x1b[97;;7:97:127:155u", []keyEvent{{key: 'a', kind: kindPress, text: "a"}}},
+	{"text that is not a character is dropped", "\x1b[97;;55296:1114112u", []keyEvent{{key: 'a', kind: kindPress}}},
+	{"enter has no text to type", "\x1b[13;;13u", []keyEvent{{key: KeyEnter, kind: kindPress}}},
 	{"unicode letter", "\x1b[233u", presses('é')},
 	{"arrow press", "\x1b[1;1A", presses(KeyUp)},
-	{"arrow repeat", "\x1b[1;1:2B", []keyEvent{{KeyDown, kindRepeat}}},
-	{"arrow release", "\x1b[1;1:3C", []keyEvent{{KeyRight, kindRelease}}},
-	{"arrow release with shift", "\x1b[1;2:3D", []keyEvent{{KeyLeft, kindRelease}}},
+	{"arrow repeat", "\x1b[1;1:2B", []keyEvent{{key: KeyDown, kind: kindRepeat}}},
+	{"arrow release", "\x1b[1;1:3C", []keyEvent{{key: KeyRight, kind: kindRelease}}},
+	{"arrow release with shift", "\x1b[1;2:3D", []keyEvent{modded(KeyLeft, kindRelease, ModShift)}},
 	{"bare arrow", "\x1b[A", presses(KeyUp)},
-	{"f5 press repeat release", "\x1b[15~\x1b[15;1:2~\x1b[15;1:3~", []keyEvent{{KeyF5, kindPress}, {KeyF5, kindRepeat}, {KeyF5, kindRelease}}},
-	{"f5 release with ctrl", "\x1b[15;5:3~", []keyEvent{{KeyF5, kindRelease}}},
-	{"f1 release", "\x1b[1;1:3P", []keyEvent{{KeyF1, kindRelease}}},
-	{"f4 repeat", "\x1b[1;1:2S", []keyEvent{{KeyF4, kindRepeat}}},
-	{"home release", "\x1b[1;1:3H", []keyEvent{{KeyHome, kindRelease}}},
-	{"end repeat", "\x1b[1;1:2F", []keyEvent{{KeyEnd, kindRepeat}}},
-	{"page up release", "\x1b[5;1:3~", []keyEvent{{KeyPageUp, kindRelease}}},
+	{"f5 press repeat release", "\x1b[15~\x1b[15;1:2~\x1b[15;1:3~", []keyEvent{{key: KeyF5, kind: kindPress}, {key: KeyF5, kind: kindRepeat}, {key: KeyF5, kind: kindRelease}}},
+	{"f5 release with ctrl", "\x1b[15;5:3~", []keyEvent{modded(KeyF5, kindRelease, ModCtrl)}},
+	{"f1 release", "\x1b[1;1:3P", []keyEvent{{key: KeyF1, kind: kindRelease}}},
+	{"f4 repeat", "\x1b[1;1:2S", []keyEvent{{key: KeyF4, kind: kindRepeat}}},
+	{"home release", "\x1b[1;1:3H", []keyEvent{{key: KeyHome, kind: kindRelease}}},
+	{"end repeat", "\x1b[1;1:2F", []keyEvent{{key: KeyEnd, kind: kindRepeat}}},
+	{"page up release", "\x1b[5;1:3~", []keyEvent{{key: KeyPageUp, kind: kindRelease}}},
 	{"insert and delete press", "\x1b[2~\x1b[3;1:1~", presses(KeyInsert, KeyDelete)},
-	{"f12 with ctrl and alt", "\x1b[24;7~", presses(KeyF12)},
-	{"navigation key between letter events", "\x1b[119u\x1b[6;1:3~\x1b[119;1:3u", []keyEvent{{'w', kindPress}, {KeyPageDown, kindRelease}, {'w', kindRelease}}},
+	{"f12 with ctrl and alt", "\x1b[24;7~", []keyEvent{modded(KeyF12, kindPress, ModCtrl|ModAlt)}},
+	{"navigation key between letter events", "\x1b[119u\x1b[6;1:3~\x1b[119;1:3u", []keyEvent{{key: 'w', kind: kindPress}, {key: KeyPageDown, kind: kindRelease}, {key: 'w', kind: kindRelease}}},
 	{"lone modifier key dropped", "\x1b[57441;1u", nil},
 	{"keypad key dropped", "\x1b[57399u", nil},
 	{"first private use code dropped", "\x1b[57344u", nil},
@@ -150,14 +190,14 @@ var kittyKeyCases = []keyCase{
 	{"huge number dropped", "\x1b[99999999999999999999u", nil},
 	{"negative code dropped", "\x1b[-5u", nil},
 	{"unknown event type is press", "\x1b[119;1:9u", presses('w')},
-	{"event type without modifiers value", "\x1b[119;:3u", []keyEvent{{'w', kindRelease}}},
+	{"event type without modifiers value", "\x1b[119;:3u", []keyEvent{{key: 'w', kind: kindRelease}}},
 	{"unknown final dropped", "\x1b[119;1:3z", nil},
-	{"focus gained", "\x1b[I", []keyEvent{{KeyUnknown, kindFocusGained}}},
-	{"focus lost", "\x1b[O", []keyEvent{{KeyUnknown, kindFocusLost}}},
-	{"focus lost between keys", "\x1b[119u\x1b[O\x1b[119;1:3u", []keyEvent{{'w', kindPress}, {KeyUnknown, kindFocusLost}, {'w', kindRelease}}},
+	{"focus gained", "\x1b[I", []keyEvent{{key: KeyUnknown, kind: kindFocusGained}}},
+	{"focus lost", "\x1b[O", []keyEvent{{key: KeyUnknown, kind: kindFocusLost}}},
+	{"focus lost between keys", "\x1b[119u\x1b[O\x1b[119;1:3u", []keyEvent{{key: 'w', kind: kindPress}, {key: KeyUnknown, kind: kindFocusLost}, {key: 'w', kind: kindRelease}}},
 	{"focus with parameters dropped", "\x1b[1I", nil},
 	{"junk then key", "\x1b[?11u\x1b[119u", presses('w')},
-	{"key then truncated is reported as a reset", "\x1b[119u\x1b[11", []keyEvent{{'w', kindPress}, {KeyUnknown, kindReset}}},
+	{"key then truncated is reported as a reset", "\x1b[119u\x1b[11", []keyEvent{{key: 'w', kind: kindPress}, {key: KeyUnknown, kind: kindReset}}},
 }
 
 func TestParseEventsKitty(t *testing.T) {
@@ -182,6 +222,9 @@ func feedAll(pieces ...string) []keyEvent {
 	}
 	return append(events, p.Flush()...)
 }
+
+// allKeyInputsForFuzz is every input of the tables above, as seeds for a fuzzer.
+func allKeyInputsForFuzz() []string { return allKeyInputs() }
 
 func allKeyInputs() []string {
 	var inputs []string
@@ -266,8 +309,8 @@ func TestKeyParserLoneEscapeWaitsForTheRest(t *testing.T) {
 }
 
 func TestKeyParserSplitReleaseIsNotLost(t *testing.T) {
-	press := []keyEvent{{'w', kindPress}}
-	release := []keyEvent{{'w', kindRelease}}
+	press := []keyEvent{{key: 'w', kind: kindPress}}
+	release := []keyEvent{{key: 'w', kind: kindRelease}}
 
 	var p keyParser
 	var got []keyEvent
@@ -306,11 +349,12 @@ func TestKeyParserSplitRunesDecodeOnce(t *testing.T) {
 }
 
 func TestKeyParserAltChordIsNotEscape(t *testing.T) {
-	if got := feedAll("\x1bx"); len(got) != 0 {
-		t.Errorf("wanted Alt+x ignored in one piece, got %v", got)
+	want := []keyEvent{chord('x', ModAlt)}
+	if got := feedAll("\x1bx"); !slices.Equal(got, want) {
+		t.Errorf("wanted Alt+x, not Escape, in one piece, got %v", got)
 	}
-	if got := feedAll("\x1b", "x"); len(got) != 0 {
-		t.Errorf("wanted Alt+x ignored across two pieces, got %v", got)
+	if got := feedAll("\x1b", "x"); !slices.Equal(got, want) {
+		t.Errorf("wanted Alt+x, not Escape, across two pieces, got %v", got)
 	}
 }
 
@@ -319,7 +363,7 @@ func TestKeyParserDiscardingAnUnfinishedSequenceReportsAReset(t *testing.T) {
 	p.Feed([]byte("\x1b[119;1"))
 
 	got := p.Flush()
-	if want := []keyEvent{{KeyUnknown, kindReset}}; !slices.Equal(got, want) {
+	if want := []keyEvent{{key: KeyUnknown, kind: kindReset}}; !slices.Equal(got, want) {
 		t.Errorf("wanted a reset when the wait ends, got %v", got)
 	}
 	if p.Pending() {
@@ -331,7 +375,7 @@ func TestKeyParserDropsGarbageThatNeverEnds(t *testing.T) {
 	var p keyParser
 
 	got := p.Feed([]byte("\x1b[" + strings.Repeat("1", 500)))
-	if want := []keyEvent{{KeyUnknown, kindReset}}; !slices.Equal(got, want) {
+	if want := []keyEvent{{key: KeyUnknown, kind: kindReset}}; !slices.Equal(got, want) {
 		t.Errorf("wanted a reset for a sequence longer than any key, got %v", got)
 	}
 	if p.Pending() {
@@ -384,6 +428,8 @@ func BenchmarkKeyParserFeed(b *testing.B) {
 		{"20 arrow keys", strings.Repeat("\x1b[A\x1b[1;5C", 10)},
 		{"function and navigation keys", "\x1b[15~\x1b[6~\x1bOH\x1bOP\x1b[1;2F\x1b[24~\x1b[3~\x1b[5;5~"},
 		{"kitty releases", strings.Repeat("\x1b[119;1:3u\x1b[15;1:3~", 5)},
+		{"kitty text of 20 keys", strings.Repeat("\x1b[104;;104u\x1b[105;2;73u", 10)},
+		{"ctrl and alt chords", strings.Repeat("\x01\x17\x1bx\x1b[119;5u\x1b[1;5C", 4)},
 	} {
 		b.Run(tt.name, func(b *testing.B) {
 			var p keyParser

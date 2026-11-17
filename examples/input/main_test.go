@@ -32,7 +32,7 @@ func TestAKeyThatWentDownIsLoggedOnce(t *testing.T) {
 	m := newMonitor()
 	kb := engine.NewKeyboard()
 	kb.Press(engine.KeyF5)
-	if got := frame(t, m, kb); !strings.Contains(got, "down    F5") {
+	if got := frame(t, m, kb); !strings.Contains(got, "press   F5") {
 		t.Errorf("wanted F5 logged as going down, got\n%s", got)
 	}
 	if got := frame(t, m, kb); strings.Count(got, "F5") != 2 { // the log line and the held list
@@ -111,5 +111,59 @@ func TestDrawAtEverySize(t *testing.T) {
 	m.Update(1.0/30, kb.Input())
 	for _, size := range [][2]int{{1, 1}, {2, 2}, {20, 8}, {80, 24}, {200, 60}} {
 		m.Draw(newFrame(t, size[0], size[1]))
+	}
+}
+
+func TestAChordIsLoggedWithItsModifiers(t *testing.T) {
+	m := newMonitor()
+	kb := engine.NewKeyboard()
+	kb.PressWith(engine.ModCtrl|engine.ModShift, 'w')
+	kb.PressWith(engine.ModAlt, engine.KeyRight)
+	got := frame(t, m, kb)
+	for _, want := range []string{"press   Ctrl+Shift+'w'", "press   Alt+Right"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("wanted %q logged, got\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "held: 'w'") {
+		t.Errorf("wanted a chord not to be held, got\n%s", got)
+	}
+}
+
+func TestAReleaseIsLogged(t *testing.T) {
+	m := newMonitor()
+	kb := engine.NewKeyboard()
+	kb.Press('a')
+	frame(t, m, kb)
+	kb.Release('a')
+	if got := frame(t, m, kb); !strings.Contains(got, "release 'a'") || strings.Contains(got, "held: 'a'") {
+		t.Errorf("wanted the release logged and the key no longer held, got\n%s", got)
+	}
+}
+
+func TestTypedTextIsShownAndKeepsTheLastCharacters(t *testing.T) {
+	m := newMonitor()
+	kb := engine.NewKeyboard()
+	kb.Type("hello ")
+	kb.PressWith(engine.ModShift, 'w')
+	kb.Type("orld")
+	if got := frame(t, m, kb); !strings.Contains(got, "typed: hello World") {
+		t.Errorf("wanted the typed text shown, got\n%s", got)
+	}
+	kb.Type(strings.Repeat("x", 100))
+	frame(t, m, kb)
+	if len(m.typed) != maxTyped {
+		t.Errorf("wanted the last %d characters kept, got %d", maxTyped, len(m.typed))
+	}
+}
+
+func TestModsAreNamedInOrder(t *testing.T) {
+	for mods, want := range map[engine.Mods]string{
+		0: "", engine.ModCtrl: "Ctrl+", engine.ModAlt | engine.ModCtrl: "Ctrl+Alt+",
+		engine.ModShift | engine.ModAlt | engine.ModCtrl | engine.ModSuper: "Ctrl+Alt+Shift+Super+",
+	} {
+		if got := modsName(mods); got != want {
+			t.Errorf("wanted %q, got %q", want, got)
+		}
 	}
 }

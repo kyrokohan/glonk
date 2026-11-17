@@ -1,11 +1,16 @@
 package engine
 
-import "time"
+import (
+	"time"
+	"unicode/utf8"
+)
 
 // Keyboard simulates a keyboard for testing a Game's Update. NewKeyboard behaves like a
 // terminal that reports key releases: a key is down from Press until Release, and the
 // Input it hands over says so exactly, with no clock involved. NewLegacyKeyboard behaves
-// like one that does not, which most terminals are, so that a game can test both.
+// like one that does not, which most terminals are, so that a game can test both. PressWith
+// presses a chord such as Ctrl+S and Type types text, for a game that reads Input.KeyEvents and
+// Input.Text.
 //
 //	kb := engine.NewKeyboard()
 //	kb.Press(engine.KeyEscape)
@@ -43,12 +48,49 @@ func (k *Keyboard) Input() *Input {
 
 // Press puts keys down. They count as pressed (Input.Pressed) until EndFrame, and
 // stay down (Input.IsDown) until Release. Pressing a key that is already down is
-// a key repeat: it is pressed again, but it has not started (Input.Started). On a
-// NewLegacyKeyboard a Press is a press or a repeat arriving, and the key stays down for
-// about 150 ms after it.
+// a key repeat: it is pressed again, but it has not started (Input.Started), and in
+// Input.KeyEvents it is an ActionRepeat. On a NewLegacyKeyboard a Press is a press or a
+// repeat arriving, which it cannot tell apart (an ActionPress either way), and the key stays
+// down for about 150 ms after it. A printable key also types its character (Input.Text).
 func (k *Keyboard) Press(keys ...Key) {
 	for _, key := range keys {
-		k.in.event(keyEvent{key, kindPress}, k.now)
+		kind := kindPress
+		if k.in.exact && k.in.held[key] {
+			kind = kindRepeat
+		}
+		k.in.event(keyEvent{key: key, kind: kind}, k.now)
+	}
+}
+
+// PressWith puts keys down with modifiers held, as a terminal with the kitty keyboard protocol reports
+// them. With Ctrl, Alt or Super held a character key is a chord, such as Ctrl+S: it is in
+// Input.KeyEvents and nowhere else, and being no more than an event it is not held, so there is nothing
+// to release. Special keys keep their modifiers in KeyEvents and are pressed as with Press. With only
+// Shift, a letter types its capital, as on a terminal that says what a key types, and Text is right.
+func (k *Keyboard) PressWith(mods Mods, keys ...Key) {
+	mods &= modsMask
+	for _, key := range keys {
+		k.in.event(keyEvent{key: key, kind: kindPress, mods: mods, chord: chordOf(key, mods)}, k.now)
+	}
+}
+
+// Type types text, a key at a time, as a person does: each character is pressed and let go, so it
+// is in Input.Text and Input.KeyEvents and no key is left held. A newline is Enter and a tab is Tab,
+// which type nothing; other control characters and invalid UTF-8 are left out. On a NewLegacyKeyboard
+// each key counts as held for about 150 ms after, as after any Press.
+func (k *Keyboard) Type(text string) {
+	for _, r := range text {
+		key := Key(r)
+		switch {
+		case r == '\n':
+			key = KeyEnter
+		case r == '\t':
+			key = KeyTab
+		case r < ' ' || r == 0x7f || r == utf8.RuneError:
+			continue
+		}
+		k.Press(key)
+		k.Release(key)
 	}
 }
 
@@ -58,7 +100,7 @@ func (k *Keyboard) Press(keys ...Key) {
 // NewLegacyKeyboard, where no release is ever reported.
 func (k *Keyboard) Release(keys ...Key) {
 	for _, key := range keys {
-		k.in.event(keyEvent{key, kindRelease}, k.now)
+		k.in.event(keyEvent{key: key, kind: kindRelease}, k.now)
 	}
 }
 
