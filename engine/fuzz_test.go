@@ -70,6 +70,25 @@ func FuzzParseEvents(f *testing.F) {
 					t.Fatalf("wanted repeat/release only from a CSI sequence, got %+v from %q", e, b)
 				}
 			}
+
+			// Modifiers, chords and text: only what a terminal can mean.
+			if e.mods&^modsMask != 0 {
+				t.Fatalf("wanted only shift, alt, ctrl and super, got %+v from %q", e, b)
+			}
+			if e.chord && (e.mods&chordMods == 0 || modifiersIgnored(e.key)) {
+				t.Fatalf("wanted a chord to be a character key with ctrl, alt or super, got %+v from %q", e, b)
+			}
+			if !e.chord && e.mods&chordMods != 0 && !modifiersIgnored(e.key) && e.key != KeyCtrlC && e.key != keyCtrlZ {
+				t.Fatalf("wanted ctrl, alt or super on a character key to make a chord, got %+v from %q", e, b)
+			}
+			if e.text != "" {
+				if e.kind == kindRelease {
+					t.Fatalf("wanted no text on a release, got %+v from %q", e, b)
+				}
+				if !utf8.ValidString(e.text) || strings.ContainsFunc(e.text, func(r rune) bool { return r < ' ' || (r >= 0x7f && r < 0xa0) }) {
+					t.Fatalf("wanted printable text, got %+v from %q", e, b)
+				}
+			}
 		}
 
 		// Parsing must not depend on anything but the bytes.
@@ -81,6 +100,28 @@ func FuzzParseEvents(f *testing.F) {
 			if events[i] != again[i] {
 				t.Fatalf("wanted parsing to be deterministic, got %+v then %+v", events[i], again[i])
 			}
+		}
+	})
+}
+
+// FuzzKeyParserSplit holds a keyParser to what parse says of the whole input, however a read cuts it:
+// the keys of Alt, Ctrl, text and every sequence are the same in two pieces as in one.
+func FuzzKeyParserSplit(f *testing.F) {
+	for _, s := range seedInputs {
+		f.Add([]byte(s), uint8(len(s)/2))
+	}
+	for _, s := range allKeyInputsForFuzz() {
+		f.Add([]byte(s), uint8(1))
+		f.Add([]byte(s), uint8(3))
+	}
+	f.Fuzz(func(t *testing.T, b []byte, cut uint8) {
+		if len(b) > maxPendingInput {
+			return // a longer unfinished sequence is thrown away by design, which a whole parse does not do
+		}
+		at := int(cut) % (len(b) + 1)
+		want := parseEvents(b)
+		if got := feedAll(string(b[:at]), string(b[at:])); !slices.Equal(got, want) {
+			t.Fatalf("%q cut at %d: wanted %+v, got %+v", b, at, want, got)
 		}
 	})
 }

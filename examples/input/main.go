@@ -1,7 +1,7 @@
-// Command input shows what a terminal sends, as glonk reads it: each key as it goes down, whether
-// the terminal reports key releases, and which keys are held. Run it in every terminal you care
-// about, and press what a game would use: the function keys, Home and End, Page Up and Page Down,
-// the arrows, letters.
+// Command input shows what a terminal sends, as glonk reads it: every key event with the
+// modifiers held, the text typed, whether the terminal reports key releases, and which keys are
+// held. Run it in every terminal you care about, and press what a game would use: the function keys,
+// Home and End, Page Up and Page Down, the arrows, letters, and Ctrl, Alt and Shift with them.
 //
 //	go run ./examples/input
 //
@@ -58,25 +58,55 @@ var probeKeys = func() []engine.Key {
 	return keys
 }()
 
+// maxTyped is how many characters of the typed text the monitor shows.
+const maxTyped = 60
+
 type monitor struct {
 	exact bool     // whether the terminal reports key releases
 	held  []string // the keys that are down now
-	log   []string // what was pressed, newest first
+	typed []rune   // the last characters typed
+	log   []string // what happened to the keys, newest first
+}
+
+// modsName writes modifiers as Ctrl+Alt+Shift+Super+, in that order, or nothing for none.
+func modsName(m engine.Mods) string {
+	var sb strings.Builder
+	for _, mod := range []struct {
+		bit  engine.Mods
+		name string
+	}{{engine.ModCtrl, "Ctrl+"}, {engine.ModAlt, "Alt+"}, {engine.ModShift, "Shift+"}, {engine.ModSuper, "Super+"}} {
+		if m.Has(mod.bit) {
+			sb.WriteString(mod.name)
+		}
+	}
+	return sb.String()
+}
+
+// actionName writes what happened to a key.
+func actionName(a engine.KeyAction) string {
+	switch a {
+	case engine.ActionRepeat:
+		return "repeat"
+	case engine.ActionRelease:
+		return "release"
+	}
+	return "press"
 }
 
 func newMonitor() *monitor { return &monitor{} }
 
-// Update notes every key that went down this frame and which are held.
+// Update notes every key event of the frame, the text typed, and which keys are held.
 func (m *monitor) Update(_ float64, in *engine.Input) error {
 	m.exact = in.Exact()
+	for _, e := range in.KeyEvents() {
+		m.add(fmt.Sprintf("%-8s%s%s", actionName(e.Action), modsName(e.Mods), keyName(e.Key)))
+	}
+	m.typed = append(m.typed, []rune(in.Text())...)
+	if len(m.typed) > maxTyped {
+		m.typed = m.typed[len(m.typed)-maxTyped:]
+	}
 	m.held = m.held[:0]
 	for _, k := range probeKeys {
-		switch {
-		case in.Started(k):
-			m.add("down    " + keyName(k))
-		case in.Pressed(k):
-			m.add("repeat  " + keyName(k))
-		}
 		if in.IsDown(k) {
 			m.held = append(m.held, keyName(k))
 		}
@@ -95,20 +125,21 @@ func (m *monitor) add(line string) {
 func (m *monitor) Draw(fb *engine.FrameBuffer) {
 	fb.DrawText(1, 0, "glonk input monitor: press keys. Ctrl-C quits.", engine.Palette(252))
 
-	releases := "no: a held key is a timing guess, and only one stays held"
+	releases := "no: every auto-repeat is a press, a held key is a timing guess, and only one stays held"
 	if m.exact {
-		releases = "yes (the kitty keyboard protocol): held keys are exact"
+		releases = "yes (the kitty keyboard protocol): repeats, releases and modifiers are exact"
 	}
 	fb.DrawText(1, 1, "terminal reports key releases: "+releases, engine.Palette(245))
 	fb.DrawText(1, 3, "held: "+strings.Join(m.held, " "), engine.Palette(226))
+	fb.DrawText(1, 4, "typed: "+string(m.typed), engine.Palette(117))
 
 	for i, line := range m.log {
-		y := 5 + i
+		y := 6 + i
 		if y >= fb.Height() {
 			break
 		}
 		color := engine.Palette(250)
-		if strings.HasPrefix(line, "repeat") {
+		if strings.HasPrefix(line, "repeat") || strings.HasPrefix(line, "release") {
 			color = engine.Palette(243)
 		}
 		fb.DrawText(1, y, line, color)

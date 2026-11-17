@@ -46,7 +46,7 @@ func TestInputIsDown(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			in := newInput(false)
 			for _, at := range tt.presses {
-				in.event(keyEvent{'w', kindPress}, t0.Add(at))
+				in.event(keyEvent{key: 'w', kind: kindPress}, t0.Add(at))
 			}
 			in.beginFrame(t0.Add(tt.frameAt))
 
@@ -60,7 +60,7 @@ func TestInputIsDown(t *testing.T) {
 func TestInputIsDownPerKey(t *testing.T) {
 	t0 := time.Unix(0, 0)
 	in := newInput(false)
-	in.event(keyEvent{'a', kindPress}, t0)
+	in.event(keyEvent{key: 'a', kind: kindPress}, t0)
 	in.beginFrame(t0)
 
 	if !in.IsDown('a') {
@@ -84,7 +84,7 @@ func TestInputIsDownBeforeFirstFrame(t *testing.T) {
 func TestInputPressed(t *testing.T) {
 	t0 := time.Unix(0, 0)
 	in := newInput(false)
-	in.event(keyEvent{'q', kindPress}, t0)
+	in.event(keyEvent{key: 'q', kind: kindPress}, t0)
 	in.beginFrame(t0)
 
 	if !in.Pressed('q') {
@@ -108,7 +108,7 @@ func TestInputPressed(t *testing.T) {
 // Where releases are reported only a key that was not down starts a hold: a repeat does not,
 // and neither does a press of a key that is down, which is what Keyboard.Press of a held key is.
 func TestInputStartedWhereReleasesAreReported(t *testing.T) {
-	press, repeat, release := keyEvent{'m', kindPress}, keyEvent{'m', kindRepeat}, keyEvent{'m', kindRelease}
+	press, repeat, release := keyEvent{key: 'm', kind: kindPress}, keyEvent{key: 'm', kind: kindRepeat}, keyEvent{key: 'm', kind: kindRelease}
 	frames := []struct {
 		name   string
 		events []keyEvent
@@ -175,7 +175,7 @@ func TestInputStartedWithoutReleases(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			in := newInput(false)
 			for i, at := range tt.presses {
-				in.event(keyEvent{'m', kindPress}, t0.Add(at))
+				in.event(keyEvent{key: 'm', kind: kindPress}, t0.Add(at))
 				in.beginFrame(t0.Add(at))
 				if i < len(tt.presses)-1 {
 					in.endFrame()
@@ -203,8 +203,8 @@ func TestInputExactHoldsTwoKeys(t *testing.T) {
 	in := newInput(true)
 
 	// W goes down, then E: with exact state W stays held although only E repeats.
-	in.event(keyEvent{'w', kindPress}, t0)
-	in.event(keyEvent{'e', kindPress}, t0.Add(100*time.Millisecond))
+	in.event(keyEvent{key: 'w', kind: kindPress}, t0)
+	in.event(keyEvent{key: 'e', kind: kindPress}, t0.Add(100*time.Millisecond))
 	in.beginFrame(t0.Add(120 * time.Millisecond))
 	in.endFrame()
 
@@ -222,12 +222,12 @@ func TestInputExactRelease(t *testing.T) {
 	t0 := time.Unix(0, 0)
 	in := newInput(true)
 
-	in.event(keyEvent{'w', kindPress}, t0)
-	in.event(keyEvent{'e', kindPress}, t0)
+	in.event(keyEvent{key: 'w', kind: kindPress}, t0)
+	in.event(keyEvent{key: 'e', kind: kindPress}, t0)
 	in.beginFrame(t0)
 	in.endFrame()
 
-	in.event(keyEvent{'w', kindRelease}, t0.Add(time.Second))
+	in.event(keyEvent{key: 'w', kind: kindRelease}, t0.Add(time.Second))
 	in.beginFrame(t0.Add(time.Second))
 
 	if in.IsDown('w') {
@@ -242,11 +242,11 @@ func TestInputExactRepeatKeepsHeld(t *testing.T) {
 	t0 := time.Unix(0, 0)
 	in := newInput(true)
 
-	in.event(keyEvent{'w', kindPress}, t0)
+	in.event(keyEvent{key: 'w', kind: kindPress}, t0)
 	in.beginFrame(t0)
 	in.endFrame()
 
-	in.event(keyEvent{'w', kindRepeat}, t0.Add(500*time.Millisecond))
+	in.event(keyEvent{key: 'w', kind: kindRepeat}, t0.Add(500*time.Millisecond))
 	in.beginFrame(t0.Add(500 * time.Millisecond))
 
 	if !in.IsDown('w') {
@@ -262,8 +262,8 @@ func TestInputExactSameFrameTap(t *testing.T) {
 	t0 := time.Unix(0, 0)
 	in := newInput(true)
 
-	in.event(keyEvent{'w', kindPress}, t0)
-	in.event(keyEvent{'w', kindRelease}, t0.Add(10*time.Millisecond))
+	in.event(keyEvent{key: 'w', kind: kindPress}, t0)
+	in.event(keyEvent{key: 'w', kind: kindRelease}, t0.Add(10*time.Millisecond))
 	in.beginFrame(t0.Add(16 * time.Millisecond))
 
 	if !in.IsDown('w') {
@@ -282,8 +282,8 @@ func TestInputReleaseAll(t *testing.T) {
 	t0 := time.Unix(0, 0)
 	in := newInput(true)
 
-	in.event(keyEvent{'w', kindPress}, t0)
-	in.event(keyEvent{'e', kindPress}, t0)
+	in.event(keyEvent{key: 'w', kind: kindPress}, t0)
+	in.event(keyEvent{key: 'e', kind: kindPress}, t0)
 	in.beginFrame(t0)
 	in.endFrame()
 
@@ -300,7 +300,7 @@ func TestInputLegacyIgnoresHeld(t *testing.T) {
 	t0 := time.Unix(0, 0)
 	in := newInput(false)
 
-	in.event(keyEvent{'w', kindPress}, t0)
+	in.event(keyEvent{key: 'w', kind: kindPress}, t0)
 	in.beginFrame(t0.Add(10 * time.Second))
 
 	if in.IsDown('w') {
@@ -312,12 +312,12 @@ func TestInputFocusLostReleasesHeldKeys(t *testing.T) {
 	t0 := time.Unix(0, 0)
 	in := newInput(true)
 
-	in.event(keyEvent{'w', kindPress}, t0)
-	in.event(keyEvent{'e', kindPress}, t0)
+	in.event(keyEvent{key: 'w', kind: kindPress}, t0)
+	in.event(keyEvent{key: 'e', kind: kindPress}, t0)
 	in.beginFrame(t0)
 	in.endFrame()
 
-	in.event(keyEvent{KeyUnknown, kindFocusLost}, t0.Add(time.Second))
+	in.event(keyEvent{key: KeyUnknown, kind: kindFocusLost}, t0.Add(time.Second))
 	in.beginFrame(t0.Add(time.Second))
 
 	if in.IsDown('w') || in.IsDown('e') {
@@ -329,11 +329,11 @@ func TestInputFocusGainedKeepsState(t *testing.T) {
 	t0 := time.Unix(0, 0)
 	in := newInput(true)
 
-	in.event(keyEvent{'w', kindPress}, t0)
+	in.event(keyEvent{key: 'w', kind: kindPress}, t0)
 	in.beginFrame(t0)
 	in.endFrame()
 
-	in.event(keyEvent{KeyUnknown, kindFocusGained}, t0.Add(time.Second))
+	in.event(keyEvent{key: KeyUnknown, kind: kindFocusGained}, t0.Add(time.Second))
 	in.beginFrame(t0.Add(time.Second))
 
 	if !in.IsDown('w') {

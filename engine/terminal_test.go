@@ -48,7 +48,7 @@ func TestEnableKeyboardProtocol(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if want := "\x1b[>11u\x1b[?1004h"; out.String() != want {
+	if want := "\x1b[>27u\x1b[?1004h"; out.String() != want {
 		t.Errorf("wanted %q, got %q", want, out.String())
 	}
 	if !tty.keyboard {

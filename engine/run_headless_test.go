@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -529,5 +530,43 @@ func TestRunHeadlessDeliversFunctionAndNavigationKeysAsPresses(t *testing.T) {
 
 	if err != nil || len(got) != len(want) {
 		t.Fatalf("wanted every one of %v pressed, got %v (err=%v)", want, got, err)
+	}
+}
+
+// What a terminal sends for modifiers and text reaches the game's Update as events and text, through a real
+// Run: a chord is an event and not a key, Alt arrives as Escape and a key, and typed characters are the text.
+func TestRunHeadlessDeliversKeyEventsAndText(t *testing.T) {
+	var events []KeyEvent
+	var text string
+	var chordWasDown bool
+	game := scriptedGame{update: func(_ float64, in *Input) error {
+		if len(in.KeyEvents()) > 0 {
+			events = slices.Clone(in.KeyEvents())
+			text = in.Text()
+			chordWasDown = in.IsDown('w')
+			return ErrQuit
+		}
+		return nil
+	}}
+
+	// h and i typed (with their releases), Ctrl+W, and Alt+x as Escape and x, in one read.
+	input := "\x1b[104;;104u\x1b[104;1:3u\x1b[105;;105u\x1b[105;1:3u\x1b[119;5u\x1bx\x1b[1;5C"
+	err := runHeadless(t, game, Config{Input: strings.NewReader(input), Output: io.Discard})
+
+	want := []KeyEvent{
+		{Key: 'h', Action: ActionPress}, {Key: 'h', Action: ActionRelease},
+		{Key: 'i', Action: ActionPress}, {Key: 'i', Action: ActionRelease},
+		{Key: 'w', Mods: ModCtrl, Action: ActionPress},
+		{Key: 'x', Mods: ModAlt, Action: ActionPress},
+		{Key: KeyRight, Mods: ModCtrl, Action: ActionPress},
+	}
+	if err != nil || !slices.Equal(events, want) {
+		t.Errorf("wanted %v, got %v (err=%v)", want, events, err)
+	}
+	if text != "hi" {
+		t.Errorf("wanted the typed text hi, got %q", text)
+	}
+	if chordWasDown {
+		t.Errorf("wanted Ctrl+W not to be the key w")
 	}
 }
