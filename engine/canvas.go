@@ -196,6 +196,31 @@ func (c *Canvas) FillTriangleFunc(x0, y0, z0, x1, y1, z1, x2, y2, z2 float64, co
 	})
 }
 
+// FillTriangleOver fills the triangle like FrameBuffer.FillTriangleOver, but into pixels: over
+// is asked what to do with each covered pixel, is given the color that is there (the zero
+// Color for an empty pixel), and returns the color to draw and a Fill. See there for the
+// order of the depth test and the call, and for what each Fill does with the depth. A nil over
+// draws nothing.
+func (c *Canvas) FillTriangleOver(x0, y0, z0, x1, y1, z1, x2, y2, z2 float64, over func(b0, b1, b2 float64, behind Color) (Color, Fill)) {
+	if over == nil {
+		return
+	}
+	scanTriangle(c.width, c.height, x0, y0, z0, x1, y1, z1, x2, y2, z2, func(x, y int, z, p0, p1, p2 float64) {
+		i := y*c.width + x
+		if !(z < c.depth[i]) {
+			return
+		}
+		col, fill := over(p0*z, p1*z, p2*z, c.pixels[i])
+		switch fill {
+		case FillSolid:
+			c.depth[i] = z
+			c.pixels[i] = col
+		case FillOver:
+			c.pixels[i] = col
+		}
+	})
+}
+
 // Compose writes the pixels into the FrameBuffer's cells as half-block characters,
 // or as solid cells if Seamless is set. Cells whose two pixels are both empty are
 // left alone; every other cell is replaced, and takes the depth of its nearer pixel

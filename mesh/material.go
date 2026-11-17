@@ -15,8 +15,10 @@ type Material struct {
 	Color engine.Color
 
 	// Texture is a picture for the faces that have Mesh.FaceTexCoords: they take the color
-	// of the surface from it, as Color is for the others. Nil, or a picture with no pixels,
-	// is none. A mesh has one picture; for two, make a mesh for each, or put both in one
+	// of the surface from it, as Color is for the others. A pixel of it that is see-through
+	// (a pixel of a bitmap.New picture that was never set, or one with an alpha under 128 in a
+	// picture that was decoded) is a hole: see Mesh.FaceTexCoords. Nil, or a picture with no
+	// pixels, is none. A mesh has one picture; for two, make a mesh for each, or put both in one
 	// picture and give each face the coordinates of its part. A view from Bitmap.Sub is a
 	// picture of its own, and repeats inside itself. The colors are the ones Bitmap.At gives,
 	// so a Shaded or Tinted view is drawn as the picture it is a view of. Drawing reads the

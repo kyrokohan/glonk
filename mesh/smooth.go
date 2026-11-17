@@ -113,8 +113,8 @@ type shadedTriangle struct {
 	rgb    [3]geometry.Vector3
 
 	// tex is the picture the face's color comes from, or nil: each cell takes it from the
-	// picture at the blend of uv, the places in it that the corners are pinned to, and color
-	// is what shows where the picture is see-through.
+	// picture at the blend of uv, the places in it that the corners are pinned to, and a cell
+	// where the picture is see-through is a hole, which draws nothing.
 	tex *bitmap.Bitmap
 	uv  [3]geometry.Vector2
 
@@ -146,26 +146,27 @@ func (t *shadedTriangle) depthAt(b0, b1, b2 float64) float64 {
 	return b0*t.corners[0].z + b1*t.corners[1].z + b2*t.corners[2].z
 }
 
-// colorAt is the color of the cell at weights b0, b1 and b2 of the three corners. With a
-// picture it is the picture's color at the blend of the corners' places in it, or color where
-// that is see-through; the corners' colors, if they have any, multiply it. Without, it is the
+// colorAt is the color of the cell at weights b0, b1 and b2 of the three corners, and whether there
+// is one. With a picture it is the picture's color at the blend of the corners' places in it; the
+// corners' colors, if they have any, multiply it. Where the picture is see-through, or the place is
+// not a number, there is no color: the cell is a hole, and is not drawn. Without a picture it is the
 // corners' colors blended with the weights. The blend is rounded to whole numbers from 0 to 255.
-func (t *shadedTriangle) colorAt(b0, b1, b2 float64) engine.Color {
+func (t *shadedTriangle) colorAt(b0, b1, b2 float64) (engine.Color, bool) {
 	if t.tex == nil {
 		c := t.rgb[0].Scale(b0).Add(t.rgb[1].Scale(b1)).Add(t.rgb[2].Scale(b2))
-		return engine.RGB(channel(c.X), channel(c.Y), channel(c.Z))
+		return engine.RGB(channel(c.X), channel(c.Y), channel(c.Z)), true
 	}
 	uv := t.uv[0].Scale(b0).Add(t.uv[1].Scale(b1)).Add(t.uv[2].Scale(b2))
 	surface := texel(t.tex, uv.X, uv.Y)
 	if surface.IsDefault() {
-		surface = t.color
+		return engine.Color{}, false
 	}
 	if !t.tinted {
-		return surface
+		return surface, true
 	}
 	s := colorVector(surface)
 	c := t.rgb[0].Scale(b0).Add(t.rgb[1].Scale(b1)).Add(t.rgb[2].Scale(b2))
-	return engine.RGB(channel(s.X*c.X/255), channel(s.Y*c.Y/255), channel(s.Z*c.Z/255))
+	return engine.RGB(channel(s.X*c.X/255), channel(s.Y*c.Y/255), channel(s.Z*c.Z/255)), true
 }
 
 // varies reports whether the cells of the triangle are not all one color, so that each has to
@@ -248,19 +249,23 @@ func cornerNormal(vertex, face geometry.Vector3, front bool) geometry.Vector3 {
 }
 
 // fillTinted draws a triangle that has vertex colors or a picture into cells. Every cell has a color of
-// its own, so, flat or smooth, each is asked for. The color fades in fog, if there is any.
+// its own, so, flat or smooth, each is asked for, and a cell where the picture is see-through is a hole:
+// it is left as it was, depth too, and not lit. The color fades in fog, if there is any.
 func fillTinted(fb *engine.FrameBuffer, t *shadedTriangle, ramp []rune, fog *Fog) {
 	c := &t.corners
-	fb.FillTriangleFunc(c[0].x, c[0].y, c[0].z, c[1].x, c[1].y, c[1].z, c[2].x, c[2].y, c[2].z, func(b0, b1, b2 float64) engine.Cell {
+	fb.FillTriangleOver(c[0].x, c[0].y, c[0].z, c[1].x, c[1].y, c[1].z, c[2].x, c[2].y, c[2].z, func(b0, b1, b2 float64, _ engine.Cell) (engine.Cell, engine.Fill) {
+		color, ok := t.colorAt(b0, b1, b2)
+		if !ok {
+			return engine.Cell{}, engine.FillSkip
+		}
 		intensity := t.intensity
 		if t.smooth {
 			intensity = t.brightnessAt(b0, b1, b2)
 		}
-		color := t.colorAt(b0, b1, b2)
 		if fog != nil {
 			color = fog.Apply(color, t.depthAt(b0, b1, b2))
 		}
-		return engine.Cell{Character: shadeChar(ramp, intensity), Foreground: color}
+		return engine.Cell{Character: shadeChar(ramp, intensity), Foreground: color}, engine.FillSolid
 	})
 }
 
@@ -268,16 +273,20 @@ func fillTinted(fb *engine.FrameBuffer, t *shadedTriangle, ramp []rune, fog *Fog
 // the shaded color fades in fog.
 func fillTintedPixels(c *engine.Canvas, t *shadedTriangle, fog *Fog) {
 	p := &t.corners
-	c.FillTriangleFunc(p[0].x, 2*p[0].y, p[0].z, p[1].x, 2*p[1].y, p[1].z, p[2].x, 2*p[2].y, p[2].z, func(b0, b1, b2 float64) engine.Color {
+	c.FillTriangleOver(p[0].x, 2*p[0].y, p[0].z, p[1].x, 2*p[1].y, p[1].z, p[2].x, 2*p[2].y, p[2].z, func(b0, b1, b2 float64, _ engine.Color) (engine.Color, engine.Fill) {
+		color, ok := t.colorAt(b0, b1, b2)
+		if !ok {
+			return engine.Color{}, engine.FillSkip
+		}
 		intensity := t.intensity
 		if t.smooth {
 			intensity = t.brightnessAt(b0, b1, b2)
 		}
-		color := engine.Shade(t.colorAt(b0, b1, b2), intensity)
+		color = engine.Shade(color, intensity)
 		if fog != nil {
 			color = fog.Apply(color, t.depthAt(b0, b1, b2))
 		}
-		return color
+		return color, engine.FillSolid
 	})
 }
 

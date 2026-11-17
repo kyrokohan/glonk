@@ -489,53 +489,9 @@ func TestVertexColorsTintAPicture(t *testing.T) {
 	}
 }
 
-// A pixel of the picture that is see-through shows the face as it would be without the picture.
-func TestSeeThroughPixelsShowTheFacesOwnColor(t *testing.T) {
-	pic := bitmap.New(2, 1)
-	pic.Set(0, 0, pureRed) // the right pixel is left unset
-	wall := Mesh{
-		Vertices: []geometry.Vector3{{X: -1, Y: -1, Z: 3}, {X: -1, Y: 1, Z: 3}, {X: 1, Y: 1, Z: 3}, {X: 1, Y: -1, Z: 3}},
-		Faces:    [][3]int{{0, 1, 2}, {0, 2, 3}},
-		FaceTexCoords: [][3]geometry.Vector2{
-			{uv(0, 1), uv(0, 0), uv(1, 0)},
-			{uv(0, 1), uv(1, 0), uv(1, 1)},
-		},
-		Material:    Material{Color: pureBlue, Texture: pic},
-		DoubleSided: true,
-	}
-	for _, withFaceColor := range []bool{false, true} {
-		m := wall
-		want := pureBlue
-		if withFaceColor {
-			m.FaceColors = repeatColor(pureGreen, 2)
-			want = pureGreen
-		}
-		fb := newShadeBuffer(t)
-		m.DrawShaded(fb, shadeCam(), Ambient{Level: 1})
-		left, right := 0, 0
-		for y := range fb.Height() {
-			for x := range fb.Width() {
-				f := fb.At(x, y).Foreground
-				switch {
-				case f.IsDefault():
-				case x < shadeW/2-3 && f == pureRed:
-					left++
-				case x > shadeW/2+3 && f == want:
-					right++
-				case x < shadeW/2-3 || x > shadeW/2+3:
-					t.Fatalf("(%d, %d): wanted red on the left and %v on the right, got %v", x, y, want, f)
-				}
-			}
-		}
-		if left < 20 || right < 20 {
-			t.Errorf("face color %v: wanted at least 20 cells on each side, got %d and %d", withFaceColor, left, right)
-		}
-	}
-}
-
-// What is not used: a list of another length than Faces, a face with a coordinate that is not
-// finite, no picture, a picture with no pixels. Each is drawn as the mesh is without them, and
-// Validate says what is wrong.
+// What is not used: a list of another length than Faces, no picture, a picture with no pixels. Each
+// is drawn as the mesh is without them, and Validate says what is wrong with a list, and with a
+// coordinate that is not finite (a face with one draws nothing: see the test of that).
 func TestTextureCoordinatesThatCannotBeUsedAreLeftOut(t *testing.T) {
 	good := [3]geometry.Vector2{uv(0.1, 0.2), uv(0.6, 0.3), uv(0.4, 0.8)}
 	base := Sphere(1.6, 10, 6)
@@ -587,16 +543,9 @@ func TestTextureCoordinatesThatCannotBeUsedAreLeftOut(t *testing.T) {
 				t.Errorf("wanted a different picture with them")
 			}
 			if tt.name == "a NaN" || tt.name == "an infinity" {
-				// Only the face that has the bad number is left out: the others are drawn in red,
-				// and it is drawn as a face with no coordinates is.
+				// Only the face that has the bad number is left out: the others are drawn in red.
 				if red := countColor(gc, pureRed); red == 0 {
 					t.Errorf("wanted the other faces drawn from the picture")
-				}
-				zeroed := m.Clone()
-				zeroed.FaceTexCoords[len(zeroed.FaceTexCoords)/2] = [3]geometry.Vector2{}
-				zc, zp := framesOf(t, zeroed, shadeCam(), lights...)
-				if !slicesEqual(gc, zc) || !slicesEqual(gp, zp) {
-					t.Errorf("wanted the face with the bad coordinate drawn as one with none")
 				}
 			}
 		})

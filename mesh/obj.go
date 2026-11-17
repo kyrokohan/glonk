@@ -115,7 +115,8 @@ func LoadOBJLimit(r io.Reader, maxBytes int64) (Mesh, error) {
 // could not be had. A mesh has one picture, the first that a triangle has coordinates in, and
 // the triangles of a material with another picture keep their one color. The picture's
 // transparency is kept: a pixel with an alpha under 128 is see-through, as bitmap.Decode reads
-// it, and shows the triangle's one color; the one color itself ignores it. A triangle takes the
+// it, and is a hole in the picture that is drawn, where nothing is drawn and what is behind shows,
+// as for leaves or a fence; the one color of a triangle ignores it. A triangle takes the
 // picture's color where it can, and then the Kd of the material, if it has one, so a material
 // with both shows the picture where it can. The coordinates are read as the file comes, so an
 // mtllib and the vt lines must come before the faces that use them, and a mtllib before the
