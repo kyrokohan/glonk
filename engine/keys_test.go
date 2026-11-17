@@ -30,7 +30,7 @@ var legacyKeyCases = []keyCase{
 	{"ss3 all four arrows", "\x1bOA\x1bOB\x1bOC\x1bOD", presses(KeyUp, KeyDown, KeyRight, KeyLeft)},
 	{"ss3 just past the arrows", "\x1bOE", nil},
 	{"modified arrow", "\x1b[1;5C", presses(KeyRight)},
-	{"unknown csi skipped", "\x1b[15~x", presses('x')},
+	{"unknown csi skipped", "\x1b[16~x", presses('x')},
 	{"lone escape", "\x1b", presses(KeyEscape)},
 	{"alt chord is dropped, not escape then key", "\x1bx", nil},
 	{"truncated csi is dropped and reported as a reset", "\x1b[", []keyEvent{{KeyUnknown, kindReset}}},
@@ -42,8 +42,23 @@ var legacyKeyCases = []keyCase{
 	{"invalid byte dropped", "\xff", nil},
 	{"empty", "", nil},
 	{"alt+o at the end is dropped", "\x1bO", nil},
-	{"ss3 function key is dropped", "\x1bOP", nil},
-	{"ss3 home and end are dropped", "\x1bOH\x1bOF", nil},
+	{"ss3 f1 to f4", "\x1bOP\x1bOQ\x1bOR\x1bOS", presses(KeyF1, KeyF2, KeyF3, KeyF4)},
+	{"ss3 home and end", "\x1bOH\x1bOF", presses(KeyHome, KeyEnd)},
+	{"ss3 keypad is dropped", "\x1bOM\x1bOj", nil},
+	{"csi home and end", "\x1b[H\x1b[F", presses(KeyHome, KeyEnd)},
+	{"csi bare f1 to f4", "\x1b[P\x1b[Q\x1b[R\x1b[S", presses(KeyF1, KeyF2, KeyF3, KeyF4)},
+	{"tilde editing keys", "\x1b[1~\x1b[2~\x1b[3~\x1b[4~\x1b[5~\x1b[6~\x1b[7~\x1b[8~",
+		presses(KeyHome, KeyInsert, KeyDelete, KeyEnd, KeyPageUp, KeyPageDown, KeyHome, KeyEnd)},
+	{"tilde function keys", "\x1b[11~\x1b[12~\x1b[13~\x1b[14~\x1b[15~\x1b[17~\x1b[18~\x1b[19~\x1b[20~\x1b[21~\x1b[23~\x1b[24~",
+		presses(KeyF1, KeyF2, KeyF3, KeyF4, KeyF5, KeyF6, KeyF7, KeyF8, KeyF9, KeyF10, KeyF11, KeyF12)},
+	{"csi f1 to f4 with a modifier", "\x1b[1;2P\x1b[1;5Q\x1b[1;3R\x1b[1;6S", presses(KeyF1, KeyF2, KeyF3, KeyF4)},
+	{"modified home and end", "\x1b[1;5H\x1b[1;2F", presses(KeyHome, KeyEnd)},
+	{"modified tilde keys", "\x1b[5;5~\x1b[15;2~\x1b[3;3~", presses(KeyPageUp, KeyF5, KeyDelete)},
+	{"tilde numbers that are no key", "\x1b[0~\x1b[9~\x1b[10~\x1b[16~\x1b[22~\x1b[25~\x1b[99~", nil},
+	{"cursor position report is not f3", "\x1b[12;40R\x1b[24;80R", nil},
+	{"cursor position is not home", "\x1b[5;10H\x1b[2;7F", nil},
+	{"function key between letters", "a\x1b[15~b", presses('a', KeyF5, 'b')},
+	{"two function keys in one read", "\x1bOP\x1b[24~", presses(KeyF1, KeyF12)},
 	{"alt+o then a plain key", "\x1bO1", presses('1')},
 	{"double escape", "\x1b\x1b", presses(KeyEscape, KeyEscape)},
 	{"escape then an arrow", "\x1b\x1b[A", presses(KeyEscape, KeyUp)},
@@ -105,6 +120,16 @@ var kittyKeyCases = []keyCase{
 	{"arrow release", "\x1b[1;1:3C", []keyEvent{{KeyRight, kindRelease}}},
 	{"arrow release with shift", "\x1b[1;2:3D", []keyEvent{{KeyLeft, kindRelease}}},
 	{"bare arrow", "\x1b[A", presses(KeyUp)},
+	{"f5 press repeat release", "\x1b[15~\x1b[15;1:2~\x1b[15;1:3~", []keyEvent{{KeyF5, kindPress}, {KeyF5, kindRepeat}, {KeyF5, kindRelease}}},
+	{"f5 release with ctrl", "\x1b[15;5:3~", []keyEvent{{KeyF5, kindRelease}}},
+	{"f1 release", "\x1b[1;1:3P", []keyEvent{{KeyF1, kindRelease}}},
+	{"f4 repeat", "\x1b[1;1:2S", []keyEvent{{KeyF4, kindRepeat}}},
+	{"home release", "\x1b[1;1:3H", []keyEvent{{KeyHome, kindRelease}}},
+	{"end repeat", "\x1b[1;1:2F", []keyEvent{{KeyEnd, kindRepeat}}},
+	{"page up release", "\x1b[5;1:3~", []keyEvent{{KeyPageUp, kindRelease}}},
+	{"insert and delete press", "\x1b[2~\x1b[3;1:1~", presses(KeyInsert, KeyDelete)},
+	{"f12 with ctrl and alt", "\x1b[24;7~", presses(KeyF12)},
+	{"navigation key between letter events", "\x1b[119u\x1b[6;1:3~\x1b[119;1:3u", []keyEvent{{'w', kindPress}, {KeyPageDown, kindRelease}, {'w', kindRelease}}},
 	{"lone modifier key dropped", "\x1b[57441;1u", nil},
 	{"keypad key dropped", "\x1b[57399u", nil},
 	{"first private use code dropped", "\x1b[57344u", nil},
@@ -348,5 +373,25 @@ func TestKeyParserCopiesWhatItHolds(t *testing.T) {
 
 	if got := p.Feed([]byte("A")); !slices.Equal(got, presses(KeyUp)) {
 		t.Errorf("wanted the held bytes unaffected by the caller reusing its buffer, got %v", got)
+	}
+}
+
+// BenchmarkKeyParserFeed is what each read from the terminal costs: a line of typed text, a burst of
+// arrow keys, and function and navigation keys. The events it returns are most of the allocation.
+func BenchmarkKeyParserFeed(b *testing.B) {
+	for _, tt := range []struct{ name, in string }{
+		{"typed text of 80 letters", strings.Repeat("glonk ", 13) + "ok"},
+		{"20 arrow keys", strings.Repeat("\x1b[A\x1b[1;5C", 10)},
+		{"function and navigation keys", "\x1b[15~\x1b[6~\x1bOH\x1bOP\x1b[1;2F\x1b[24~\x1b[3~\x1b[5;5~"},
+		{"kitty releases", strings.Repeat("\x1b[119;1:3u\x1b[15;1:3~", 5)},
+	} {
+		b.Run(tt.name, func(b *testing.B) {
+			var p keyParser
+			chunk := []byte(tt.in)
+			b.ReportAllocs()
+			for b.Loop() {
+				p.Feed(chunk)
+			}
+		})
 	}
 }

@@ -4,6 +4,10 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+### Added
+
+- `KeyHome`, `KeyEnd`, `KeyPageUp`, `KeyPageDown`, `KeyInsert`, `KeyDelete` and `KeyF1` to `KeyF12` are keys, asked of `Input` like any other with `IsDown`, `Pressed` and `Started`, and pressed with `Keyboard.Press` in a test. A terminal sends them as longer sequences, which glonk read as nothing: the `CSI n ~` ones were dropped as unknown, and the SS3 forms of F1 to F4, Home and End were skipped on purpose as not game keys, so a program that listened for them never heard. It now reads `CSI n ~` with xterm's numbers (2 Insert, 3 Delete, 5 Page Up, 6 Page Down, 11 to 15 and 17 to 21 and 23 and 24 for F1 to F12) and with rxvt's for Home and End (1 and 7, and 4 and 8), `CSI H` and `CSI F`, `CSI 1 ; modifiers` then `P`, `Q`, `R` or `S` or those with no parameters, and the SS3 forms, and in the kitty keyboard protocol the repeat and the release of each. A modifier held with one of them is not looked at, as it is not on an arrow, so Ctrl+Page Down is Page Down; reading the modifiers is the next part of #18. `CSI row ; column R` is not F3: it is a cursor position report, which glonk does not ask for, and a first parameter other than 1 is not read as one of these keys. `examples/input` shows what a terminal sends, as glonk reads it, to try a terminal with: each key as it goes down, whether the terminal reports releases, and which keys are held. A program that used to see nothing for these keys now sees them.
+
 ## [0.11.0] - 2026-11-17
 
 On top of 0.10.0 this release adds text drawn as pixels on the canvas, a way to put a rectangle of the canvas down over cells that are already in the frame, and a coin in the world example's panel, and it takes back the time that drawing a plain mesh lost in 0.10.0. Nothing was removed or renamed and no signature changed; the module needs newer versions of `golang.org/x/sys` and `golang.org/x/term`.

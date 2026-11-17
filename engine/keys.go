@@ -7,6 +7,11 @@ import (
 )
 
 // Key is a keypress: printable keys are their own rune, special keys are negative.
+//
+// The function keys and Home, End, Page Up, Page Down, Insert and Delete are read in the forms
+// that xterm, rxvt and the kitty keyboard protocol send them in. A terminal that sends one in
+// another form sends nothing that glonk reads. A modifier held with one of them, as with an
+// arrow, is not looked at: Ctrl+PageDown is PageDown.
 type Key rune
 
 // Special keys. Negative values so they can never collide with a real rune.
@@ -36,6 +41,43 @@ const (
 	KeyCtrlC
 	// keyCtrlZ asks Run to suspend. Like Ctrl-C it is Run's, never the game's.
 	keyCtrlZ
+
+	// KeyHome is the Home key.
+	KeyHome
+	// KeyEnd is the End key.
+	KeyEnd
+	// KeyPageUp is the Page Up key.
+	KeyPageUp
+	// KeyPageDown is the Page Down key.
+	KeyPageDown
+	// KeyInsert is the Insert key.
+	KeyInsert
+	// KeyDelete is the Delete key, the one that deletes forward. Backspace is KeyBackspace.
+	KeyDelete
+	// KeyF1 is the F1 function key.
+	KeyF1
+	// KeyF2 is the F2 function key.
+	KeyF2
+	// KeyF3 is the F3 function key.
+	KeyF3
+	// KeyF4 is the F4 function key.
+	KeyF4
+	// KeyF5 is the F5 function key.
+	KeyF5
+	// KeyF6 is the F6 function key.
+	KeyF6
+	// KeyF7 is the F7 function key.
+	KeyF7
+	// KeyF8 is the F8 function key.
+	KeyF8
+	// KeyF9 is the F9 function key.
+	KeyF9
+	// KeyF10 is the F10 function key.
+	KeyF10
+	// KeyF11 is the F11 function key.
+	KeyF11
+	// KeyF12 is the F12 function key.
+	KeyF12
 )
 
 // keyKind says what happened to a key. Only terminals speaking the kitty
@@ -93,6 +135,52 @@ func arrow(c byte) Key {
 	}
 }
 
+// functionKeys is F1 to F12 in order, so that a number from a sequence finds its key.
+var functionKeys = [...]Key{KeyF1, KeyF2, KeyF3, KeyF4, KeyF5, KeyF6, KeyF7, KeyF8, KeyF9, KeyF10, KeyF11, KeyF12}
+
+// ss3Key maps the final byte of an SS3 sequence (ESC O x) to its key: the four arrows
+// (cursor keys in application mode), Home and End, and F1 to F4, which xterm sends this way.
+func ss3Key(c byte) Key {
+	switch {
+	case c >= 'A' && c <= 'D':
+		return arrow(c)
+	case c == 'H':
+		return KeyHome
+	case c == 'F':
+		return KeyEnd
+	case c >= 'P' && c <= 'S':
+		return functionKeys[c-'P']
+	}
+	return KeyUnknown
+}
+
+// tildeKey maps the number of a CSI n ~ sequence to its key: the editing keys, and the
+// function keys, which skip 16 and 22. Home and End have two numbers each, 1 and 7 and 4 and 8,
+// because xterm and rxvt differ. Any other number is not a key we read.
+func tildeKey(n int) Key {
+	switch n {
+	case 1, 7:
+		return KeyHome
+	case 2:
+		return KeyInsert
+	case 3:
+		return KeyDelete
+	case 4, 8:
+		return KeyEnd
+	case 5:
+		return KeyPageUp
+	case 6:
+		return KeyPageDown
+	case 11, 12, 13, 14, 15:
+		return functionKeys[n-11] // F1 to F5: 11 to 15
+	case 17, 18, 19, 20, 21:
+		return functionKeys[n-17+5] // F6 to F10: 17 to 21
+	case 23, 24:
+		return functionKeys[n-23+10] // F11 and F12: 23 and 24
+	}
+	return KeyUnknown
+}
+
 // maxPendingInput bounds how many bytes of an unfinished sequence keyParser holds.
 // Real key sequences are a few bytes long; more than this is garbage.
 const maxPendingInput = 128
@@ -137,7 +225,7 @@ func parse(b []byte, final bool) (events []keyEvent, consumed int) {
 			case next == '[':
 				j := i + 2
 				// Skipping parameters lets modified arrows (ESC [1;5C) read as
-				// plain arrows and unknown keys (ESC [15~) drop cleanly.
+				// plain arrows and unknown keys (ESC [16~) drop cleanly.
 				for j < len(b) && b[j] >= 0x20 && b[j] <= 0x3f {
 					j++
 				}
@@ -153,7 +241,7 @@ func parse(b []byte, final bool) (events []keyEvent, consumed int) {
 				i = j + 1
 
 			case next == 'O':
-				// Some terminals send arrows as SS3 (ESC O A) instead of CSI.
+				// Some terminals send arrows, Home, End and F1 to F4 as SS3 (ESC O A) instead of CSI.
 				if i+2 >= len(b) {
 					if !final {
 						return events, i
@@ -162,11 +250,11 @@ func parse(b []byte, final bool) (events []keyEvent, consumed int) {
 					continue
 				}
 				switch f := b[i+2]; {
-				case f >= 'A' && f <= 'D':
-					press(arrow(f))
+				case ss3Key(f) != KeyUnknown:
+					press(ss3Key(f))
 					i += 3
 				case f >= 0x40 && f <= 0x7e:
-					i += 3 // F1 to F4, Home, End, keypad: not game keys
+					i += 3 // keypad and the rest: not keys we read
 				default:
 					i += 2 // Alt+O; f is read on its own
 				}
@@ -280,8 +368,20 @@ func appendCSI(events []keyEvent, params []byte, final byte) []keyEvent {
 
 	switch {
 	case final >= 'A' && final <= 'D':
-		// Arrows ignore modifiers so ctrl+right still turns right.
+		// Arrows ignore modifiers so ctrl+right still turns right, and so do the keys below.
 		return append(events, keyEvent{arrow(final), eventKind(fields)})
+	case final == 'H' || final == 'F' || (final >= 'P' && final <= 'S'):
+		// Home, End and F1 to F4 are CSI 1 ; modifiers X, or a bare CSI X. Another first
+		// parameter is not one of them: CSI row ; column R, for one, is a cursor position
+		// report, which glonk never asks for but which this keeps from being read as F3.
+		if len(params) > 0 && param(fields, 0, 0) != 1 {
+			return events
+		}
+		return append(events, keyEvent{ss3Key(final), eventKind(fields)})
+	case final == '~':
+		if key := tildeKey(param(fields, 0, 0)); key != KeyUnknown {
+			return append(events, keyEvent{key, eventKind(fields)})
+		}
 	case final == 'u':
 		return appendKitty(events, fields)
 	}
