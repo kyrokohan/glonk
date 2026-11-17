@@ -336,3 +336,23 @@ func TestKeyboardMatchesTheInputOfARealRun(t *testing.T) {
 		})
 	}
 }
+
+// The function and navigation keys are keys like any other: pressed, started and down.
+func TestKeyboardPressesFunctionAndNavigationKeys(t *testing.T) {
+	keys := append([]Key{KeyHome, KeyEnd, KeyPageUp, KeyPageDown, KeyInsert, KeyDelete}, functionKeys[:]...)
+	for name, kb := range map[string]*Keyboard{"releases reported": NewKeyboard(), "no releases": NewLegacyKeyboard()} {
+		kb.Press(keys...)
+		in := kb.Input()
+		for _, k := range keys {
+			if !in.Pressed(k) || !in.Started(k) || !in.IsDown(k) {
+				t.Errorf("%s: key %d: wanted it pressed, started and down", name, k)
+			}
+		}
+		kb.EndFrame()
+		for _, k := range keys {
+			if in.Pressed(k) || in.Started(k) {
+				t.Errorf("%s: key %d: wanted a new frame to forget the press", name, k)
+			}
+		}
+	}
+}

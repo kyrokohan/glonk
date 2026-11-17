@@ -507,3 +507,27 @@ func TestRunHeadlessColors(t *testing.T) {
 		})
 	}
 }
+
+// Keys that a terminal sends as longer sequences reach the game as presses, as a plain key does.
+func TestRunHeadlessDeliversFunctionAndNavigationKeysAsPresses(t *testing.T) {
+	var got []Key
+	want := []Key{KeyF5, KeyPageDown, KeyHome, KeyF1, KeyEnd}
+	game := scriptedGame{update: func(_ float64, in *Input) error {
+		for _, k := range want {
+			if in.Pressed(k) {
+				got = append(got, k)
+			}
+		}
+		if len(got) > 0 {
+			return ErrQuit
+		}
+		return nil
+	}}
+
+	// CSI 15 ~, CSI 6 ~, SS3 H, SS3 P and CSI F, in one read.
+	err := runHeadless(t, game, Config{Input: strings.NewReader("\x1b[15~\x1b[6~\x1bOH\x1bOP\x1b[F"), Output: io.Discard})
+
+	if err != nil || len(got) != len(want) {
+		t.Fatalf("wanted every one of %v pressed, got %v (err=%v)", want, got, err)
+	}
+}

@@ -14,7 +14,7 @@ Website: [glonk.dev](https://glonk.dev)
 - **Half blocks:** a pixel `Canvas` with two square-ish pixels per cell, drawn with `▀` and a background color, for twice the vertical detail and shading by color instead of by character. Lines, rectangles, circles, wireframes and pictures (JPEG or PNG) can be drawn into the pixels too. See [Pixel shapes and pictures](#pixel-shapes-and-pictures).
 - **Mixed:** draw a 3D scene first, then a 2D HUD on top, into the same frame.
 - **Widgets:** a label, a panel, a bar and a menu for a HUD or a pause screen, drawn in screen space. See [Widgets](#widgets).
-- **Input:** held keys, one-shot presses (`Input.Started`, which a repeat does not set off again) and key repeats (`Input.Pressed`), including arrows. Terminals with the [kitty keyboard protocol](https://sw.kovidgoyal.net/kitty/keyboard-protocol/) (Ghostty, kitty, WezTerm, foot, iTerm2, Alacritty) report real key releases, so you can hold several keys at once.
+- **Input:** held keys, one-shot presses (`Input.Started`, which a repeat does not set off again) and key repeats (`Input.Pressed`), including the arrows, Home, End, Page Up, Page Down, Insert, Delete and F1 to F12. Terminals with the [kitty keyboard protocol](https://sw.kovidgoyal.net/kitty/keyboard-protocol/) (Ghostty, kitty, WezTerm, foot, iTerm2, Alacritty) report real key releases, so you can hold several keys at once.
 - **Resizing:** the frame follows the terminal window, and a game with a `Resize(width, height int)` method is told its size.
 - **Frame numbers:** a game with a `Stats(engine.Stats)` method is told after every frame how it went: frames a second, the time of `Update`, `Draw` and the write to the terminal, and the bytes sent. See [Frame numbers](#frame-numbers).
 - **Testing:** `engine.Keyboard` presses keys for a game's `Update`, a `FrameBuffer` prints as text or draws as a picture, and `Config.Input` and `Config.Output` let a whole `Run` be driven without a terminal. See [Testing a game](#testing-a-game).
@@ -47,6 +47,7 @@ make run EXAMPLE=./examples/world            # world: a level bigger than the sc
 make run EXAMPLE=./examples/cube3d            # cube3d: walk around a floor with six shaded cubes and a wireframe one
 make run EXAMPLE=./examples/viewer            # viewer: look at the bundled OBJ models and shapes
 make run EXAMPLE=./examples/viewer ARGS=my.obj  # viewer: look at your own model (its .mtl beside it gives it colors)
+make run EXAMPLE=./examples/input             # input: see what your terminal sends, as glonk reads it: every key as it goes down, and which are held
 ```
 
 cube3d controls:
