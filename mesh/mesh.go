@@ -306,7 +306,7 @@ func (m Mesh) DrawOnSurfacePixels(c *engine.Canvas, cam Camera, color engine.Col
 // each end is from the camera. It skips what is off screen as a whole, and edges that
 // name a vertex the mesh does not have, and draws nothing for a mesh or camera that
 // cannot be used. The ends are not trimmed to the grid: see trimEdge.
-func (m Mesh) eachEdge(cam Camera, w, h int, fn func(ax, ay, za, bx, by, zb float64)) {
+func (m *Mesh) eachEdge(cam Camera, w, h int, fn func(ax, ay, za, bx, by, zb float64)) {
 	cam, ok := cam.withDefaults()
 	if !ok || !m.Transform.valid() {
 		return

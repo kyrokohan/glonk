@@ -33,7 +33,7 @@ func cannotReach(lightCenter geometry.Vector3, lightRadius float64, meshCenter g
 // with, live on the heap. A light that does not say how far it reaches is kept, as is a nil
 // one (which lights nothing). Leaving out a light that gives 0 everywhere the mesh is changes
 // no sum in Brightness, since adding 0 is exact, so the picture is the same.
-func (s *scratch) lightsReaching(m Mesh, place placement, lights []Light) []Light {
+func (s *scratch) lightsReaching(m *Mesh, place placement, lights []Light) []Light {
 	all := append(s.lit[:0], lights...)
 	b := m.currentBounds()
 	if !cullingOn || b == nil {

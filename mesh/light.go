@@ -182,7 +182,12 @@ type screenPoint struct {
 // brightness from 0 to 1; a mesh with them is lit by fn, cell by cell, from the
 // corners' places and normals. A face that names a vertex the mesh does not have is
 // skipped.
-func (m Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(t *shadedTriangle)) {
+//
+// The mesh is taken by pointer, as it is by the helpers it calls (offscreen, currentBounds,
+// worldNormals, lightsReaching): a Mesh is 280 bytes, and a copy for each of them, for every mesh
+// drawn, was 1 to 2% of a scene of many small ones. The methods that are exported keep their value
+// receivers, and copy the mesh once.
+func (m *Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(t *shadedTriangle)) {
 	cam, ok := cam.withDefaults()
 	if !ok || !m.Transform.valid() {
 		return

@@ -125,7 +125,7 @@ func TestLightsReachingKeepsTheRightOnes(t *testing.T) {
 
 	s := getScratch(0)
 	defer s.release()
-	got := s.lightsReaching(ball, ball.Transform.placement(), lights)
+	got := s.lightsReaching(&ball, ball.Transform.placement(), lights)
 	if !slices.Equal(got, want) {
 		t.Errorf("wanted %v, got %v", want, got)
 	}
@@ -139,7 +139,7 @@ func TestLightsReachingKeepsTheRightOnes(t *testing.T) {
 		off bool
 	}{"culling off": {ball, true}, "no bounds": {func() Mesh { m := ball; m.bounds = nil; return m }(), false}} {
 		cullingOn = !tt.off
-		got := s.lightsReaching(tt.m, tt.m.Transform.placement(), lights)
+		got := s.lightsReaching(&tt.m, tt.m.Transform.placement(), lights)
 		cullingOn = true
 		if !slices.Equal(got, lights) {
 			t.Errorf("%s: wanted every light, got %v", name, got)
@@ -147,11 +147,11 @@ func TestLightsReachingKeepsTheRightOnes(t *testing.T) {
 	}
 
 	// All of them can go.
-	got = s.lightsReaching(ball, ball.Transform.placement(), []Light{Point{Position: far.at, Range: 3}, far})
+	got = s.lightsReaching(&ball, ball.Transform.placement(), []Light{Point{Position: far.at, Range: 3}, far})
 	if len(got) != 0 {
 		t.Errorf("wanted none, got %v", got)
 	}
-	if got = s.lightsReaching(ball, ball.Transform.placement(), nil); len(got) != 0 {
+	if got = s.lightsReaching(&ball, ball.Transform.placement(), nil); len(got) != 0 {
 		t.Errorf("wanted none for no lights, got %v", got)
 	}
 }
@@ -332,7 +332,7 @@ func TestLeavingLightsOutChangesNoPicture(t *testing.T) {
 		}
 
 		s := getScratch(0)
-		n := len(s.lightsReaching(m, m.Transform.placement(), lights))
+		n := len(s.lightsReaching(&m, m.Transform.placement(), lights))
 		s.release()
 		left, kept = left+len(lights)-n, kept+n
 	}
@@ -377,7 +377,7 @@ func TestReleasingAScratchForgetsTheLights(t *testing.T) {
 	// And the ones taken out by lightsReaching, which are past the end of what it returns.
 	m := Sphere(1, 8, 4)
 	s = getScratch(0)
-	out := s.lightsReaching(m, m.Transform.placement(), []Light{Point{Position: vec(50, 0, 0), Range: 1}, Ambient{Level: 0.5}, Point{Position: vec(60, 0, 0), Range: 1}})
+	out := s.lightsReaching(&m, m.Transform.placement(), []Light{Point{Position: vec(50, 0, 0), Range: 1}, Ambient{Level: 0.5}, Point{Position: vec(60, 0, 0), Range: 1}})
 	if len(out) != 1 {
 		t.Fatalf("wanted one light kept, got %v", out)
 	}
@@ -391,7 +391,7 @@ func TestReleasingAScratchForgetsTheLights(t *testing.T) {
 
 	// The same where nothing is left out.
 	s = getScratch(0)
-	all := s.lightsReaching(m, m.Transform.placement(), []Light{Ambient{Level: 0.5}, Directional{Direction: vec(0, -1, 0)}})
+	all := s.lightsReaching(&m, m.Transform.placement(), []Light{Ambient{Level: 0.5}, Directional{Direction: vec(0, -1, 0)}})
 	s.release()
 	if all[0] != nil || all[1] != nil {
 		t.Errorf("wanted the lights forgotten when nothing was left out, got %v", all)
