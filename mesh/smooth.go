@@ -64,7 +64,7 @@ func unitDirection(v geometry.Vector3) (geometry.Vector3, bool) {
 
 // hasNormals reports whether the mesh has one normal per vertex, which is what
 // smooth shading needs. Whether they are finite is found out when they are used.
-func (m Mesh) hasNormals() bool {
+func (m *Mesh) hasNormals() bool {
 	return len(m.Normals) > 0 && len(m.Normals) == len(m.Vertices)
 }
 
@@ -77,7 +77,7 @@ func (p placement) direction(d geometry.Vector3) geometry.Vector3 {
 // worldNormals returns the mesh's normals in world space, as unit vectors (or zero,
 // for a normal of zero), in memory the scratch keeps. It returns nil if there are not
 // one per vertex or one is not a finite number, in which case the mesh is shaded flat.
-func (s *scratch) worldNormals(m Mesh, place placement) []geometry.Vector3 {
+func (s *scratch) worldNormals(m *Mesh, place placement) []geometry.Vector3 {
 	if !m.hasNormals() {
 		return nil
 	}

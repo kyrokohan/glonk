@@ -17,7 +17,7 @@ var cullingOn = true
 // themselves, while it is current, and otherwise one round Position that holds the vertex
 // farthest from the model's origin. The sphere's radius is looked at only if its middle is
 // itself off the view, so a mesh that is on screen costs one point and a few multiplications.
-func (m Mesh) offscreen(eye viewTransform, proj projector, near, far float64) bool {
+func (m *Mesh) offscreen(eye viewTransform, proj projector, near, far float64) bool {
 	if !cullingOn || len(m.Vertices) == 0 {
 		return false
 	}
@@ -61,7 +61,7 @@ func (m Mesh) offscreen(eye viewTransform, proj projector, near, far float64) bo
 // reach is how far from its Position the mesh can get once it is placed: its farthest
 // vertex from the model's origin, made larger by the Scale. A vertex that is not a
 // number does not count, as it draws nothing.
-func (m Mesh) reach() float64 {
+func (m *Mesh) reach() float64 {
 	far := 0.0
 	for _, v := range m.Vertices {
 		if d := v.LengthSq(); d > far {
@@ -111,7 +111,7 @@ func (m *Mesh) UpdateBounds() {
 
 // currentBounds returns the stored sphere if it was worked out from the vertices the mesh has now,
 // and nil otherwise.
-func (m Mesh) currentBounds() *bounds {
+func (m *Mesh) currentBounds() *bounds {
 	b := m.bounds
 	if b == nil || len(m.Vertices) != b.n || &m.Vertices[0] != b.first {
 		return nil
