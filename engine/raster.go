@@ -254,6 +254,56 @@ func (fb *FrameBuffer) FillTriangleFunc(x0, y0, z0, x1, y1, z1, x2, y2, z2 float
 	})
 }
 
+// Fill says what FillTriangleOver does with a cell that it has asked about.
+type Fill uint8
+
+// The things FillTriangleOver can do with a cell, which its callback says.
+const (
+	// FillSkip leaves the cell, and the depth stored with it, as they were. What is
+	// drawn later behind it is still seen: a hole.
+	FillSkip Fill = iota
+
+	// FillSolid draws the cell and stores its depth, as FillTriangleFunc does.
+	FillSolid
+
+	// FillOver draws the cell and leaves the depth as it was, which is the depth of what is
+	// behind: a pane of glass. What is drawn later and is nearer than that depth replaces the
+	// cell, and what is farther is hidden by what was behind, so a surface like this is drawn
+	// after the solid things, and see-through ones from far to near.
+	FillOver
+)
+
+// FillTriangleOver fills the triangle like FillTriangleFunc, but asks over what to do with
+// each covered cell, and gives it the cell as it is: over returns the cell to draw and
+// a Fill, which says whether to draw it, and whether to store its depth. A cell that is not
+// drawn, because over says FillSkip, or says something that is not a Fill, keeps what it
+// had, depth too. A nil over draws nothing.
+//
+// It is for a surface that can be seen through: holes (FillSkip where the surface is not
+// there, FillSolid where it is) and glass (FillOver, with a cell made from the one behind
+// it). The weights are those of FillTriangleFunc, and the depth test comes first in the
+// same way: over is called only for a cell nearer than what is there, and so is never asked
+// about one that would be hidden.
+func (fb *FrameBuffer) FillTriangleOver(x0, y0, z0, x1, y1, z1, x2, y2, z2 float64, over func(b0, b1, b2 float64, behind Cell) (Cell, Fill)) {
+	if over == nil {
+		return
+	}
+	scanTriangle(fb.width, fb.height, x0, y0, z0, x1, y1, z1, x2, y2, z2, func(x, y int, z, p0, p1, p2 float64) {
+		i := y*fb.width + x
+		if !(z < fb.depth[i]) {
+			return
+		}
+		c, fill := over(p0*z, p1*z, p2*z, fb.frame[i])
+		switch fill {
+		case FillSolid:
+			fb.depth[i] = z
+			fb.frame[i] = c
+		case FillOver:
+			fb.frame[i] = c
+		}
+	})
+}
+
 // scanTriangle walks the w x h grid and calls plot for every cell whose centre
 // lies inside the triangle, with the interpolated depth z there. It does the
 // geometry for every kind of target; the caller decides what a cell holds.

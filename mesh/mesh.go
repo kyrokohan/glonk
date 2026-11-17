@@ -90,12 +90,13 @@ type Mesh struct {
 	// Material.Color, and is lit as they are: brightness is still shown by the character or
 	// the shade, and it fades in fog. A vertex color tints it, each channel multiplied, and
 	// a corner without one leaves it as it is. A pixel of the picture that is see-through
-	// shows the face as it would be without a picture. A zero triple means "none here", and
-	// that face is drawn without one; so is every face of a mesh with no Material.Texture, or
-	// an empty one. A list of any other length than Faces is not used, and a face with a
-	// coordinate that is not finite shows its own color all over, as without a picture;
-	// Validate reports both. Wireframes (Draw, DrawDepth) ignore them. LoadOBJFS fills it
-	// from a model's texture.
+	// is a hole: nothing is drawn there, and no depth is stored, so what is behind shows
+	// through it, whichever was drawn first. A zero triple means "none here", and that face
+	// is drawn without a picture; so is every face of a mesh with no Material.Texture, or an
+	// empty one. A list of any other length than Faces is not used. A face with a coordinate
+	// that is not finite has no place in the picture to look up, so all of it is a hole and
+	// it draws nothing; Validate reports both. Wireframes (Draw, DrawDepth) ignore them.
+	// LoadOBJFS fills it from a model's texture.
 	FaceTexCoords [][3]geometry.Vector2
 
 	// Transform places the model in the world.
