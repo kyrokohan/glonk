@@ -23,7 +23,8 @@ const (
 // until Compose: it then gives every cell it fills the depth of its nearer pixel, and
 // depth-tested drawing into cells afterwards (FrameBuffer.FillTriangle,
 // FrameBuffer.DrawLineDepth, FrameBuffer.SetDepth) is hidden behind the pixels where
-// they are nearer.
+// they are nearer. ComposeRect puts down only a part of it, over cells that are already
+// in the frame, for a picture inside a filled panel.
 type Canvas struct {
 	// Seamless makes Compose draw solid cells only, with no half-block characters.
 	// Some terminals draw those characters a little short of the cell and leave a
@@ -248,6 +249,9 @@ func (c *Canvas) FillTriangleOver(x0, y0, z0, x1, y1, z1, x2, y2, z2 float64, ov
 //
 // A pixel set with Set has no depth, so it is as far away as can be: depth-tested
 // drawing afterwards lands on top of it.
+//
+// To put down only a part of the canvas, over cells that are already in the frame, see
+// ComposeRect.
 func (c *Canvas) Compose() {
 	fb := c.fb
 	for row := range fb.height {
