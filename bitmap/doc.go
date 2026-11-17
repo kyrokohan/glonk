@@ -50,7 +50,8 @@
 // [Bitmap.Shaded] is a view drawn darker, for a thing in a lit scene that has to be as dark as
 // the wall beside it, and [Bitmap.Tinted] is a view drawn mixed toward a color, by a part from 0
 // to 1: a part of 1 draws the shape of the picture all in the color, for the letters of a font
-// made from one white picture or for a thing that flashes white when it is hit. They share the
+// of your own made from one white picture (the engine has a small one: [engine.Canvas.DrawText])
+// or for a thing that flashes white when it is hit. They share the
 // pixels, and combine with [Bitmap.Sub] and [Bitmap.Mirrored], which keep them.
 //
 //	lit := frame.Shaded(0.6)                     // as bright as the wall next to it

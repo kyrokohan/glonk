@@ -395,3 +395,64 @@ func ExampleColor_RGB() {
 	// 12 34 56
 	// 0 0 0
 }
+
+// Canvas.DrawText draws text in a pixel font that comes with glonk, as pixels of the canvas: letters 5 wide
+// and 7 tall, which keep what is behind them between the strokes. PixelTextWidth is how wide a text is, to
+// center it, and DrawTextScaled makes every pixel of a letter a block. This prints a word in pixels, and
+// writes a picture of the whole font and of three sizes to the path in GLONK_SCREENSHOT, if there is one.
+func ExampleCanvas_DrawText() {
+	fb, err := engine.NewFrameBuffer(24, 5) // 24 by 10 pixels
+	if err != nil {
+		panic(err)
+	}
+	canvas := fb.Canvas()
+	title := "Hi!"
+	width := engine.PixelTextWidth(title, 1)
+	canvas.DrawText((canvas.Width()-width)/2, 1, title, engine.RGB(255, 200, 0))
+
+	fmt.Println("width:", width, "and at twice the size:", engine.PixelTextWidth(title, 2))
+	for y := range 9 {
+		row := make([]byte, canvas.Width())
+		for x := range row {
+			row[x] = '.'
+			if !canvas.At(x, y).IsDefault() {
+				row[x] = '#'
+			}
+		}
+		fmt.Println(string(row))
+	}
+
+	if path := os.Getenv("GLONK_SCREENSHOT"); path != "" {
+		sheet, err := engine.NewFrameBuffer(120, 58)
+		if err != nil {
+			panic(err)
+		}
+		c := sheet.Canvas()
+		for i := range 95 { // every character of the font, 16 to a row
+			c.DrawText(2+i%16*7, 2+i/16*9, string(rune(' '+i)), engine.RGB(235, 235, 235))
+		}
+		c.DrawText(2, 66, "Pixel text, scale 1", engine.RGB(120, 200, 255))
+		c.DrawTextScaled(2, 76, "glonk", engine.RGB(255, 200, 80), 2)
+		c.DrawTextScaled(2, 94, "4210", engine.RGB(255, 120, 120), 3)
+		c.Compose()
+		f, err := os.Create(path)
+		if err != nil {
+			panic(err)
+		}
+		defer f.Close()
+		if err := png.Encode(f, sheet.Image(engine.ImageOptions{Scale: 6})); err != nil {
+			panic(err)
+		}
+	}
+	// Output:
+	// width: 17 and at twice the size: 34
+	// ........................
+	// ...#...#...#.....#......
+	// ...#...#.........#......
+	// ...#...#..##.....#......
+	// ...#####...#.....#......
+	// ...#...#...#.....#......
+	// ...#...#...#............
+	// ...#...#..###....#......
+	// ........................
+}
