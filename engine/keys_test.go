@@ -153,6 +153,8 @@ var kittyKeyCases = []keyCase{
 	{"text of a non-ascii key", "\x1b[233;;233u", []keyEvent{{key: 'é', kind: kindPress, text: "é"}}},
 	{"control characters are not text", "\x1b[97;;7:97:127:155u", []keyEvent{{key: 'a', kind: kindPress, text: "a"}}},
 	{"text that is not a character is dropped", "\x1b[97;;55296:1114112u", []keyEvent{{key: 'a', kind: kindPress}}},
+	{"a code point that would wrap into a rune is dropped", "\x1b[97;;4294967361:4294967361u", []keyEvent{{key: 'a', kind: kindPress}}},
+	{"a code point past int32 beside a good one", "\x1b[97;;65:4294967361:66u", []keyEvent{{key: 'a', kind: kindPress, text: "AB"}}},
 	{"enter has no text to type", "\x1b[13;;13u", []keyEvent{{key: KeyEnter, kind: kindPress}}},
 	{"unicode letter", "\x1b[233u", presses('é')},
 	{"arrow press", "\x1b[1;1A", presses(KeyUp)},

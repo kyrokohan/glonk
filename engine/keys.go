@@ -470,8 +470,9 @@ func kittyText(fields [][]int) string {
 	}
 	var text []rune
 	for _, cp := range fields[2] {
-		if r := rune(cp); cp >= ' ' && !(cp >= 0x7f && cp < 0xa0) && utf8.ValidRune(r) && len(text) < 16 {
-			text = append(text, r)
+		// Bounded before it is a rune: a number past the last one would wrap into a valid one.
+		if cp >= ' ' && cp <= utf8.MaxRune && !(cp >= 0x7f && cp < 0xa0) && utf8.ValidRune(rune(cp)) && len(text) < 16 {
+			text = append(text, rune(cp))
 		}
 	}
 	return string(text)
