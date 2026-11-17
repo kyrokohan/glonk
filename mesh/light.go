@@ -215,6 +215,9 @@ func (m Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(t
 	faceColors := len(m.FaceColors) == len(m.Faces) // otherwise they are not used
 	vertexColors := len(m.VertexColors) == len(m.Vertices) && len(m.Vertices) > 0
 	pictured := len(m.FaceTexCoords) == len(m.Faces) && m.Material.Texture.Width() > 0
+	// A plain mesh, the common one, has nothing to work out for its colors, and takes one test a face for it. The
+	// tests for the picture and for the cut, each its own and each made for every face, cost it 3 to 6%.
+	special := pictured || vertexColors
 	tri.tinted, tri.tex = false, nil
 	tri.opacity = m.Material.seeThrough()
 	var corner [3]geometry.Vector3 // the colors of the corners of the face being drawn, if it has any
@@ -254,32 +257,33 @@ func (m Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(t
 		}
 
 		varying := false // the face has colors or a picture of its own, so every cell is asked for its color
-		if pictured {
-			tri.tex = nil
-			// A coordinate that is not finite makes every cell of the face none, which shows the face's own
-			// color. The triple is compared a corner at a time, through a pointer: comparing the array as
-			// a whole costs every mesh, picture or not, 9% on a mesh of many flat faces.
-			if p := &m.FaceTexCoords[i]; p[0] != (geometry.Vector2{}) || p[1] != (geometry.Vector2{}) || p[2] != (geometry.Vector2{}) {
-				tri.tex, faceUV, varying = m.Material.Texture, *p, true
+		cut := false     // the near or the far plane crosses a face that does, which gives its new corners theirs
+		if special {
+			if pictured {
+				tri.tex = nil
+				// A coordinate that is not finite makes every cell of the face none, which shows the face's own
+				// color. The triple is compared a corner at a time, through a pointer: comparing the array as
+				// a whole costs every mesh, picture or not, 9% on a mesh of many flat faces.
+				if p := &m.FaceTexCoords[i]; p[0] != (geometry.Vector2{}) || p[1] != (geometry.Vector2{}) || p[2] != (geometry.Vector2{}) {
+					tri.tex, faceUV, varying = m.Material.Texture, *p, true
+				}
 			}
-		}
-		if vertexColors {
-			vc := [3]engine.Color{m.VertexColors[f[0]], m.VertexColors[f[1]], m.VertexColors[f[2]]}
-			if tri.tinted = !vc[0].IsDefault() || !vc[1].IsDefault() || !vc[2].IsDefault(); tri.tinted {
-				varying = true
-				for k := range corner {
-					if tri.tex != nil {
-						// A corner without a color lets all of the picture through.
-						corner[k] = cornerColor(vc[k], engine.RGB(255, 255, 255), true)
-					} else {
-						corner[k] = cornerColor(vc[k], tri.color, hasFaceColor)
+			if vertexColors {
+				vc := [3]engine.Color{m.VertexColors[f[0]], m.VertexColors[f[1]], m.VertexColors[f[2]]}
+				if tri.tinted = !vc[0].IsDefault() || !vc[1].IsDefault() || !vc[2].IsDefault(); tri.tinted {
+					varying = true
+					for k := range corner {
+						if tri.tex != nil {
+							// A corner without a color lets all of the picture through.
+							corner[k] = cornerColor(vc[k], engine.RGB(255, 255, 255), true)
+						} else {
+							corner[k] = cornerColor(vc[k], tri.color, hasFaceColor)
+						}
 					}
 				}
 			}
+			cut = varying && (crossesFar || v0.Z < cam.Near || v1.Z < cam.Near || v2.Z < cam.Near)
 		}
-		// The near or the far plane crosses a triangle that has colors or a picture of its own to
-		// give its new corners.
-		cut := varying && (crossesFar || v0.Z < cam.Near || v1.Z < cam.Near || v2.Z < cam.Near)
 
 		a, b, c := clipVert{view: v0}, clipVert{view: v1}, clipVert{view: v2}
 		if smooth {
