@@ -2,6 +2,8 @@ package mesh_test
 
 import (
 	"fmt"
+	"image"
+	"image/draw"
 	"image/png"
 	"math"
 	"os"
@@ -342,6 +344,81 @@ func ExampleMaterial_opacity() {
 	// the wall through a hole: #c86428
 	// glass over the wall: #786478
 	// glass over nothing: #002860
+}
+
+// A line that lies on a surface, a grid on a floor or a box round the thing that is selected, ties with
+// the surface under DrawDepth and is broken wherever it is a hair behind it, which across a floor seen at
+// a low angle is much of it. DrawOnSurface draws it whole, and a solid that is nearer still hides it. This
+// draws a grid on a floor both ways, in pixels, counts what each keeps, and writes the two pictures side by
+// side to the path in GLONK_SCREENSHOT, if there is one.
+func ExampleMesh_DrawOnSurface() {
+	floor := mesh.Plane(60, 60)
+	floor.Material.Color = engine.RGB(60, 80, 60)
+	grid := mesh.Grid(24, 12)
+	grid.Transform.Position = geometry.Vector3{Z: 14}
+	box := mesh.Cube(2)
+	box.Material.Color = engine.RGB(200, 140, 60)
+	box.Transform.Position = geometry.Vector3{X: 1.5, Y: 1, Z: 6}
+	cam := mesh.Camera{Position: geometry.Vector3{Y: 1.6}, Pitch: -0.12, FOV: math.Pi / 3}
+	light := mesh.Ambient{Level: 1}
+	line := engine.RGB(255, 0, 255)
+
+	scene := func(drawGrid func(*engine.Canvas)) *engine.FrameBuffer {
+		fb, err := engine.NewFrameBuffer(80, 24)
+		if err != nil {
+			panic(err)
+		}
+		canvas := fb.Canvas()
+		floor.DrawShadedPixels(canvas, cam, light)
+		box.DrawShadedPixels(canvas, cam, light)
+		drawGrid(canvas)
+		canvas.Compose()
+		return fb
+	}
+	count := func(fb *engine.FrameBuffer) (n int) {
+		img := fb.Image(engine.ImageOptions{})
+		r, g, b := line.RGB()
+		for y := range img.Bounds().Dy() {
+			for x := range img.Bounds().Dx() {
+				if p := img.RGBAAt(x, y); p.R == r && p.G == g && p.B == b {
+					n++
+				}
+			}
+		}
+		return n
+	}
+	// The whole grid, with no depth, on an empty frame: every pixel it has, behind the box too.
+	alone, err := engine.NewFrameBuffer(80, 24)
+	if err != nil {
+		panic(err)
+	}
+	grid.DrawPixels(alone.Canvas(), cam, line)
+	alone.Canvas().Compose()
+
+	byDepth := scene(func(c *engine.Canvas) { grid.DrawDepthPixels(c, cam, line) })
+	onSurface := scene(func(c *engine.Canvas) { grid.DrawOnSurfacePixels(c, cam, line) })
+	fmt.Println("the whole grid:", count(alone), "pixels, some of them behind the box")
+	fmt.Println("drawn by DrawDepthPixels:", count(byDepth))
+	fmt.Println("drawn by DrawOnSurfacePixels:", count(onSurface))
+
+	if path := os.Getenv("GLONK_SCREENSHOT"); path != "" {
+		left, right := byDepth.Image(engine.ImageOptions{Scale: 4}), onSurface.Image(engine.ImageOptions{Scale: 4})
+		both := image.NewRGBA(image.Rect(0, 0, left.Bounds().Dx()*2+8, left.Bounds().Dy()))
+		draw.Draw(both, left.Bounds(), left, image.Point{}, draw.Src)
+		draw.Draw(both, left.Bounds().Add(image.Point{X: left.Bounds().Dx() + 8}), right, image.Point{}, draw.Src)
+		f, err := os.Create(path)
+		if err != nil {
+			panic(err)
+		}
+		defer f.Close()
+		if err := png.Encode(f, both); err != nil {
+			panic(err)
+		}
+	}
+	// Output:
+	// the whole grid: 707 pixels, some of them behind the box
+	// drawn by DrawDepthPixels: 411
+	// drawn by DrawOnSurfacePixels: 580
 }
 
 // spot is a light of your own: a spotlight, which lights what is inside a cone from

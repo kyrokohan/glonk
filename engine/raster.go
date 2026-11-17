@@ -52,6 +52,36 @@ func (fb *FrameBuffer) DrawLineDepth(x0, y0 int, z0 float64, x1, y1 int, z1 floa
 	})
 }
 
+// DrawLineOnSurface draws the same line as DrawLineDepth, for a line that lies on a surface that
+// is already drawn: a grid on a floor, a box round the thing that is selected, a mark on a wall,
+// the edges of a mesh over its own faces. A line like that is at almost the depth of the surface,
+// and DrawLineDepth hides it wherever it is a hair farther, which across a surface seen at a low
+// angle is half of it, however it is lifted. Here a cell is drawn if it is no farther than what is
+// stored there plus the slope of that surface across a cell, read from the depths stored around it,
+// so a line on a floor is whole at any distance and at any angle, and a line a long way behind a
+// surface, or behind something nearer, is still hidden. The cell that is drawn keeps the nearer
+// of its own depth and the one that was there, so the surface does not get farther, and what is
+// drawn later and is farther than the surface is still hidden.
+//
+// The line, its depth, and what a depth that is not positive, NaN or infinite does are those of
+// DrawLineDepth. The slope is the smaller of the steps to the cells before and after on each axis,
+// so the edge of a nearer object is not taken for one; a cell with nothing stored in it has none,
+// and is drawn if it is nearer than nothing, as DrawLineDepth does. A line that is a hair behind a
+// surface that is seen edge-on, past what a cell of it could hold, shows: no depth test can tell
+// them apart.
+func (fb *FrameBuffer) DrawLineOnSurface(x0, y0 int, z0 float64, x1, y1 int, z1 float64, cell Cell) {
+	d, ok := newLineDepth(z0, z1)
+	if !ok {
+		return
+	}
+	walkLineAt(fb.width, fb.height, x0, y0, x1, y1, func(x, y, i, n int) {
+		if keep, draw := laidOn(fb.depth, fb.width, fb.height, x, y, d.at(i, n)); draw {
+			fb.depth[y*fb.width+x] = keep
+			fb.frame[y*fb.width+x] = cell
+		}
+	})
+}
+
 // lineDepth is the distance from the camera along a line whose ends are z0 and z1 away.
 // DrawLineDepth of a FrameBuffer and of a Canvas both take it from here, so that they
 // cannot disagree; see FrameBuffer.DrawLineDepth for what it is.

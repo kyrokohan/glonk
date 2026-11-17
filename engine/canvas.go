@@ -166,6 +166,23 @@ func (c *Canvas) DrawLineDepth(x0, y0 int, z0 float64, x1, y1 int, z1 float64, c
 	})
 }
 
+// DrawLineOnSurface is FrameBuffer.DrawLineOnSurface for pixels: the same line as DrawLineDepth,
+// drawn on a surface that is already in the Canvas, whole at any distance and any angle, and still
+// hidden by what is nearer. The slope that a pixel is allowed is read from the depths of the
+// pixels around it, so the surface is the Canvas's own, drawn by FillTriangle or DrawShadedPixels.
+func (c *Canvas) DrawLineOnSurface(x0, y0 int, z0 float64, x1, y1 int, z1 float64, color Color) {
+	d, ok := newLineDepth(z0, z1)
+	if !ok {
+		return
+	}
+	walkLineAt(c.width, c.height, x0, y0, x1, y1, func(x, y, i, n int) {
+		if keep, draw := laidOn(c.depth, c.width, c.height, x, y, d.at(i, n)); draw {
+			c.depth[y*c.width+x] = keep
+			c.pixels[y*c.width+x] = color
+		}
+	})
+}
+
 // FillTriangle fills the triangle with corners (x0, y0), (x1, y1), (x2, y2) in
 // pixel coordinates, like FrameBuffer.FillTriangle but into pixels. The z values
 // are the corners' depths (see SetDepth) and must be positive.
