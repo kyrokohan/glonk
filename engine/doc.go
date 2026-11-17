@@ -19,4 +19,6 @@
 // works in nearly any terminal. A [Canvas] gives the same frame a second
 // layer of pixels, two to a cell, drawn with half-block characters; triangles, lines,
 // rectangles and circles can be drawn into it, and the bitmap package draws pictures.
+// [Canvas.DrawText] draws text into it in a small pixel font, at any whole multiple of its size, and
+// [PixelTextWidth] says how wide that is; [FrameBuffer.DrawText] draws text into cells.
 package engine
