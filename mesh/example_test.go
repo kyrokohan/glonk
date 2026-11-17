@@ -2,7 +2,9 @@ package mesh_test
 
 import (
 	"fmt"
+	"image/png"
 	"math"
+	"os"
 	"strings"
 
 	"glonk.dev/bitmap"
@@ -270,6 +272,76 @@ func ExampleMaterial_texture() {
 	fmt.Println(fb.At(14, 5).Foreground, fb.At(25, 5).Foreground)
 	// Output:
 	// #ff0000 #0000ff
+}
+
+// examplePanel is a rectangle w wide and h tall facing the camera at depth z, as two triangles.
+func examplePanel(z, w, h float64) mesh.Mesh {
+	return mesh.Mesh{
+		Vertices:    []geometry.Vector3{{X: -w / 2, Y: -h / 2, Z: z}, {X: -w / 2, Y: h / 2, Z: z}, {X: w / 2, Y: h / 2, Z: z}, {X: w / 2, Y: -h / 2, Z: z}},
+		Faces:       [][3]int{{0, 1, 2}, {0, 2, 3}},
+		DoubleSided: true,
+	}
+}
+
+// A mesh can be seen through in two ways. A pixel of its picture that is see-through is a hole, where
+// nothing is drawn and what is behind shows, as in a fence. And Material.Opacity mixes the whole mesh
+// over what is already drawn, as glass does, so the solid things are drawn first and then the
+// see-through ones, from far to near. This draws a wall, a fence in front of it and a pane of glass in
+// front of both, and writes the picture to the path in GLONK_SCREENSHOT, if there is one.
+func ExampleMaterial_opacity() {
+	fb, err := engine.NewFrameBuffer(48, 14)
+	if err != nil {
+		panic(err)
+	}
+	canvas := fb.Canvas()
+	cam := mesh.Camera{}
+	light := mesh.Ambient{Level: 1}
+
+	// A wall of orange.
+	wall := examplePanel(6, 9, 5)
+	wall.Material.Color = engine.RGB(200, 100, 40)
+	wall.DrawShadedPixels(canvas, cam, light)
+
+	// A fence: a picture of four pixels, bars where they are set and holes where they are not.
+	bars := bitmap.New(4, 1)
+	bars.Set(0, 0, engine.RGB(120, 60, 20))
+	bars.Set(2, 0, engine.RGB(120, 60, 20))
+	fence := examplePanel(4, 6, 3)
+	fence.FaceTexCoords = [][3]geometry.Vector2{
+		{{X: 0, Y: 1}, {X: 0, Y: 0}, {X: 1, Y: 0}},
+		{{X: 0, Y: 1}, {X: 1, Y: 0}, {X: 1, Y: 1}},
+	}
+	fence.Material.Texture = bars
+	fence.Transform.Position = geometry.Vector3{X: -1}
+	fence.DrawShadedPixels(canvas, cam, light)
+
+	// Glass last, 40% blue, over the wall, the fence and the empty space beside them.
+	glass := examplePanel(3, 3, 3)
+	glass.Material = mesh.Material{Color: engine.RGB(0, 100, 240), Opacity: 0.4}
+	glass.Transform.Position = geometry.Vector3{X: 1.6}
+	glass.DrawShadedPixels(canvas, cam, light)
+
+	fmt.Println("a bar of the fence:", canvas.At(10, 9))
+	fmt.Println("the wall through a hole:", canvas.At(16, 9))
+	fmt.Println("glass over the wall:", canvas.At(26, 9))
+	fmt.Println("glass over nothing:", canvas.At(36, 9))
+
+	if path := os.Getenv("GLONK_SCREENSHOT"); path != "" {
+		canvas.Compose()
+		f, err := os.Create(path)
+		if err != nil {
+			panic(err)
+		}
+		defer f.Close()
+		if err := png.Encode(f, fb.Image(engine.ImageOptions{Scale: 10})); err != nil {
+			panic(err)
+		}
+	}
+	// Output:
+	// a bar of the fence: #783c14
+	// the wall through a hole: #c86428
+	// glass over the wall: #786478
+	// glass over nothing: #002860
 }
 
 // spot is a light of your own: a spotlight, which lights what is inside a cone from

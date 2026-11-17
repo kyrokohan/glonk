@@ -216,6 +216,7 @@ func (m Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(t
 	vertexColors := len(m.VertexColors) == len(m.Vertices) && len(m.Vertices) > 0
 	pictured := len(m.FaceTexCoords) == len(m.Faces) && m.Material.Texture.Width() > 0
 	tri.tinted, tri.tex = false, nil
+	tri.opacity = m.Material.seeThrough()
 	var corner [3]geometry.Vector3 // the colors of the corners of the face being drawn, if it has any
 	var faceUV [3]geometry.Vector2 // the places of the picture its corners are pinned to, if it has one
 	for i, f := range m.Faces {
@@ -337,7 +338,11 @@ func (m Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(t
 //
 // A face with texture coordinates takes the color of each cell from the Material.Texture at
 // that place on the face (see Mesh.FaceTexCoords), and a face with vertex colors fades from one
-// to the next, or both, the colors tinting the picture.
+// to the next, or both, the colors tinting the picture. A hole in the picture draws nothing.
+//
+// A mesh with a Material.Opacity between 0 and 1 is mixed over what is already drawn, in place of
+// covering it, and does not store its depth: draw the solid meshes first, and the see-through ones
+// from far to near. In cells the character behind it stays and its colors are mixed.
 //
 // Brightness is shown by the character: a ramp from dim to bright, Material.Ramp. A camera
 // with a Fog fades the color of each cell toward the fog's, by how deep the cell is, and the
@@ -374,7 +379,9 @@ func (m Mesh) DrawShaded(fb *engine.FrameBuffer, cam Camera, lights ...Light) {
 // finer. Call Canvas.Compose afterwards to put the pixels into the FrameBuffer. A camera with
 // a Fog fades the shaded color of each pixel toward the fog's, by how deep the pixel is. A face
 // with texture coordinates is drawn in the pixels of its picture, one for each pixel of the
-// canvas, so a picture of 16 by 16 on a wall that fills a screen is seen as 16 by 16 blocks.
+// canvas, so a picture of 16 by 16 on a wall that fills a screen is seen as 16 by 16 blocks. A mesh
+// with a Material.Opacity between 0 and 1 mixes its color with each pixel that is already there, and
+// with black over an empty one, and does not store depth.
 func (m Mesh) DrawShadedPixels(c *engine.Canvas, cam Camera, lights ...Light) {
 	// Project onto the cell grid the canvas belongs to, then stretch y to pixel rows.
 	fog := cam.Fog

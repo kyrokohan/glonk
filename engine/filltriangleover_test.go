@@ -363,3 +363,164 @@ func TestFillTriangleOverDrawsNothingForBadTriangles(t *testing.T) {
 		})
 	}
 }
+
+// visits walks the triangles with scan and counts how many times each cell of a w by h grid is visited.
+func visits(w, h int, scan func(w, h int, x0, y0, z0, x1, y1, z1, x2, y2, z2 float64, plot func(x, y int, z, p0, p1, p2 float64)), tris [][6]float64) []int {
+	n := make([]int, w*h)
+	for _, c := range tris {
+		scan(w, h, c[0], c[1], 1, c[2], c[3], 1, c[4], c[5], 1, func(x, y int, _, _, _, _ float64) { n[y*w+x]++ })
+	}
+	return n
+}
+
+// fan is the triangles that a polygon is cut into from its first corner, as a mesh cuts a quad,
+// and as a mesh of any size is made of triangles that share their edges.
+func fan(points ...[2]float64) [][6]float64 {
+	var tris [][6]float64
+	for i := 1; i+1 < len(points); i++ {
+		tris = append(tris, [6]float64{points[0][0], points[0][1], points[i][0], points[i][1], points[i+1][0], points[i+1][1]})
+	}
+	return tris
+}
+
+// Where triangles share an edge, a cell with its centre on the edge is visited once: no more, and
+// no less. A cell on the outer edge of a shape is the half-open rule's to decide, in or out by the
+// side the edge is on, so it may be left out, and the corner where such edges meet is out. The
+// corners are put where centres fall on the diagonals and on the spokes.
+func TestScanTriangleOnceVisitsACellOnASharedEdgeOnce(t *testing.T) {
+	const w, h = 12, 12
+	grid := func(x, y float64) [][6]float64 {
+		return fan([2]float64{x, y}, [2]float64{x + 6, y}, [2]float64{x + 6, y + 6}, [2]float64{x, y + 6})
+	}
+	shapes := map[string][][6]float64{
+		"a square, one diagonal":        fan([2]float64{1, 1}, [2]float64{9, 1}, [2]float64{9, 9}, [2]float64{1, 9}),
+		"a square, the other":           fan([2]float64{9, 1}, [2]float64{9, 9}, [2]float64{1, 9}, [2]float64{1, 1}),
+		"wound the other way":           fan([2]float64{1, 1}, [2]float64{1, 9}, [2]float64{9, 9}, [2]float64{9, 1}),
+		"corners on cell centres":       fan([2]float64{1.5, 1.5}, [2]float64{9.5, 1.5}, [2]float64{9.5, 9.5}, [2]float64{1.5, 9.5}),
+		"a hexagon of spokes":           fan([2]float64{6, 6}, [2]float64{10, 6}, [2]float64{8, 10}, [2]float64{4, 10}, [2]float64{2, 6}, [2]float64{4, 2}, [2]float64{8, 2}, [2]float64{10, 6}),
+		"a slanted quad":                fan([2]float64{1, 2}, [2]float64{10, 1}, [2]float64{11, 9}, [2]float64{2, 10}),
+		"a grid of four squares":        slices.Concat(grid(0, 0), grid(6, 0), grid(0, 6), grid(6, 6)),
+		"a quad that runs off the grid": fan([2]float64{-3, -3}, [2]float64{15, -3}, [2]float64{15, 15}, [2]float64{-3, 15}),
+	}
+	ties := 0
+	for name, tris := range shapes {
+		once := visits(w, h, scanTriangleOnce, tris)
+		both := visits(w, h, scanTriangle, tris)
+		for i := range once {
+			x, y := i%w, i/w
+			switch {
+			case once[i] > 1:
+				t.Errorf("%s: cell (%d, %d) visited %d times, wanted once", name, x, y, once[i])
+			case once[i] > 0 && both[i] == 0:
+				t.Errorf("%s: cell (%d, %d) visited, but not by scanTriangle", name, x, y)
+			}
+			if both[i] > 1 {
+				ties++
+			}
+		}
+	}
+	// The shapes really do have cells on an edge, or this would prove nothing.
+	if ties < 20 {
+		t.Errorf("wanted shapes with at least 20 cells on a shared edge, got %d", ties)
+	}
+
+	// What a quad covers does not depend on how it is cut: the same square cut along either diagonal,
+	// and wound either way, is the same cells, once each. A cell on the diagonal that was dropped, or
+	// drawn twice, would show against the cut that has it inside a triangle.
+	same := visits(w, h, scanTriangleOnce, shapes["a square, one diagonal"])
+	for _, name := range []string{"a square, the other", "wound the other way"} {
+		if got := visits(w, h, scanTriangleOnce, shapes[name]); !slices.Equal(got, same) {
+			t.Errorf("%s: wanted the cells of the same square cut the other way", name)
+		}
+	}
+
+	// Exact totals: the square on cell centres has its left and top edges in and its right and bottom
+	// out, an 8 by 8 block, and a square of four has every cell of the grid once.
+	count := func(tris [][6]float64) (n int) {
+		for _, v := range visits(w, h, scanTriangleOnce, tris) {
+			n += v
+		}
+		return n
+	}
+	if got := count(shapes["corners on cell centres"]); got != 64 {
+		t.Errorf("wanted 64 cells in the block on cell centres, got %d", got)
+	}
+	// Which cells: the square's centres on its left column and its top row are in, and those on its right
+	// column and its bottom row are out, so it is columns 1 to 8 and rows 1 to 8, not 2 to 9.
+	for i, n := range visits(w, h, scanTriangleOnce, shapes["corners on cell centres"]) {
+		x, y := i%w, i/w
+		if want := x >= 1 && x <= 8 && y >= 1 && y <= 8; (n == 1) != want {
+			t.Errorf("block on cell centres: cell (%d, %d) visited %d times, wanted it in the block: %v", x, y, n, want)
+		}
+	}
+	if got := count(shapes["a grid of four squares"]); got != 144 {
+		t.Errorf("wanted every one of 144 cells once, got %d", got)
+	}
+}
+
+// Away from the edges it is scanTriangle: the same cells, with the same depths and weights.
+func TestScanTriangleOnceIsScanTriangleWhereNothingIsOnAnEdge(t *testing.T) {
+	rng := rand.New(rand.NewPCG(51, 4))
+	type visit struct {
+		x, y          int
+		z, p0, p1, p2 float64
+	}
+	for range 500 {
+		c, _ := randomTriangle(rng, 9, 6)
+		var a, b []visit
+		scanTriangle(9, 6, c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], func(x, y int, z, p0, p1, p2 float64) { a = append(a, visit{x, y, z, p0, p1, p2}) })
+		scanTriangleOnce(9, 6, c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], func(x, y int, z, p0, p1, p2 float64) { b = append(b, visit{x, y, z, p0, p1, p2}) })
+		if !slices.Equal(a, b) {
+			t.Fatalf("triangle %v: wanted the visits of scanTriangle, got %d for %d", c, len(b), len(a))
+		}
+	}
+	// And the same bad triangles draw nothing.
+	nan := 0.0
+	nan /= nan
+	for _, c := range [][9]float64{{0, 0, 1, 1, 1, 1, 2, 2, 1}, {0, 0, 0, 4, 0, 1, 0, 4, 1}, {0, 0, 1, 4, 0, nan, 0, 4, 1}, {0, 0, 1, nan, 0, 1, 0, 4, 1}} {
+		scanTriangleOnce(9, 6, c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], func(x, y int, _, _, _, _ float64) { t.Errorf("wanted nothing for %v, got (%d, %d)", c, x, y) })
+	}
+}
+
+// Through the fill itself: a quad of two triangles, drawn over, asks about each cell once, so a mix is
+// made once.
+func TestFillTriangleOverAsksAboutACellOnAnEdgeOnce(t *testing.T) {
+	fb := newFB(t, 12, 12)
+	for _, c := range fan([2]float64{1, 1}, [2]float64{9, 1}, [2]float64{9, 9}, [2]float64{1, 9}) {
+		fb.FillTriangleOver(c[0], c[1], 1, c[2], c[3], 1, c[4], c[5], 1, func(_, _, _ float64, behind Cell) (Cell, Fill) {
+			behind.Character++ // a cell that is asked twice ends up two on
+			return behind, FillOver
+		})
+	}
+	covered := 0
+	for i, c := range fb.frame {
+		n := int(c.Character) - ' ' // a fresh cell is a space
+		if n > 1 {
+			t.Fatalf("cell (%d, %d) was asked about %d times", i%12, i/12, n)
+		}
+		covered += n
+	}
+	if covered != 64 {
+		t.Errorf("wanted the 8 by 8 square covered, got %d cells", covered)
+	}
+
+	// On a canvas, with the pixels of a 12 by 12 grid.
+	_, c := newTestCanvas(t, 12, 6)
+	for _, tri := range fan([2]float64{1, 1}, [2]float64{9, 1}, [2]float64{9, 9}, [2]float64{1, 9}) {
+		c.FillTriangleOver(tri[0], tri[1], 1, tri[2], tri[3], 1, tri[4], tri[5], 1, func(_, _, _ float64, behind Color) (Color, Fill) {
+			r, _, _ := behind.RGB()
+			return RGB(r+1, 0, 0), FillOver // a pixel asked twice ends up two on
+		})
+	}
+	covered = 0
+	for i, p := range c.pixels {
+		r, _, _ := p.RGB()
+		if r > 1 {
+			t.Fatalf("pixel (%d, %d) was asked about %d times", i%12, i/12, r)
+		}
+		covered += int(r)
+	}
+	if covered != 64 {
+		t.Errorf("wanted 64 pixels covered, got %d", covered)
+	}
+}

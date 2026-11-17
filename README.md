@@ -185,8 +185,30 @@ wall.DrawShaded(fb, cam, lights...) // or DrawShadedPixels into a Canvas
 - **Lit like a color.** The picture's color is the face's color, in place of `FaceColors` and `Material.Color`, and is lit and faded in fog as they are. A vertex color tints it, each channel multiplied, and a corner without one lets all of it through. A pixel that is see-through is a hole: nothing is drawn there, depth included, so what is behind shows through it, whichever was drawn first (a pixel of a `bitmap.New` picture that was never set, or with an alpha under 128 in one that was decoded). A face with a coordinate that is not finite draws nothing.
 - **Limits.** One picture for a mesh; for two, make two meshes, or put both in one picture. Wireframes ignore it. A `Bitmap` that is a `Shaded` or `Tinted` view is drawn in the colors of the picture it is a view of. A list that is not one triple for each face, or a face with a coordinate that is not finite, is not used, and `Validate` says so. `Clone` copies the list and shares the picture, and `Fit` and `SmoothNormals` keep both.
 - **From OBJ files.** `LoadOBJFS` keeps a model's `map_Kd` picture and its `vt` coordinates this way, with `v` turned over because an OBJ counts it from the bottom. `FaceColors` still holds the one color for each triangle that it gave before.
-- **Cost.** A face with a picture asks for a color in every cell, which costs more than one flat color and far less than the faces a picture used to be cut into: a wall of two triangles with a picture of 16 by 16 takes 7 microseconds in cells on 80 by 24 and 12 in pixels, where the same wall made of 512 faces of one color takes 60 and 62 (on 200 by 60: 37 and 71, against 92 and 102). A mesh without a picture draws the same cells and allocates nothing; `Mesh` is 32 bytes larger, and of 66 drawing benchmarks compared with v0.9.0 one is slower, by 5%: a sphere of 15,872 faces behind the camera whose vertices are written in the world and have no bounds.
+- **Cost.** A face with a picture asks for a color in every cell, which costs more than one flat color and far less than the faces a picture used to be cut into: a wall of two triangles with a picture of 16 by 16 takes 7 microseconds in cells on 80 by 24 and 13 in pixels, where the same wall made of 512 faces of one color takes 60 and 62 (on 200 by 60: 41 and 76, against 92 and 102). A face with a picture goes through a fill that can leave a pixel alone, for holes, which costs 5 to 10% more than a color for each pixel. A mesh without a picture draws the same cells and allocates nothing; `Mesh` is 32 bytes larger, and of 66 drawing benchmarks compared with v0.9.0 one is slower, by 5%: a sphere of 15,872 faces behind the camera whose vertices are written in the world and have no bounds.
 - **See it:** `go run ./examples/viewer model.obj` draws a model that has a `map_Kd` picture in its pixels; `C` puts the picture aside for the palette and back.
+
+## See-through faces
+
+A pixel of a picture that is see-through is a hole (see "Textures"), and `Material.Opacity` makes a whole mesh see-through: the part of its color that shows, from 0 to 1, mixed over what is already drawn.
+
+```go
+wall.DrawShaded(fb, cam, lights...) // solids first
+pane := mesh.Mesh{
+	Vertices: []geometry.Vector3{{X: -1, Y: -1}, {X: -1, Y: 1}, {X: 1, Y: 1}, {X: 1, Y: -1}},
+	Faces:    [][3]int{{0, 1, 2}, {0, 2, 3}},
+	Material: mesh.Material{Color: engine.RGB(0, 100, 240), Opacity: 0.4}, // 40% blue glass
+}
+pane.Transform.Position = geometry.Vector3{Z: 3}
+pane.DrawShaded(fb, cam, lights...) // then see-through meshes, from far to near
+```
+
+- **Mixed over what is there.** Each cell or pixel of the face is `engine.Mix(behind, color, Opacity)`, where the color is the face's own, picture or vertex colors included, lit and faded in fog first. In pixels the pixel is mixed. In cells the character and attributes of the cell behind stay, and its foreground and background are each mixed, so glass over a blank cell shows as a block of its color.
+- **Over nothing.** An empty pixel or blank cell counts as black, as `Mix` and `Shade` read the default color, so a ghost shows against the background at its part of its color. Fill the canvas first for another background. (`Canvas.BlendRect` leaves an empty pixel empty, since a rectangle has no color of its own.)
+- **The order is yours.** A see-through face is tested against depth, so a nearer solid hides it, but does not store it. Draw the solid meshes first, and then the see-through ones from far to near: a see-through mesh drawn before a solid that is behind it is covered by it, and two panes are mixed in the order drawn. glonk does not sort, between meshes or the faces of one, which blend in the order of `Faces`.
+- **From behind.** As for a solid, a face that faces away is skipped unless `DoubleSided`, and then it is lit as the side the camera sees. A closed shape such as a glass ball, drawn on both sides, is mixed in face order, so list the faces of its far side first, or make two meshes.
+- **Values.** `Opacity` 0, the default, means 1: the mesh is solid, as `Light.Intensity` 0 means 1. NaN and anything not between 0 and 1 is solid too. One value for a mesh; there is no opacity for each face or for a pixel of a picture, and an MTL file's `d` is not read.
+- **Cost.** About what a solid costs, a little more for reading what is behind: a pane of two triangles over a wall takes 17 microseconds in cells on 80 by 24 and 26 in pixels, where the same pane solid takes 14 and 22. A fence of 16 by 16 pixels, half of them holes, takes 7 microseconds in cells on 80 by 24 as two triangles with a picture, against 34 as the 256 faces it had to be cut into, and 13 against 34 in pixels. On 200 by 60 it is 38 against 61 in cells, and 72 against 66 in pixels, where the picture's lookup in every pixel costs more than the cut-up wall's flat colors.
 
 ## Wireframes and depth
 

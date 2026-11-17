@@ -112,6 +112,10 @@ type shadedTriangle struct {
 	tinted bool
 	rgb    [3]geometry.Vector3
 
+	// opacity is the part of the color that shows, if the mesh can be seen through, and 0 for a solid
+	// one: the color is mixed over what is there, in place of covering it, and depth is not stored.
+	opacity float64
+
 	// tex is the picture the face's color comes from, or nil: each cell takes it from the
 	// picture at the blend of uv, the places in it that the corners are pinned to, and a cell
 	// where the picture is see-through is a hole, which draws nothing.
@@ -150,9 +154,13 @@ func (t *shadedTriangle) depthAt(b0, b1, b2 float64) float64 {
 // is one. With a picture it is the picture's color at the blend of the corners' places in it; the
 // corners' colors, if they have any, multiply it. Where the picture is see-through, or the place is
 // not a number, there is no color: the cell is a hole, and is not drawn. Without a picture it is the
-// corners' colors blended with the weights. The blend is rounded to whole numbers from 0 to 255.
+// corners' colors blended with the weights, rounded to whole numbers from 0 to 255, and without
+// those, the color of the face.
 func (t *shadedTriangle) colorAt(b0, b1, b2 float64) (engine.Color, bool) {
 	if t.tex == nil {
+		if !t.tinted {
+			return t.color, true // a plain face that can be seen through
+		}
 		c := t.rgb[0].Scale(b0).Add(t.rgb[1].Scale(b1)).Add(t.rgb[2].Scale(b2))
 		return engine.RGB(channel(c.X), channel(c.Y), channel(c.Z)), true
 	}
@@ -169,10 +177,10 @@ func (t *shadedTriangle) colorAt(b0, b1, b2 float64) (engine.Color, bool) {
 	return engine.RGB(channel(s.X*c.X/255), channel(s.Y*c.Y/255), channel(s.Z*c.Z/255)), true
 }
 
-// varies reports whether the cells of the triangle are not all one color, so that each has to
-// be asked for: it has a picture, or corners with colors.
+// varies reports whether the cells of the triangle need asking about one by one: it has a picture,
+// or corners with colors, or can be seen through.
 func (t *shadedTriangle) varies() bool {
-	return t.tinted || t.tex != nil
+	return t.tinted || t.tex != nil || t.opacity != 0
 }
 
 // channel rounds v to a whole number from 0 to 255. NaN and anything below 0 give 0.
@@ -248,12 +256,17 @@ func cornerNormal(vertex, face geometry.Vector3, front bool) geometry.Vector3 {
 	return vertex
 }
 
-// fillTinted draws a triangle that has vertex colors or a picture into cells. Every cell has a color of
-// its own, so, flat or smooth, each is asked for, and a cell where the picture is see-through is a hole:
-// it is left as it was, depth too, and not lit. The color fades in fog, if there is any.
+// fillTinted draws a triangle that has vertex colors, a picture, or can be seen through into cells.
+// Every cell has a color of its own, so, flat or smooth, each is asked for, and a cell where the
+// picture is see-through is a hole: it is left as it was, depth too, and not lit. The color fades in
+// fog, if there is any.
+//
+// A face that can be seen through draws no character of its own: the cell behind keeps its character,
+// and its colors are mixed with the face's, lit by the brightness and faded in fog first, and the depth
+// is left.
 func fillTinted(fb *engine.FrameBuffer, t *shadedTriangle, ramp []rune, fog *Fog) {
 	c := &t.corners
-	fb.FillTriangleOver(c[0].x, c[0].y, c[0].z, c[1].x, c[1].y, c[1].z, c[2].x, c[2].y, c[2].z, func(b0, b1, b2 float64, _ engine.Cell) (engine.Cell, engine.Fill) {
+	fb.FillTriangleOver(c[0].x, c[0].y, c[0].z, c[1].x, c[1].y, c[1].z, c[2].x, c[2].y, c[2].z, func(b0, b1, b2 float64, behind engine.Cell) (engine.Cell, engine.Fill) {
 		color, ok := t.colorAt(b0, b1, b2)
 		if !ok {
 			return engine.Cell{}, engine.FillSkip
@@ -261,6 +274,15 @@ func fillTinted(fb *engine.FrameBuffer, t *shadedTriangle, ramp []rune, fog *Fog
 		intensity := t.intensity
 		if t.smooth {
 			intensity = t.brightnessAt(b0, b1, b2)
+		}
+		if t.opacity != 0 {
+			color = engine.Shade(color, intensity)
+			if fog != nil {
+				color = fog.Apply(color, t.depthAt(b0, b1, b2))
+			}
+			behind.Foreground = engine.Mix(behind.Foreground, color, t.opacity)
+			behind.Background = engine.Mix(behind.Background, color, t.opacity)
+			return behind, engine.FillOver
 		}
 		if fog != nil {
 			color = fog.Apply(color, t.depthAt(b0, b1, b2))
@@ -273,7 +295,7 @@ func fillTinted(fb *engine.FrameBuffer, t *shadedTriangle, ramp []rune, fog *Fog
 // the shaded color fades in fog.
 func fillTintedPixels(c *engine.Canvas, t *shadedTriangle, fog *Fog) {
 	p := &t.corners
-	c.FillTriangleOver(p[0].x, 2*p[0].y, p[0].z, p[1].x, 2*p[1].y, p[1].z, p[2].x, 2*p[2].y, p[2].z, func(b0, b1, b2 float64, _ engine.Color) (engine.Color, engine.Fill) {
+	c.FillTriangleOver(p[0].x, 2*p[0].y, p[0].z, p[1].x, 2*p[1].y, p[1].z, p[2].x, 2*p[2].y, p[2].z, func(b0, b1, b2 float64, behind engine.Color) (engine.Color, engine.Fill) {
 		color, ok := t.colorAt(b0, b1, b2)
 		if !ok {
 			return engine.Color{}, engine.FillSkip
@@ -285,6 +307,9 @@ func fillTintedPixels(c *engine.Canvas, t *shadedTriangle, fog *Fog) {
 		color = engine.Shade(color, intensity)
 		if fog != nil {
 			color = fog.Apply(color, t.depthAt(b0, b1, b2))
+		}
+		if t.opacity != 0 {
+			return engine.Mix(behind, color, t.opacity), engine.FillOver
 		}
 		return color, engine.FillSolid
 	})

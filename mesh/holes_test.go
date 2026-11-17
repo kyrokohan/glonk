@@ -13,10 +13,17 @@ import (
 // strength, and returns what was drawn.
 func drawMeshes(t *testing.T, cam Camera, meshes ...Mesh) (cells []engine.Cell, pixels []engine.Color) {
 	t.Helper()
+	return drawLit(t, cam, Ambient{Level: 1}, meshes...)
+}
+
+// drawLit draws the meshes in order, into cells and into pixels, lit by light, and returns what was
+// drawn: every cell, and every pixel, row by row.
+func drawLit(t *testing.T, cam Camera, light Light, meshes ...Mesh) (cells []engine.Cell, pixels []engine.Color) {
+	t.Helper()
 	t.Setenv("TERM_PROGRAM", "")
 	fb := newShadeBuffer(t)
 	for _, m := range meshes {
-		m.DrawShaded(fb, cam, Ambient{Level: 1})
+		m.DrawShaded(fb, cam, light)
 	}
 	for y := range fb.Height() {
 		for x := range fb.Width() {
@@ -25,7 +32,7 @@ func drawMeshes(t *testing.T, cam Camera, meshes ...Mesh) (cells []engine.Cell, 
 	}
 	canvas := newShadeBuffer(t).Canvas()
 	for _, m := range meshes {
-		m.DrawShadedPixels(canvas, cam, Ambient{Level: 1})
+		m.DrawShadedPixels(canvas, cam, light)
 	}
 	for y := range canvas.Height() {
 		for x := range canvas.Width() {
