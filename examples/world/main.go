@@ -5,7 +5,7 @@
 //	go run ./examples/world
 //
 // The arrow keys walk, and Esc pauses with a menu to resume or quit. The coin count is a panel
-// of the widget package, drawn over the world.
+// of the widget package, drawn over the world, with a coin in it drawn as pixels.
 package main
 
 import (
@@ -14,6 +14,7 @@ import (
 	"os"
 	"strings"
 
+	"glonk.dev/bitmap"
 	"glonk.dev/engine"
 	"glonk.dev/geometry"
 	"glonk.dev/sprite"
@@ -32,11 +33,40 @@ const (
 	quitItem
 )
 
-// The heads-up display: the count of coins, as text and as a bar, in a panel at the top left.
+// The heads-up display: a coin, and the count of coins as text and as a bar, in a panel at the top
+// left. The coin is pixels: a cell is one pixel across and two down, so its 5 by 6 pixels fill 5
+// cells and 3 rows, and the panel is as tall as they are with its border.
 const (
 	barWidth = 16
-	hudRows  = 3 // the panel's border and the one row inside it
+	coinCols = 5
+	coinRows = 6
+	hudRows  = 2 + coinRows/2
 )
+
+// coinArt is the coin of the panel: 'o' its rim, 'F' its face, 's' a shine, and a dot a see-through
+// pixel, so that the panel's fill shows at the corners.
+var coinArt = [coinRows]string{
+	".ooo.",
+	"oFFFo",
+	"oFsFo",
+	"oFFFo",
+	"oFFFo",
+	".ooo.",
+}
+
+// newCoinPicture returns coinArt as a picture, made once at start-up.
+func newCoinPicture() *bitmap.Bitmap {
+	colors := map[rune]engine.Color{'o': engine.RGB(176, 120, 0), 'F': engine.RGB(255, 200, 0), 's': engine.RGB(255, 240, 150)}
+	pic := bitmap.New(coinCols, coinRows)
+	for y, row := range coinArt {
+		for x, ch := range row {
+			if color, ok := colors[ch]; ok {
+				pic.Set(x, y, color)
+			}
+		}
+	}
+	return pic
+}
 
 // hudStyle is the colors of the panel, its text and the pause menu: light on dark, so that
 // the world does not show through.
@@ -58,7 +88,8 @@ type worldGame struct {
 
 	level  *tilemap.Map
 	player *sprite.Sprite
-	hero   *sprite.Layer // the player, a layer of its own so that it draws over the coins
+	hero   *sprite.Layer  // the player, a layer of its own so that it draws over the coins
+	coin   *bitmap.Bitmap // the picture in the panel
 	coins  *sprite.Layer
 	spin   *sprite.Animation // every coin shows the same frame
 	score  int
@@ -79,6 +110,7 @@ func newWorldGame() *worldGame {
 	g := &worldGame{
 		level: tilemap.FromLines(legend, lines...),
 		hero:  sprite.NewLayer(),
+		coin:  newCoinPicture(),
 		coins: sprite.NewLayer(),
 		menu:  widget.Menu{Items: []string{"Resume", "Quit"}, Style: hudStyle},
 	}
@@ -206,8 +238,8 @@ func (g *worldGame) Draw(fb *engine.FrameBuffer) {
 	}
 }
 
-// drawHUD draws the panel at the top left: the coins collected, as a count and as a bar, and
-// in the title once there are no more.
+// drawHUD draws the panel at the top left: a coin, and the coins collected as a count and as a bar,
+// with the title saying so once there are no more.
 func (g *worldGame) drawHUD(fb *engine.FrameBuffer) {
 	title := "coins"
 	if g.score == g.total {
@@ -217,14 +249,23 @@ func (g *worldGame) drawHUD(fb *engine.FrameBuffer) {
 	count := fmt.Sprintf("%d/%d", g.score, g.total)
 	countWidth := len(fmt.Sprintf("%d/%d", g.total, g.total))
 
+	// The coin takes cells 2 to 2+coinCols-1; the count and the bar go after it, on the middle row.
+	textX, row := 3+coinCols, hudRows/2
 	widget.Panel{Title: title, Style: hudStyle, Fill: engine.Cell{Background: hudStyle.Background}}.
-		Draw(fb, 0, 0, countWidth+barWidth+5, hudRows)
-	widget.Label{Text: count, Align: widget.Right, Style: hudStyle}.Draw(fb, 2, 1, countWidth)
+		Draw(fb, 0, 0, textX+countWidth+barWidth+3, hudRows)
+
+	// The panel is cells and is filled, so the coin is drawn on the canvas, under every cell, and
+	// put down over the panel: the see-through corners show its fill. Pixel row 2 is cell row 1.
+	canvas := fb.Canvas()
+	g.coin.Draw(canvas, 2, 2)
+	canvas.ComposeRect(2, 2, coinCols, coinRows)
+
+	widget.Label{Text: count, Align: widget.Right, Style: hudStyle}.Draw(fb, textX, row, countWidth)
 	widget.Bar{
 		Value: float64(g.score) / float64(g.total), // NaN with no coins at all, which is an empty bar
 		Full:  engine.Cell{Character: '█', Foreground: engine.Palette(226), Background: hudStyle.Background},
 		Empty: engine.Cell{Character: '░', Foreground: engine.Palette(240), Background: hudStyle.Background},
-	}.Draw(fb, countWidth+3, 1, barWidth)
+	}.Draw(fb, textX+countWidth+1, row, barWidth)
 }
 
 // drawPause draws the pause menu in a panel in the middle of the screen.

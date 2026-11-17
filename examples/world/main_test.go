@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"image/color"
 	"math"
 	"math/rand/v2"
 	"strings"
@@ -350,8 +351,9 @@ func TestTheHUDShowsTheCoinsAndTheKeys(t *testing.T) {
 	fb := newFrame(t, 80, 24)
 	g.Draw(fb)
 	lines := strings.Split(fb.String(), "\n")
-	if !strings.Contains(lines[0], "┌─ coins ─") || !strings.Contains(lines[1], "│  0/36 ░░░░░░░░░░░░░░░░ │") || !strings.HasPrefix(lines[2], "└──") {
-		t.Errorf("wanted the panel with the count and an empty bar on top, got\n%s\n%s\n%s", lines[0], lines[1], lines[2])
+	// The count and the bar are on the middle row of the panel, which is as tall as the coin.
+	if !strings.Contains(lines[0], "┌─ coins ─") || !strings.Contains(lines[2], " 0/36 ░░░░░░░░░░░░░░░░ │") || !strings.HasPrefix(lines[hudRows-1], "└──") {
+		t.Errorf("wanted the panel with the count and an empty bar on top, got\n%s\n%s\n%s", lines[0], lines[2], lines[hudRows-1])
 	}
 	if !strings.Contains(lines[23], "arrows walk  Esc pauses") {
 		t.Errorf("wanted the keys at the bottom, got %q", lines[23])
@@ -360,6 +362,48 @@ func TestTheHUDShowsTheCoinsAndTheKeys(t *testing.T) {
 	newSizedGame(12, 4).Draw(small)
 	if strings.Contains(small.String(), "Esc") {
 		t.Errorf("wanted the keys left out where they do not fit, got\n%s", small)
+	}
+}
+
+// The coin is pixels put down over the filled panel: where the picture has a pixel the frame shows it,
+// where it is see-through the frame shows the panel's fill and not the terminal's default, and the
+// pixels of the panel around the coin are the fill too.
+func TestTheCoinIsDrawnInsideTheFilledPanel(t *testing.T) {
+	g := newSizedGame(80, 24)
+	fb := newFrame(t, 80, 24)
+	g.Draw(fb)
+	img := fb.Image(engine.ImageOptions{Scale: 1}) // a pixel of the picture for each pixel of the canvas
+	shows := func(c engine.Color) color.RGBA {
+		r, gr, b := c.RGB()
+		return color.RGBA{R: r, G: gr, B: b, A: 255}
+	}
+
+	if !g.coin.At(0, 0).IsDefault() || g.coin.At(2, 2).IsDefault() {
+		t.Fatalf("wanted a coin with see-through corners and a middle")
+	}
+	for y := range coinRows {
+		for x := range coinCols {
+			want := g.coin.At(x, y)
+			if want.IsDefault() {
+				want = hudStyle.Background
+			}
+			if got := img.RGBAAt(2+x, 2+y); got != shows(want) {
+				t.Errorf("coin pixel (%d, %d): wanted %v, got %v", x, y, shows(want), got)
+			}
+		}
+		// The columns on either side of the coin are the panel's fill, so nothing spills out.
+		for _, x := range []int{1, 2 + coinCols} {
+			if got := img.RGBAAt(x, 2+y); got != shows(hudStyle.Background) {
+				t.Errorf("pixel (%d, %d) beside the coin: wanted the panel's fill, got %v", x, 2+y, got)
+			}
+		}
+	}
+	// The border and the count are cells that the coin did not touch.
+	if got := fb.At(0, 2).Character; got != '│' {
+		t.Errorf("wanted the panel's border at the left of the coin, got %q", got)
+	}
+	if got := strings.Split(fb.String(), "\n")[2]; !strings.Contains(got, " 0/36 ") {
+		t.Errorf("wanted the count beside the coin, got %q", got)
 	}
 }
 
@@ -375,10 +419,11 @@ func TestTheBarFillsAsCoinsAreCollected(t *testing.T) {
 	}
 	fb := newFrame(t, 80, 24)
 	g.Draw(fb)
-	if got := strings.Split(fb.String(), "\n")[1]; !strings.Contains(got, "│ 18/36 ████████░░░░░░░░ │") {
+	if got := strings.Split(fb.String(), "\n")[2]; !strings.Contains(got, " 18/36 ████████░░░░░░░░ │") {
 		t.Errorf("wanted half the bar filled at 18 of 36, got %q", got)
 	}
-	if got := fb.At(8, 1); got.Character != '█' || got.Foreground != engine.Palette(226) || got.Background != hudStyle.Background {
+	// 2 for the border and a blank, 5 for the coin, a blank, the count's 5 and another blank.
+	if got := fb.At(14, 2); got.Character != '█' || got.Foreground != engine.Palette(226) || got.Background != hudStyle.Background {
 		t.Errorf("wanted the bar's first cell yellow on the panel's background, got %+v", got)
 	}
 }
