@@ -20,6 +20,18 @@
     <p class="note">Early and pre-1.0: the API may change.</p>
   </header>
 
+  <section aria-labelledby="draws">
+    <h2 id="draws">What it draws</h2>
+    <input type="checkbox" id="hold" class="hold">
+    <label for="hold">Hold the picture still</label>
+    <picture class="moving">
+      <source media="(prefers-reduced-motion: reduce)" srcset="/media/cube3d.png">
+      <img src="/media/cube3d.gif" width="840" height="560" alt="A walk among shaded blocks, past a tree and into a cube drawn as lines, in half-block pixels with lines of text above and below.">
+    </picture>
+    <img class="held" src="/media/cube3d.png" width="840" height="560" alt="A walk among shaded blocks, past a tree and into a cube drawn as lines, in half-block pixels with lines of text above and below.">
+    <p class="note">The cube3d example, as the engine drew it: 120 by 40 terminal cells, two pixels to a cell.</p>
+  </section>
+
   <section aria-labelledby="what">
     <h2 id="what">What it does</h2>
     <ul>

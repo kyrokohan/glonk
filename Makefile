@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help fmt fmtcheck test vet lint vuln fuzz bench benchcmp brand run build check
+.PHONY: help fmt fmtcheck test vet lint vuln fuzz bench benchcmp brand record run build check
 
 help:
 	@echo "Available targets:"
@@ -13,6 +13,7 @@ help:
 	@echo "  bench    - Run the benchmarks once, with allocations (BENCH= picks some)"
 	@echo "  benchcmp - Compare the benchmarks with those of BASE (default origin/main), the packages that differ"
 	@echo "  brand    - Write the logo files and the site's icons again from internal/brand"
+	@echo "  record   - Play the examples' scripts and write the recordings, as asciicasts, into CASTS (default casts)"
 	@echo "  run      - Run an example (default bounce2d; EXAMPLE=./examples/cube3d; ARGS= passes arguments)"
 	@echo "  build    - Compile every package"
 	@echo "  check    - Check formatting, run tests and vet"
@@ -87,6 +88,14 @@ benchcmp:
 brand:
 	@echo "Drawing the logo files..."
 	go test ./internal/brand -run TestTheFilesAreWhatTheSourceDraws -update
+
+# The recordings in site/media are drawn from what these four examples play: each has a script of
+# key presses in its record_test.go, and internal/record plays it with no terminal. A tape takes
+# as long as it lasts, which is why make check skips them.
+CASTS ?= casts
+record:
+	@echo "Recording the examples into $(CASTS)..."
+	go test ./examples/cube3d ./examples/viewer ./examples/sprites ./examples/world -run '^TestRecord$$' -record '$(abspath $(CASTS))'
 
 EXAMPLE ?= ./examples/bounce2d
 ARGS ?=
