@@ -24,6 +24,8 @@ func TestKeyboardSequences(t *testing.T) {
 		{"reset style", func(sb *sequenceBuilder) { sb.ResetStyle() }, "\x1b[0m"},
 		{"enable focus reporting", func(sb *sequenceBuilder) { sb.EnableFocusReporting() }, "\x1b[?1004h"},
 		{"disable focus reporting", func(sb *sequenceBuilder) { sb.DisableFocusReporting() }, "\x1b[?1004l"},
+		{"enable bracketed paste", func(sb *sequenceBuilder) { sb.EnableBracketedPaste() }, "\x1b[?2004h"},
+		{"disable bracketed paste", func(sb *sequenceBuilder) { sb.DisableBracketedPaste() }, "\x1b[?2004l"},
 		{"disable autowrap", func(sb *sequenceBuilder) { sb.DisableAutowrap() }, "\x1b[?7l"},
 		{"enable autowrap", func(sb *sequenceBuilder) { sb.EnableAutowrap() }, "\x1b[?7h"},
 	}
@@ -74,10 +76,11 @@ func TestExitSequence(t *testing.T) {
 		keyboard bool
 		want     string
 	}{
-		// Autowrap comes back before the alternate screen is left, where it was turned off.
-		{"without the protocol", false, "\x1b[?25h\x1b[?7h\x1b[?1049l"},
+		// Autowrap comes back before the alternate screen is left, where it was turned off, and the terminal
+		// stops marking pastes, which it should not do for the shell that gets it back.
+		{"without the protocol", false, "\x1b[?2004l\x1b[?25h\x1b[?7h\x1b[?1049l"},
 		// Popped before leaving the alternate screen, where the flags were pushed.
-		{"with the protocol", true, "\x1b[<u\x1b[?1004l\x1b[?25h\x1b[?7h\x1b[?1049l"},
+		{"with the protocol", true, "\x1b[<u\x1b[?1004l\x1b[?2004l\x1b[?25h\x1b[?7h\x1b[?1049l"},
 	}
 
 	for _, tt := range tests {
@@ -136,7 +139,7 @@ func TestEnterSequence(t *testing.T) {
 	tty := newTerminal(os.Stdin, &bytes.Buffer{})
 
 	// The alternate screen first, so autowrap is turned off on it and back on there.
-	want := "\x1b[?1049h\x1b[?7l\x1b[2J\x1b[?25l"
+	want := "\x1b[?1049h\x1b[?7l\x1b[2J\x1b[?25l\x1b[?2004h"
 	if got := tty.enterSequence().String(); got != want {
 		t.Errorf("wanted %q, got %q", want, got)
 	}

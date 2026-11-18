@@ -33,6 +33,10 @@ const (
 	// ESC [ O when it loses it.
 	enableFocusSeq  = "\x1b[?1004h"
 	disableFocusSeq = "\x1b[?1004l"
+
+	// Bracketed paste: the terminal wraps what is pasted in ESC [ 200 ~ and ESC [ 201 ~.
+	enablePasteSeq  = "\x1b[?2004h"
+	disablePasteSeq = "\x1b[?2004l"
 )
 
 // sequenceBuilder collects the bytes of one write to the terminal. It keeps its
@@ -177,6 +181,16 @@ func (sb *sequenceBuilder) PopKeyboardFlags() {
 // EnableFocusReporting asks the terminal to report when its window gains or loses focus.
 func (sb *sequenceBuilder) EnableFocusReporting() {
 	sb.Print(enableFocusSeq)
+}
+
+// EnableBracketedPaste asks the terminal to mark what is pasted, so that it is not read as typing.
+func (sb *sequenceBuilder) EnableBracketedPaste() {
+	sb.Print(enablePasteSeq)
+}
+
+// DisableBracketedPaste turns bracketed paste back off.
+func (sb *sequenceBuilder) DisableBracketedPaste() {
+	sb.Print(disablePasteSeq)
 }
 
 // DisableFocusReporting turns focus reporting back off.

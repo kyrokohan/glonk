@@ -24,7 +24,8 @@ const holdTimeout = 150 * time.Millisecond
 // IsDown is for keys held to keep something going, Started for keys that switch something
 // once, and Pressed for keys whose auto-repeat should act again.
 //
-// [Input.KeyEvents] and [Input.Text] are for what IsDown, Pressed and Started do not say: which
+// [Input.Paste] is what was pasted, which is no key at all. [Input.KeyEvents] and [Input.Text] are for what
+// IsDown, Pressed and Started do not say: which
 // modifiers were held with a key, the keys of a frame in the order they came, and the characters
 // that were typed, for a text field or a shortcut. IsDown, Pressed and Started never see a chord,
 // a character key with Ctrl, Alt or Super held, such as Ctrl+W: it is not the key itself, and a
@@ -41,6 +42,7 @@ type Input struct {
 
 	events []KeyEvent // this frame's key events, in order
 	text   []byte     // this frame's typed text
+	paste  string     // this frame's pasted text
 }
 
 // newInput returns an Input with no keys held. exact says whether the terminal
@@ -63,6 +65,9 @@ func (in *Input) event(e keyEvent, at time.Time) {
 		return
 	case kindFocusGained:
 		return // nothing to do: keys held across a focus change send fresh repeats
+	case kindPaste:
+		in.addPaste(e.text)
+		return // text, not keys: it is in no list of keys and in no map
 	}
 
 	in.list(e)
@@ -135,6 +140,7 @@ func (in *Input) endFrame() {
 	clear(in.started)
 	in.events = in.events[:0]
 	in.text = in.text[:0]
+	in.paste = ""
 }
 
 // KeyEvents returns what happened to the keys since the previous frame, in the order it happened: each
@@ -155,6 +161,20 @@ func (in *Input) endFrame() {
 // copy what is to be kept.
 func (in *Input) KeyEvents() []KeyEvent {
 	return in.events
+}
+
+// Paste returns the text pasted since the previous frame, or the empty string if there was none: one
+// string for each paste, joined in order if there were several. A terminal that supports bracketed paste,
+// which glonk asks for, marks a paste, so that it arrives whole and is not typing: it is in no key event,
+// in no map of keys, and not in Text, so a newline in it does not press Enter, an escape sequence in it
+// is not read as keys, and a Ctrl-C in it does not end the run. A terminal without it sends a paste as
+// the key presses it is, and Paste is empty.
+//
+// The text is valid UTF-8, with U+FFFD for what is not, and every line break is a newline, since a
+// terminal sends them as carriage returns. At most 1 MiB is kept, in a paste and in a frame: the rest is
+// dropped. A paste that stalls for half a second before its end is delivered as it stands.
+func (in *Input) Paste() string {
+	return in.paste
 }
 
 // Text returns the characters typed since the previous frame, in order, as a text field wants them: the
@@ -238,13 +258,14 @@ type inputFeed struct {
 	parser     keyParser
 	in         *Input
 	wait       time.Duration
+	pasteWait  time.Duration // how long a paste may stall, where wait is for an unfinished sequence
 	timer      *time.Timer
 	canSuspend bool // whether Ctrl-Z may stop the program
 	refresh    bool // the window came back to the front since refreshNeeded was last asked
 }
 
 func newInputFeed(in *Input) *inputFeed {
-	f := &inputFeed{in: in, wait: escapeTimeout, canSuspend: suspendSupported}
+	f := &inputFeed{in: in, wait: escapeTimeout, pasteWait: pasteTimeout, canSuspend: suspendSupported}
 	f.timer = time.NewTimer(f.wait)
 	f.timer.Stop()
 	return f
@@ -257,7 +278,11 @@ func (f *inputFeed) feed(chunk []byte, now time.Time) inputAction {
 
 	f.stop()
 	if f.parser.Pending() {
-		f.timer.Reset(f.wait)
+		wait := f.wait
+		if f.parser.Pasting() {
+			wait = f.pasteWait
+		}
+		f.timer.Reset(wait)
 	}
 	return action
 }

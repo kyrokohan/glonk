@@ -22,6 +22,7 @@ var seedInputs = []string{
 	"\x1b[;5u", "\x1b[1;u", "\x1b[99999999999999999999u", "\x1b[-5u", "\x1b[119;:3u",
 	"\x1bOP", "\x1bOH", "\x1b[H", "\x1b[F", "\x1b[5~", "\x1b[6;1:3~", "\x1b[15;5:2~", "\x1b[24~", "\x1b[1;2P", "\x1b[1;1:3S",
 	"\x1b[12;40R", "\x1b[5;10H", "\x1b[~", "\x1b[;~", "\x1b[99999999999999999999~", "\x1b[1;1:3~",
+	"\x1b[200~paste\x1b[201~", "\x1b[200~", "\x1b[200~a\r\nb\xff\x1b[201~k", "\x1b[201~", "\x1b[200~\x1b[200~\x1b[201~", "\x1b[200~x\x1b[20", "\x1b[200;1~", "\x1b[200",
 }
 
 func FuzzParseEvents(f *testing.F) {
@@ -60,6 +61,13 @@ func FuzzParseEvents(f *testing.F) {
 				if e.key != KeyUnknown {
 					t.Fatalf("wanted focus and reset events to carry no key, got %+v from %q", e, b)
 				}
+			case kindPaste:
+				if e.key != KeyUnknown || e.mods != 0 || e.chord {
+					t.Fatalf("wanted a paste to carry no key, got %+v from %q", e, b)
+				}
+				if len(e.text) > maxPaste || !utf8.ValidString(e.text) || strings.Contains(e.text, "\r") {
+					t.Fatalf("wanted a paste of valid text with newlines for line breaks, got %q from %q", e.text, b)
+				}
 			default:
 				t.Fatalf("wanted a known event kind, got %+v from %q", e, b)
 			}
@@ -72,6 +80,9 @@ func FuzzParseEvents(f *testing.F) {
 			}
 
 			// Modifiers, chords and text: only what a terminal can mean.
+			if e.kind == kindPaste {
+				continue
+			}
 			if e.mods&^modsMask != 0 {
 				t.Fatalf("wanted only shift, alt, ctrl and super, got %+v from %q", e, b)
 			}
@@ -122,6 +133,34 @@ func FuzzKeyParserSplit(f *testing.F) {
 		want := parseEvents(b)
 		if got := feedAll(string(b[:at]), string(b[at:])); !slices.Equal(got, want) {
 			t.Fatalf("%q cut at %d: wanted %+v, got %+v", b, at, want, got)
+		}
+	})
+}
+
+// FuzzPasteSplit holds a paste to being the same event, with the same text, however the reads cut it,
+// whatever it holds: it can hold anything but the end marker, which ends it.
+func FuzzPasteSplit(f *testing.F) {
+	for _, s := range []string{"", "hello", "a\r\nb", "\x1b[A\x03", "\x1b[20", "\xff\xfe", "\x1b", "\x1b[2011~"} {
+		f.Add([]byte(s), uint8(1), uint8(3))
+	}
+	f.Fuzz(func(t *testing.T, body []byte, cutA, cutB uint8) {
+		// Taking a marker out can join the bytes around it into another, so it goes on until none is left.
+		for bytes.Contains(body, pasteEndMarker) {
+			body = bytes.ReplaceAll(body, pasteEndMarker, nil)
+		}
+		whole := append(append([]byte("\x1b[200~"), body...), []byte("\x1b[201~k")...)
+		want := parseEvents(whole)
+		a := int(cutA) % (len(whole) + 1)
+		b := a + int(cutB)%(len(whole)-a+1)
+		var p keyParser
+		got := append(p.Feed(whole[:a]), p.Feed(whole[a:b])...)
+		got = append(got, p.Feed(whole[b:])...)
+		got = append(got, p.Flush()...)
+		if !slices.Equal(got, want) {
+			t.Fatalf("%q cut at %d and %d: wanted %+v, got %+v", whole, a, b, want, got)
+		}
+		if len(want) != 2 || want[0].kind != kindPaste || want[1].key != 'k' {
+			t.Fatalf("wanted the paste and a key for %q, got %+v", whole, want)
 		}
 	})
 }

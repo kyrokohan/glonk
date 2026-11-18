@@ -14,6 +14,11 @@ func presses(keys ...Key) []keyEvent {
 	return events
 }
 
+// pasted is the event of a paste of text.
+func pasted(text string) keyEvent {
+	return keyEvent{key: KeyUnknown, kind: kindPaste, text: text}
+}
+
 // chord is a character key with modifiers held that make it a shortcut, which only KeyEvents sees.
 func chord(k Key, mods Mods) keyEvent {
 	return keyEvent{key: k, kind: kindPress, mods: mods, chord: true}
@@ -87,6 +92,23 @@ var legacyKeyCases = []keyCase{
 	{"alt chord then a key", "\x1bxw", []keyEvent{chord('x', ModAlt), {key: 'w', kind: kindPress}}},
 	{"key then alt chord", "w\x1bx", []keyEvent{{key: 'w', kind: kindPress}, chord('x', ModAlt)}},
 	{"alt and a space", "\x1b ", []keyEvent{chord(' ', ModAlt)}},
+	{"a paste", "\x1b[200~hello\x1b[201~", []keyEvent{pasted("hello")}},
+	{"keys around a paste", "a\x1b[200~xy\x1b[201~b", []keyEvent{{key: 'a', kind: kindPress}, pasted("xy"), {key: 'b', kind: kindPress}}},
+	{"an empty paste", "\x1b[200~\x1b[201~", []keyEvent{pasted("")}},
+	{"two pastes", "\x1b[200~a\x1b[201~\x1b[200~b\x1b[201~", []keyEvent{pasted("a"), pasted("b")}},
+	{"a paste of non-ascii text", "\x1b[200~日本語 é\x1b[201~", []keyEvent{pasted("日本語 é")}},
+	{"line breaks in a paste are newlines", "\x1b[200~a\rb\r\nc\nd\r\r\x1b[201~", []keyEvent{pasted("a\nb\nc\nd\n\n")}},
+	{"invalid utf-8 in a paste", "\x1b[200~a\xffb\xe6\x97\x1b[201~", []keyEvent{pasted("a\ufffdb\ufffd")}},
+	{"keys and escape sequences in a paste are text", "\x1b[200~\x1b[A\x03\x1a\x7f\t\x1bx\x1b[201~", []keyEvent{pasted("\x1b[A\x03\x1a\x7f\t\x1bx")}},
+	{"a start marker inside a paste is text", "\x1b[200~a\x1b[200~b\x1b[201~", []keyEvent{pasted("a\x1b[200~b")}},
+	{"a lookalike of the end marker is text", "\x1b[200~a\x1b[2b\x1b[20\x1b[2011~\x1b[201\x1b[201~", []keyEvent{pasted("a\x1b[2b\x1b[20\x1b[2011~\x1b[201")}},
+	{"an end marker with no paste is no key", "\x1b[201~x", []keyEvent{{key: 'x', kind: kindPress}}},
+	{"an unfinished paste is delivered as it stands", "\x1b[200~hello", []keyEvent{pasted("hello")}},
+	{"an unfinished paste keeps what might have been the end", "\x1b[200~hello\x1b[20", []keyEvent{pasted("hello\x1b[20")}},
+	{"a start marker with parameters is no paste", "\x1b[200;1~x\x1b[2000~y\x1b[202~z", []keyEvent{{key: 'x', kind: kindPress}, {key: 'y', kind: kindPress}, {key: 'z', kind: kindPress}}},
+	{"a truncated start marker is a reset", "\x1b[200", []keyEvent{{key: KeyUnknown, kind: kindReset}}},
+	{"a number of 200 on another final is no paste", "\x1b[200Ax\x1b[200Fy", []keyEvent{{key: KeyUp, kind: kindPress}, {key: 'x', kind: kindPress}, {key: 'y', kind: kindPress}}},
+	{"a paste then a kitty key", "\x1b[200~x\x1b[201~\x1b[119;5u", []keyEvent{pasted("x"), chord('w', ModCtrl)}},
 	{"alt and a control byte is dropped", "\x1b\x01\x1b\x00", nil},
 	{"alt chord with an invalid byte", "\x1b\xff", nil},
 	{"backspace ctrl-h", "\x08", presses(KeyBackspace)},

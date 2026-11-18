@@ -570,3 +570,27 @@ func TestRunHeadlessDeliversKeyEventsAndText(t *testing.T) {
 		t.Errorf("wanted Ctrl+W not to be the key w")
 	}
 }
+
+// A paste reaches Update as one string, and nothing in it is a key, a quit or an Enter.
+func TestRunHeadlessDeliversAPasteAsOneEvent(t *testing.T) {
+	var pasted string
+	var keys int
+	game := scriptedGame{update: func(_ float64, in *Input) error {
+		if in.Paste() != "" {
+			pasted, keys = in.Paste(), len(in.KeyEvents())
+			return ErrQuit
+		}
+		return nil
+	}}
+
+	// The paste holds a Ctrl-C, a line break and an arrow; the end of the run is Update's ErrQuit.
+	input := "\x1b[200~a\x03b\r\nc\x1b[A\x1b[201~"
+	err := runHeadless(t, game, Config{Input: strings.NewReader(input), Output: io.Discard})
+
+	if err != nil || pasted != "a\x03b\nc\x1b[A" {
+		t.Errorf("wanted the whole paste and the run ended by the game, got %q (err=%v)", pasted, err)
+	}
+	if keys != 0 {
+		t.Errorf("wanted no key event from a paste, got %d", keys)
+	}
+}

@@ -1,0 +1,4 @@
+go test fuzz v1
+[]byte("\x1b\x1b[201~[201~0")
+byte('^')
+byte('\u0093')
