@@ -4,6 +4,10 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-17
+
+On top of 0.11.0 this release reads the rest of what a terminal sends: the function and navigation keys, the modifiers held with a key and the characters typed, a paste as one string, and the mouse. Nothing was removed or renamed and no signature changed; what behaves differently is under Changed, and reading keys costs a little more. The module needs the same versions of `golang.org/x/sys` and `golang.org/x/term` as 0.11.0.
+
 ### Added
 
 - `KeyHome`, `KeyEnd`, `KeyPageUp`, `KeyPageDown`, `KeyInsert`, `KeyDelete` and `KeyF1` to `KeyF12` are keys, asked of `Input` like any other with `IsDown`, `Pressed` and `Started`, and pressed with `Keyboard.Press` in a test. A terminal sends them as longer sequences, which glonk read as nothing: the `CSI n ~` ones were dropped as unknown, and the SS3 forms of F1 to F4, Home and End were skipped on purpose as not game keys, so a program that listened for them never heard. It now reads `CSI n ~` with xterm's numbers (2 Insert, 3 Delete, 5 Page Up, 6 Page Down, 11 to 15 and 17 to 21 and 23 and 24 for F1 to F12) and with rxvt's for Home and End (1 and 7, and 4 and 8), `CSI H` and `CSI F`, `CSI 1 ; modifiers` then `P`, `Q`, `R` or `S` or those with no parameters, and the SS3 forms, and in the kitty keyboard protocol the repeat and the release of each. A modifier held with one of them is not looked at, as it is not on an arrow, so Ctrl+Page Down is Page Down; reading the modifiers is the next part of #18. `CSI row ; column R` is not F3: it is a cursor position report, which glonk does not ask for, and a first parameter other than 1 is not read as one of these keys. `examples/input` shows what a terminal sends, as glonk reads it, to try a terminal with: each key as it goes down, whether the terminal reports releases, and which keys are held. A program that used to see nothing for these keys now sees them.
@@ -18,6 +22,7 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 - `examples/input` shows each key event with its modifiers and the text typed, as well as which keys are held.
 - **A paste is no longer typed.** Run asks the terminal for bracketed paste as it takes it over, and turns it off when it gives it back and across Ctrl-Z. Before, pasting into a program was typing: a newline pressed Enter, a pasted Ctrl-C ended the run, every escape sequence in it was read as keys, and a long paste was a long flood of key presses. Now, on a terminal with the mode, none of that happens, and the text is in `Input.Paste` for a program that wants it; a program that read pasted text off the key presses (`Pressed` of each letter) gets nothing from a paste until it reads `Paste`. A terminal without the mode is as it was.
 - A mouse report in the older form a terminal sends where it has no decimal mode, `ESC [ M` and three bytes, is dropped whole. Before, its three bytes were read as typed characters; no key sends `ESC [ M`, so nothing else is lost. A decimal report (`CSI < ... M` or `m`) was dropped before and is read now whether or not `Config.Mouse` was set, so a mouse mode that another program left on in the terminal moves `MousePos`.
+- Reading keys costs about 8 to 9 ns more a key than in 0.11.0, because a key event now carries its modifiers, a chord flag and its text (24 bytes where it was 8): 80 typed letters take 1.30 us where they took 0.64, and 20 arrow keys, or 20 keys of the kitty protocol, take 7 to 10% more, with the same allocations. Nobody types fast enough to notice. `make benchcmp BASE=v0.11.0` over the 205 benchmarks both versions have finds 1 slower, `BenchmarkImage` `scale_4` at +4.3%, in image code that did not change since 0.11.0 (when that row was checked against `main` in #97, it moved with the test code in the binary and not with the library), and none that allocate more.
 
 ## [0.11.0] - 2026-11-17
 
@@ -270,7 +275,8 @@ The first release. The API is pre-1.0 and may still change. The README lists the
 - Three example programs (`bounce2d`, `cube3d` and a model `viewer`), runnable examples in the package documentation, fuzz tests for the parsers, rasterizers and clipping, and a test that keeps the documentation complete.
 - Continuous integration (format, vet and race tests on Linux and macOS for Go 1.26 and 1.27, cross-compilation, 32-bit tests), Dependabot, a security policy and contributing notes.
 
-[Unreleased]: https://github.com/kyrokohan/glonk/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/kyrokohan/glonk/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/kyrokohan/glonk/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/kyrokohan/glonk/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/kyrokohan/glonk/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/kyrokohan/glonk/compare/v0.8.0...v0.9.0
