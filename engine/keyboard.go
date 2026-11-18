@@ -9,8 +9,8 @@ import (
 // terminal that reports key releases: a key is down from Press until Release, and the
 // Input it hands over says so exactly, with no clock involved. NewLegacyKeyboard behaves
 // like one that does not, which most terminals are, so that a game can test both. PressWith
-// presses a chord such as Ctrl+S and Type types text, for a game that reads Input.KeyEvents and
-// Input.Text.
+// presses a chord such as Ctrl+S, Type types text and Paste pastes it, for a game that reads
+// Input.KeyEvents, Input.Text and Input.Paste.
 //
 //	kb := engine.NewKeyboard()
 //	kb.Press(engine.KeyEscape)
@@ -92,6 +92,13 @@ func (k *Keyboard) Type(text string) {
 		k.Press(key)
 		k.Release(key)
 	}
+}
+
+// Paste pastes text, as a terminal with bracketed paste sends it: it is in Input.Paste and nowhere
+// else, no key is pressed and nothing is typed. The text is what a real paste would be: valid UTF-8,
+// line breaks as newlines, at most 1 MiB. Several in a frame are joined.
+func (k *Keyboard) Paste(text string) {
+	k.in.event(keyEvent{key: KeyUnknown, kind: kindPaste, text: pasteText(text)}, k.now)
 }
 
 // Release lets keys go. A key pressed and released before the frame ends is still

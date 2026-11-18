@@ -477,6 +477,10 @@ func TestKeyboardMatchesTheEventsAndTextOfARealRun(t *testing.T) {
 		{"f1", func(kb *Keyboard) { kb.Press(KeyF1) }, "\x1b[1P"},
 		{"enter", func(kb *Keyboard) { kb.Press(KeyEnter) }, "\x1b[13u"},
 		{"release", func(kb *Keyboard) { kb.Release('z') }, "\x1b[122;1:3u"},
+		{"paste", func(kb *Keyboard) { kb.Paste("one\r\ntwo") }, "\x1b[200~one\r\ntwo\x1b[201~"},
+		{"empty paste", func(kb *Keyboard) { kb.Paste("") }, "\x1b[200~\x1b[201~"},
+		{"paste with bytes that are not text", func(kb *Keyboard) { kb.Paste("a\xffb\rc") }, "\x1b[200~a\xffb\rc\x1b[201~"},
+		{"paste of escape sequences", func(kb *Keyboard) { kb.Paste("\x1b[A\x03") }, "\x1b[200~\x1b[A\x03\x1b[201~"},
 	}
 
 	// Each step alone in a frame, and all of them in one.
@@ -494,6 +498,9 @@ func TestKeyboardMatchesTheEventsAndTextOfARealRun(t *testing.T) {
 		}
 		if got, want := kb.Input().Text(), real.Text(); got != want {
 			t.Errorf("text: keyboard %q, real %q", got, want)
+		}
+		if got, want := kb.Input().Paste(), real.Paste(); got != want {
+			t.Errorf("paste: keyboard %q, real %q", got, want)
 		}
 	}
 	for _, s := range steps {

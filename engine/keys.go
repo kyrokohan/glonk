@@ -87,6 +87,9 @@ const (
 // window gained or lost focus, which we only ask for alongside the protocol.
 // kindReset also carries KeyUnknown: part of the input was thrown away, so any
 // release in it may have been lost and Input must forget which keys are held.
+// kindPaste carries KeyUnknown and the pasted text, and kindPasteStart is the parser's
+// own: the marker that opens a paste was read, and the keyParser, which never hands
+// it on, collects what follows.
 type keyKind uint8
 
 const (
@@ -96,6 +99,8 @@ const (
 	kindFocusGained
 	kindFocusLost
 	kindReset
+	kindPaste
+	kindPasteStart
 )
 
 // keyEvent is one decoded key event.
@@ -192,8 +197,8 @@ const maxPendingInput = 128
 // parseEvents decodes input that is known to be complete into key events. For
 // input that arrives in pieces use a keyParser.
 func parseEvents(b []byte) []keyEvent {
-	events, _ := parse(b, true)
-	return events
+	var p keyParser
+	return append(p.Feed(b), p.Flush()...)
 }
 
 // parse decodes raw terminal input into key events and reports how many bytes it
@@ -240,6 +245,10 @@ func parse(b []byte, final bool) (events []keyEvent, consumed int) {
 					events = append(events, keyEvent{key: KeyUnknown, kind: kindReset})
 					i = len(b)
 					continue
+				}
+				if b[j] == '~' && string(b[i+2:j]) == "200" {
+					// A paste is text, not keys: what follows is the keyParser's to collect.
+					return append(events, keyEvent{key: KeyUnknown, kind: kindPasteStart}), j + 1
 				}
 				events = appendCSI(events, b[i+2:j], b[j])
 				i = j + 1
@@ -327,8 +336,17 @@ func parse(b []byte, final bool) (events []keyEvent, consumed int) {
 // A tail that is a lone ESC cannot be told from the Escape key until a moment has
 // passed without more bytes: the caller checks Pending after each Feed, waits, and
 // calls Flush if nothing came.
+//
+// A paste is text between two markers, and can be many reads long, so it is kept apart
+// from the unfinished sequence: see paste.go. While one is being collected Pending is
+// true, and Flush ends it as it stands.
 type keyParser struct {
 	pending []byte
+
+	inPaste bool   // the marker that opens a paste was read and its end not yet
+	paste   []byte // what has been collected of it, up to maxPaste
+	hold    []byte // the last bytes of it, which may be the start of the end marker
+	scan    []byte // room to look at hold and the next read together
 }
 
 // Feed decodes the next piece of input after whatever was left over from the last.
@@ -336,29 +354,67 @@ func (p *keyParser) Feed(b []byte) []keyEvent {
 	data := b
 	if len(p.pending) > 0 {
 		data = append(p.pending, b...)
+		p.pending = p.pending[:0] // data has it now
 	}
 
-	events, n := parse(data, false)
-	rest := data[n:]
-	if len(rest) > maxPendingInput {
-		// No key sequence is this long, so this is garbage that would only grow.
-		events = append(events, keyEvent{key: KeyUnknown, kind: kindReset})
-		rest = nil
+	var events []keyEvent
+	for {
+		if p.inPaste {
+			n, done := p.collect(data)
+			data = data[n:]
+			if !done {
+				return events // all of it was the paste's
+			}
+			events = append(events, keyEvent{key: KeyUnknown, kind: kindPaste, text: p.take()})
+		}
+
+		keys, n := parse(data, false)
+		if k := len(keys); k > 0 && keys[k-1].kind == kindPasteStart {
+			events = append(events, keys[:k-1]...)
+			p.inPaste = true
+			data = data[n:]
+			continue
+		}
+		if events == nil {
+			events = keys // nothing before it was a paste, so no copy
+		} else {
+			events = append(events, keys...)
+		}
+		rest := data[n:]
+		if len(rest) > maxPendingInput {
+			// No key sequence is this long, so this is garbage that would only grow.
+			events = append(events, keyEvent{key: KeyUnknown, kind: kindReset})
+			rest = nil
+		}
+		p.pending = append(p.pending[:0], rest...)
+		return events
 	}
-	p.pending = append(p.pending[:0], rest...)
-	return events
 }
 
-// Pending reports whether an unfinished sequence is being held.
+// Pending reports whether an unfinished sequence, or a paste, is being held.
 func (p *keyParser) Pending() bool {
-	return len(p.pending) > 0
+	return len(p.pending) > 0 || p.inPaste
 }
 
-// Flush gives up waiting: it decodes the held bytes as the end of the input.
+// Pasting reports whether a paste is being collected.
+func (p *keyParser) Pasting() bool {
+	return p.inPaste
+}
+
+// Flush gives up waiting: it decodes the held bytes as the end of the input, and delivers a
+// paste that has not ended as it stands.
 func (p *keyParser) Flush() []keyEvent {
-	events, _ := parse(p.pending, true)
+	var events []keyEvent
+	if p.inPaste {
+		p.addPaste(p.hold) // what might have begun the end marker is text after all
+		events = append(events, keyEvent{key: KeyUnknown, kind: kindPaste, text: p.take()})
+	}
+	keys, _ := parse(p.pending, true)
 	p.pending = p.pending[:0]
-	return events
+	if events == nil {
+		return keys
+	}
+	return append(events, keys...)
 }
 
 // appendCSI decodes a CSI sequence (parameter bytes plus final byte) and appends

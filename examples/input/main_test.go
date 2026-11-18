@@ -167,3 +167,32 @@ func TestModsAreNamedInOrder(t *testing.T) {
 		}
 	}
 }
+
+func TestAPasteIsLoggedAndShown(t *testing.T) {
+	m := newMonitor()
+	kb := engine.NewKeyboard()
+	kb.Paste("hello\nworld")
+	got := frame(t, m, kb)
+	for _, want := range []string{"paste   11 bytes, 2 lines", `pasted: "hello\nworld"`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("wanted %q, got\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "typed: h") || strings.Contains(got, "held:") && strings.Contains(got, "held: 'h'") {
+		t.Errorf("wanted a paste not to be typing, got\n%s", got)
+	}
+}
+
+// What is pasted is shown, never carried out: an escape sequence is quoted, and a long paste is cut.
+func TestAPastedEscapeSequenceIsQuotedAndALongPasteIsCut(t *testing.T) {
+	if got := preview("\x1b[2J\x07"); got != `"\x1b[2J\a"` {
+		t.Errorf("wanted the escape sequence quoted, got %s", got)
+	}
+	long := preview(strings.Repeat("a", 500))
+	if !strings.HasSuffix(long, `"...`) || len(long) > maxPasted+6 {
+		t.Errorf("wanted a long paste cut at %d characters, got %d bytes: %s", maxPasted, len(long), long)
+	}
+	if got := preview("日本語"); got != `"日本語"` {
+		t.Errorf("wanted text kept as it is, got %s", got)
+	}
+}

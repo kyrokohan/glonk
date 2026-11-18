@@ -1,7 +1,8 @@
 // Command input shows what a terminal sends, as glonk reads it: every key event with the
-// modifiers held, the text typed, whether the terminal reports key releases, and which keys are
-// held. Run it in every terminal you care about, and press what a game would use: the function keys,
-// Home and End, Page Up and Page Down, the arrows, letters, and Ctrl, Alt and Shift with them.
+// modifiers held, the text typed, what is pasted, whether the terminal reports key releases, and
+// which keys are held. Run it in every terminal you care about, and press what a game would use:
+// the function keys, Home and End, Page Up and Page Down, the arrows, letters, Ctrl, Alt and Shift
+// with them, and paste some text with line breaks.
 //
 //	go run ./examples/input
 //
@@ -58,14 +59,30 @@ var probeKeys = func() []engine.Key {
 	return keys
 }()
 
-// maxTyped is how many characters of the typed text the monitor shows.
-const maxTyped = 60
+// maxTyped is how many characters of the typed text the monitor shows, and maxPasted how many of
+// the last paste.
+const (
+	maxTyped  = 60
+	maxPasted = 60
+)
 
 type monitor struct {
-	exact bool     // whether the terminal reports key releases
-	held  []string // the keys that are down now
-	typed []rune   // the last characters typed
-	log   []string // what happened to the keys, newest first
+	exact  bool     // whether the terminal reports key releases
+	held   []string // the keys that are down now
+	typed  []rune   // the last characters typed
+	pasted string   // the start of the last paste, quoted
+	log    []string // what happened to the keys, newest first
+}
+
+// preview is the start of a paste, quoted so that what it holds, a line break or an escape sequence,
+// is shown and not carried out.
+func preview(paste string) string {
+	r := []rune(paste)
+	more := ""
+	if len(r) > maxPasted {
+		r, more = r[:maxPasted], "..."
+	}
+	return strconv.Quote(string(r)) + more
 }
 
 // modsName writes modifiers as Ctrl+Alt+Shift+Super+, in that order, or nothing for none.
@@ -101,6 +118,10 @@ func (m *monitor) Update(_ float64, in *engine.Input) error {
 	for _, e := range in.KeyEvents() {
 		m.add(fmt.Sprintf("%-8s%s%s", actionName(e.Action), modsName(e.Mods), keyName(e.Key)))
 	}
+	if paste := in.Paste(); paste != "" {
+		m.add(fmt.Sprintf("%-8s%d bytes, %d lines", "paste", len(paste), strings.Count(paste, "\n")+1))
+		m.pasted = preview(paste)
+	}
 	m.typed = append(m.typed, []rune(in.Text())...)
 	if len(m.typed) > maxTyped {
 		m.typed = m.typed[len(m.typed)-maxTyped:]
@@ -132,9 +153,10 @@ func (m *monitor) Draw(fb *engine.FrameBuffer) {
 	fb.DrawText(1, 1, "terminal reports key releases: "+releases, engine.Palette(245))
 	fb.DrawText(1, 3, "held: "+strings.Join(m.held, " "), engine.Palette(226))
 	fb.DrawText(1, 4, "typed: "+string(m.typed), engine.Palette(117))
+	fb.DrawText(1, 5, "pasted: "+m.pasted, engine.Palette(183))
 
 	for i, line := range m.log {
-		y := 6 + i
+		y := 7 + i
 		if y >= fb.Height() {
 			break
 		}

@@ -58,7 +58,7 @@ type Config struct {
 	// Input is where keys are read from; nil means os.Stdin.
 	//
 	// When Input and Output are both terminals, Run takes them over: raw mode, the
-	// alternate screen, the keyboard protocol, quit signals and Ctrl-Z. Opening
+	// alternate screen, the keyboard protocol, bracketed paste, quit signals and Ctrl-Z. Opening
 	// /dev/tty for both lets a program draw on the terminal while its stdin is a
 	// pipe:
 	//

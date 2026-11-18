@@ -62,6 +62,7 @@ func (t *terminal) enterSequence() *sequenceBuilder {
 	sb.DisableAutowrap()
 	sb.EraseInDisplay(2)
 	sb.HideCursor()
+	sb.EnableBracketedPaste()
 	return sb
 }
 
@@ -110,6 +111,7 @@ func (t *terminal) exitSequence() *sequenceBuilder {
 		sb.PopKeyboardFlags()
 		sb.DisableFocusReporting()
 	}
+	sb.DisableBracketedPaste()
 	sb.ShowCursor()
 	sb.EnableAutowrap()
 	sb.SwitchToMainScreen()
