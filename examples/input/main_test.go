@@ -196,3 +196,51 @@ func TestAPastedEscapeSequenceIsQuotedAndALongPasteIsCut(t *testing.T) {
 		t.Errorf("wanted text kept as it is, got %s", got)
 	}
 }
+
+func TestTheMouseIsUnknownUntilReported(t *testing.T) {
+	m := newMonitor()
+	got := frame(t, m, engine.NewKeyboard())
+	if !strings.Contains(got, "mouse: no report yet") {
+		t.Errorf("wanted it to say that no report has come, got\n%s", got)
+	}
+}
+
+func TestTheMouseIsShownAndItsButtonsLogged(t *testing.T) {
+	m := newMonitor()
+	kb := engine.NewKeyboard()
+	kb.MouseMove(12, 5)
+	kb.MouseDown(engine.MouseLeft)
+	got := frame(t, m, kb)
+	for _, want := range []string{"press   mouse Left at 12,5", "mouse: cell 12,5, down: [Left]"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("wanted %q, got\n%s", want, got)
+		}
+	}
+
+	kb.MouseDown(engine.MouseRight)
+	kb.MouseMove(13, 5)
+	got = frame(t, m, kb)
+	if !strings.Contains(got, "down: [Left Right]") || strings.Count(got, "press   mouse Left") != 1 {
+		t.Errorf("wanted both buttons down and the left press logged once, got\n%s", got)
+	}
+
+	kb.MouseUp(engine.MouseLeft)
+	got = frame(t, m, kb)
+	if !strings.Contains(got, "release mouse Left at 13,5") || !strings.Contains(got, "down: [Right]") {
+		t.Errorf("wanted the release logged and the right button still down, got\n%s", got)
+	}
+}
+
+func TestTheWheelIsLoggedAndAddedUp(t *testing.T) {
+	m := newMonitor()
+	kb := engine.NewKeyboard()
+	kb.Wheel(0, 2)
+	frame(t, m, kb)
+	kb.Wheel(-1, -3)
+	got := frame(t, m, kb)
+	for _, want := range []string{"wheel   right -1, down -3", "wheel total: right -1, down -1"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("wanted %q, got\n%s", want, got)
+		}
+	}
+}

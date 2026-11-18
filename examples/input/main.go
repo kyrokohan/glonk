@@ -1,8 +1,9 @@
 // Command input shows what a terminal sends, as glonk reads it: every key event with the
-// modifiers held, the text typed, what is pasted, whether the terminal reports key releases, and
-// which keys are held. Run it in every terminal you care about, and press what a game would use:
-// the function keys, Home and End, Page Up and Page Down, the arrows, letters, Ctrl, Alt and Shift
-// with them, and paste some text with line breaks.
+// modifiers held, the text typed, what is pasted, where the mouse is and what its buttons and wheel
+// do, whether the terminal reports key releases, and which keys are held. Run it in every terminal
+// you care about, and press what a game would use: the function keys, Home and End, Page Up and
+// Page Down, the arrows, letters, Ctrl, Alt and Shift with them, paste some text with line breaks,
+// and move the mouse over the window, click, drag and turn the wheel.
 //
 //	go run ./examples/input
 //
@@ -71,8 +72,18 @@ type monitor struct {
 	held   []string // the keys that are down now
 	typed  []rune   // the last characters typed
 	pasted string   // the start of the last paste, quoted
-	log    []string // what happened to the keys, newest first
+	log    []string // what happened to the keys and the mouse, newest first
+
+	pos            string   // where the pointer was last reported, or "" before a report
+	buttons        []string // the mouse buttons that are down now
+	wheelX, wheelY int      // what the wheel has added up to since the monitor began
 }
+
+// mouseButtons are the buttons Input reports, by name.
+var mouseButtons = []struct {
+	b    engine.MouseButton
+	name string
+}{{engine.MouseLeft, "Left"}, {engine.MouseMiddle, "Middle"}, {engine.MouseRight, "Right"}}
 
 // preview is the start of a paste, quoted so that what it holds, a line break or an escape sequence,
 // is shown and not carried out.
@@ -122,6 +133,7 @@ func (m *monitor) Update(_ float64, in *engine.Input) error {
 		m.add(fmt.Sprintf("%-8s%d bytes, %d lines", "paste", len(paste), strings.Count(paste, "\n")+1))
 		m.pasted = preview(paste)
 	}
+	m.mouse(in)
 	m.typed = append(m.typed, []rune(in.Text())...)
 	if len(m.typed) > maxTyped {
 		m.typed = m.typed[len(m.typed)-maxTyped:]
@@ -133,6 +145,30 @@ func (m *monitor) Update(_ float64, in *engine.Input) error {
 		}
 	}
 	return nil
+}
+
+// mouse notes where the pointer is, what its buttons did in the frame and which are down, and the wheel.
+func (m *monitor) mouse(in *engine.Input) {
+	x, y, ok := in.MousePos()
+	if ok {
+		m.pos = fmt.Sprintf("%d,%d", x, y)
+	}
+	m.buttons = m.buttons[:0]
+	for _, mb := range mouseButtons {
+		if in.MouseStarted(mb.b) {
+			m.add(fmt.Sprintf("%-8smouse %s at %d,%d", "press", mb.name, x, y))
+		}
+		if in.MouseReleased(mb.b) {
+			m.add(fmt.Sprintf("%-8smouse %s at %d,%d", "release", mb.name, x, y))
+		}
+		if in.MouseDown(mb.b) {
+			m.buttons = append(m.buttons, mb.name)
+		}
+	}
+	if dx, dy := in.Wheel(); dx != 0 || dy != 0 {
+		m.wheelX, m.wheelY = m.wheelX+dx, m.wheelY+dy
+		m.add(fmt.Sprintf("%-8sright %+d, down %+d", "wheel", dx, dy))
+	}
 }
 
 // add puts a line at the top of the log and drops the oldest past maxLog.
@@ -154,9 +190,10 @@ func (m *monitor) Draw(fb *engine.FrameBuffer) {
 	fb.DrawText(1, 3, "held: "+strings.Join(m.held, " "), engine.Palette(226))
 	fb.DrawText(1, 4, "typed: "+string(m.typed), engine.Palette(117))
 	fb.DrawText(1, 5, "pasted: "+m.pasted, engine.Palette(183))
+	fb.DrawText(1, 6, m.mouseLine(), engine.Palette(121))
 
 	for i, line := range m.log {
-		y := 7 + i
+		y := 8 + i
 		if y >= fb.Height() {
 			break
 		}
@@ -168,9 +205,18 @@ func (m *monitor) Draw(fb *engine.FrameBuffer) {
 	}
 }
 
+// mouseLine is the state of the mouse in one line: where it is, which buttons are down and the wheel, or that no
+// terminal report has come, with the two things that stop one.
+func (m *monitor) mouseLine() string {
+	if m.pos == "" {
+		return "mouse: no report yet: move the pointer over the window (a terminal without SGR mouse mode sends none)"
+	}
+	return fmt.Sprintf("mouse: cell %s, down: [%s], wheel total: right %+d, down %+d", m.pos, strings.Join(m.buttons, " "), m.wheelX, m.wheelY)
+}
+
 func main() {
 	// Width and Height of 0 fill the terminal and follow resizes.
-	err := engine.Run(context.Background(), newMonitor(), engine.Config{FPS: 30})
+	err := engine.Run(context.Background(), newMonitor(), engine.Config{FPS: 30, Mouse: true})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

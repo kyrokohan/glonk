@@ -26,6 +26,8 @@ func TestKeyboardSequences(t *testing.T) {
 		{"disable focus reporting", func(sb *sequenceBuilder) { sb.DisableFocusReporting() }, "\x1b[?1004l"},
 		{"enable bracketed paste", func(sb *sequenceBuilder) { sb.EnableBracketedPaste() }, "\x1b[?2004h"},
 		{"disable bracketed paste", func(sb *sequenceBuilder) { sb.DisableBracketedPaste() }, "\x1b[?2004l"},
+		{"enable mouse", func(sb *sequenceBuilder) { sb.EnableMouse() }, "\x1b[?1003h\x1b[?1006h"},
+		{"disable mouse", func(sb *sequenceBuilder) { sb.DisableMouse() }, "\x1b[?1006l\x1b[?1003l"},
 		{"disable autowrap", func(sb *sequenceBuilder) { sb.DisableAutowrap() }, "\x1b[?7l"},
 		{"enable autowrap", func(sb *sequenceBuilder) { sb.EnableAutowrap() }, "\x1b[?7h"},
 	}
@@ -72,21 +74,25 @@ func TestEnableKeyboardProtocolFailedWrite(t *testing.T) {
 
 func TestExitSequence(t *testing.T) {
 	tests := []struct {
-		name     string
-		keyboard bool
-		want     string
+		name            string
+		keyboard, mouse bool
+		want            string
 	}{
 		// Autowrap comes back before the alternate screen is left, where it was turned off, and the terminal
 		// stops marking pastes, which it should not do for the shell that gets it back.
-		{"without the protocol", false, "\x1b[?2004l\x1b[?25h\x1b[?7h\x1b[?1049l"},
+		{"without the protocol", false, false, "\x1b[?2004l\x1b[?25h\x1b[?7h\x1b[?1049l"},
 		// Popped before leaving the alternate screen, where the flags were pushed.
-		{"with the protocol", true, "\x1b[<u\x1b[?1004l\x1b[?2004l\x1b[?25h\x1b[?7h\x1b[?1049l"},
+		{"with the protocol", true, false, "\x1b[<u\x1b[?1004l\x1b[?2004l\x1b[?25h\x1b[?7h\x1b[?1049l"},
+		// The reverse of what was turned on: focus, the mouse, then paste. Focus is turned off once, whichever of
+		// the two asked for it.
+		{"with the mouse", false, true, "\x1b[?1004l\x1b[?1006l\x1b[?1003l\x1b[?2004l\x1b[?25h\x1b[?7h\x1b[?1049l"},
+		{"with the protocol and the mouse", true, true, "\x1b[<u\x1b[?1004l\x1b[?1006l\x1b[?1003l\x1b[?2004l\x1b[?25h\x1b[?7h\x1b[?1049l"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tty := newTerminal(os.Stdin, &bytes.Buffer{})
-			tty.keyboard = tt.keyboard
+			tty.keyboard, tty.mouse = tt.keyboard, tt.mouse
 
 			if got := tty.exitSequence().String(); got != tt.want {
 				t.Errorf("wanted %q, got %q", tt.want, got)
@@ -142,6 +148,14 @@ func TestEnterSequence(t *testing.T) {
 	want := "\x1b[?1049h\x1b[?7l\x1b[2J\x1b[?25l\x1b[?2004h"
 	if got := tty.enterSequence().String(); got != want {
 		t.Errorf("wanted %q, got %q", want, got)
+	}
+
+	// The mouse is only asked for when the program asked, and with focus, so that a button is let go when the
+	// window loses it.
+	tty.mouse = true
+	want += "\x1b[?1003h\x1b[?1006h\x1b[?1004h"
+	if got := tty.enterSequence().String(); got != want {
+		t.Errorf("with the mouse, wanted %q, got %q", want, got)
 	}
 }
 

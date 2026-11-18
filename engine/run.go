@@ -55,6 +55,15 @@ type Config struct {
 	// color is always sent as the palette color, so it follows the user's theme.
 	Colors ColorMode
 
+	// Mouse asks the terminal to report the pointer: where it is, as it moves with or without a button,
+	// the buttons and the wheel, which Input.MousePos, MouseDown, MouseStarted, MouseReleased and Wheel
+	// say. It is off unless set, because a terminal that reports the pointer to a program no longer lets
+	// the user select text with it (Shift with the mouse usually still does, in terminals that allow it),
+	// so a program that does not read the mouse is left as it was. It has no effect without a terminal.
+	// Where a terminal does not support it, MousePos says ok is false. Run asks for the decimal form of a
+	// report (mode 1006) and reads nothing older.
+	Mouse bool
+
 	// Input is where keys are read from; nil means os.Stdin.
 	//
 	// When Input and Output are both terminals, Run takes them over: raw mode, the
@@ -116,7 +125,9 @@ func openTerminal(cfg Config) (*terminal, io.Reader, error) {
 	inFile, inOK := in.(*os.File)
 	outFile, outOK := out.(*os.File)
 	if inOK && outOK && term.IsTerminal(int(inFile.Fd())) && term.IsTerminal(int(outFile.Fd())) {
-		return newTerminal(inFile, out), in, nil
+		t := newTerminal(inFile, out)
+		t.mouse = cfg.Mouse
+		return t, in, nil
 	}
 	if cfg.Width == 0 || cfg.Height == 0 {
 		return nil, nil, errNoTerminal
