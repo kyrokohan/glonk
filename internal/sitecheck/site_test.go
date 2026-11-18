@@ -167,14 +167,56 @@ func TestTheLinkPreviewNamesAFileOfTheSite(t *testing.T) {
 	}
 }
 
+// noMedia reports whether site/media is absent. The recordings and the fonts are a module of their
+// own, so that a download of glonk leaves them out (see site/media/go.mod). A copy of glonk in the
+// module cache therefore has no such folder, and only there are links into it let through.
+func noMedia() bool {
+	_, err := os.Stat(filepath.Join("..", "..", "site", "media"))
+	return os.IsNotExist(err)
+}
+
+// A visitor's browser asks glonk.dev for the page and nobody else for anything: the fonts, the
+// stylesheet and the pictures are files of the site. What a page loads is what its link tags, its
+// pictures and its stylesheet name; a link to follow is not loaded.
+func TestNothingIsLoadedFromAnotherSite(t *testing.T) {
+	local := func(target string) bool {
+		return strings.HasPrefix(target, "/") && !strings.HasPrefix(target, "//")
+	}
+	loads := regexp.MustCompile(`<link\b[^>]*\bhref="([^"]*)"|\bsrc(?:set)?="([^"]*)"`)
+	for _, name := range pages {
+		for _, m := range loads.FindAllStringSubmatch(read(t, "site", name), -1) {
+			if target := m[1] + m[2]; !local(target) {
+				t.Errorf("%s: wanted %q to be loaded from this site", name, target)
+			}
+		}
+	}
+
+	css := read(t, "site", "style.css")
+	if strings.Contains(css, "@import") {
+		t.Error("style.css: wanted no @import")
+	}
+	urls := regexp.MustCompile(`url\(\s*["']?([^"')]+)["']?\s*\)`).FindAllStringSubmatch(css, -1)
+	if len(urls) == 0 {
+		t.Error("style.css: wanted it to name the fonts of BRAND.md")
+	}
+	for _, m := range urls {
+		if !local(m[1]) {
+			t.Errorf("style.css: wanted %q to be loaded from this site", m[1])
+			continue
+		}
+		if noMedia() && strings.HasPrefix(m[1], "/media/") {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join("..", "..", "site", m[1])); err != nil {
+			t.Errorf("style.css: wanted %q to be a file of the site, got %v", m[1], err)
+		}
+	}
+}
+
 // A link to this site must name a file that is in it.
 func TestLocalLinksNameFilesOfTheSite(t *testing.T) {
 	link := regexp.MustCompile(`(?:href|src|srcset)="([^"]*)"`)
-	// The recordings are a module of their own, so that a download of glonk leaves them out (see
-	// site/media/go.mod). A copy of glonk in the module cache therefore has no such folder, and
-	// only there are links into it let through.
-	_, err := os.Stat(filepath.Join("..", "..", "site", "media"))
-	noRecordings := os.IsNotExist(err)
+	noRecordings := noMedia()
 	for _, name := range pages {
 		page := read(t, "site", name)
 
