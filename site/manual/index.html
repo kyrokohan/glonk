@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="go-import" content="glonk.dev git https://github.com/kyrokohan/glonk">
+<meta name="go-source" content="glonk.dev https://github.com/kyrokohan/glonk https://github.com/kyrokohan/glonk/tree/main{/dir} https://github.com/kyrokohan/glonk/blob/main{/dir}/{file}#L{line}">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manual: glonk</title>
+<meta name="description" content="How to use glonk, a terminal rendering engine for Go: models, shapes, textures, sprites, tile maps, widgets, input and testing a game.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://glonk.dev/manual/">
+<meta property="og:title" content="Manual: glonk">
+<meta property="og:description" content="How to use glonk, a terminal rendering engine for Go: models, shapes, textures, sprites, tile maps, widgets, input and testing a game.">
+<meta property="og:image" content="https://glonk.dev/card.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="The glonk logo, the words: a terminal rendering engine for Go: 2D, 3D, or both in one frame, and a gold block on a dark floor of lines.">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" href="/media/fonts/DepartureMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+<!-- Made from the repository by internal/sitepages. Do not edit: change the source and run make site. -->
+<a class="skip" href="#text">Skip to the text</a>
+<div class="page">
+
+<header class="top">
+  <a class="name" href="/"><span class="mark" aria-hidden="true"></span>glonk</a>
+  <nav aria-label="glonk">
+    <a href="/manual/" aria-current="page">Manual</a>
+    <a href="/changelog/">Changelog</a>
+    <a href="https://github.com/kyrokohan/glonk/tree/main/examples">Examples</a>
+    <a href="https://github.com/kyrokohan/glonk">GitHub</a>
+  </nav>
+</header>
+
+<main class="doc">
+<div class="front">
+<h1>Manual</h1>
+<p class="lede">What glonk does and how to use it. This page is the <a href="https://github.com/kyrokohan/glonk#readme">README</a>, and every package is documented, with examples that run, on <a href="https://pkg.go.dev/glonk.dev">pkg.go.dev</a>.</p>
+</div>
+
+<nav class="contents" aria-label="Contents">
+<p>Contents</p>
+<ul role="list">
+<li><a href="#what-it-does">What it does</a></li>
+<li><a href="#install">Install</a></li>
+<li><a href="#run-the-examples">Run the examples</a></li>
+<li><a href="#loading-models">Loading models</a></li>
+<li><a href="#shapes-and-smooth-shading">Shapes and smooth shading</a></li>
+<li><a href="#vertex-colors">Vertex colors</a></li>
+<li><a href="#textures">Textures</a></li>
+<li><a href="#see-through-faces">See-through faces</a></li>
+<li><a href="#wireframes-and-depth">Wireframes and depth</a></li>
+<li><a href="#pixel-shapes-and-pictures">Pixel shapes and pictures</a></li>
+<li><a href="#sprites">Sprites</a></li>
+<li><a href="#collision">Collision</a></li>
+<li><a href="#tile-maps-and-a-camera">Tile maps and a camera</a></li>
+<li><a href="#widgets">Widgets</a></li>
+<li><a href="#quickstart">Quickstart</a></li>
+<li><a href="#frame-numbers">Frame numbers</a></li>
+<li><a href="#testing-a-game">Testing a game</a></li>
+<li><a href="#packages">Packages</a></li>
+<li><a href="#compatibility-and-limits">Compatibility and limits</a></li>
+<li><a href="#planned">Planned</a></li>
+</ul>
+</nav>
+
+<article class="text" id="text">
+<h2 id="what-it-does">What it does</h2>
+<ul>
+<li><strong>2D:</strong> cells with foreground and background colors (the 256-color palette, or exact RGB on terminals with true color) and text attributes (bold, dim, underline, reverse), lines, boxes, text, and sprites (several cells, see-through, animated).</li>
+<li><strong>3D:</strong> wireframe or solid meshes through a perspective camera, with near-plane clipping and an optional far plane. Solid meshes are shaded by any number of lights (directional, ambient, point, or your own) into an ASCII brightness ramp, face by face or, with normals, smoothly across each face. They hide each other by depth and skip faces turned away. A wireframe drawn with depth is hidden by nearer solids too.</li>
+<li><strong>Shapes and models:</strong> a cube, sphere, cylinder, cone, plane and grid, or OBJ files from any <code>io.Reader</code> (a file, <code>//go:embed</code>, a download), centered and scaled and drawn wireframe or shaded, in the colors and texture pictures of their materials when loaded from an <code>fs.FS</code>, and with a color on each vertex.</li>
+<li><strong>Half blocks:</strong> a pixel <code>Canvas</code> with two square-ish pixels per cell, drawn with <code>▀</code> and a background color, for twice the vertical detail and shading by color instead of by character. Lines, rectangles, circles, wireframes and pictures (JPEG or PNG) can be drawn into the pixels too. See <a href="#pixel-shapes-and-pictures">Pixel shapes and pictures</a>.</li>
+<li><strong>Mixed:</strong> draw a 3D scene first, then a 2D HUD on top, into the same frame.</li>
+<li><strong>Widgets:</strong> a label, a panel, a bar and a menu for a HUD or a pause screen, drawn in screen space. See <a href="#widgets">Widgets</a>.</li>
+<li><strong>Input:</strong> held keys, one-shot presses (<code>Input.Started</code>, which a repeat does not set off again) and key repeats (<code>Input.Pressed</code>), including the arrows, Home, End, Page Up, Page Down, Insert, Delete and F1 to F12. <code>Input.KeyEvents</code> gives the frame&#39;s key events in order, each with its modifiers (Ctrl, Alt, Shift, Super) and whether it was a press, a repeat or a release, for shortcuts such as Ctrl+S; <code>Input.Text</code> is the characters typed, for a text field. A chord, a character key with Ctrl, Alt or Super held, is in those and not in <code>IsDown</code>, <code>Pressed</code> or <code>Started</code>, so Ctrl+W does not walk a player who walks on W. Terminals with the <a href="https://sw.kovidgoyal.net/kitty/keyboard-protocol/">kitty keyboard protocol</a> (Ghostty, kitty, WezTerm, foot, iTerm2, Alacritty) report real key releases, so you can hold several keys at once. <code>Input.Paste</code> is what was pasted, as one string: a terminal with bracketed paste marks a paste, which glonk asks for, so a newline in it does not press Enter, an escape sequence in it is not read as keys, and a Ctrl-C in it does not end the run. With <code>Config.Mouse</code>, <code>Input.MousePos</code> is the cell the pointer is in, <code>MouseDown</code>, <code>MouseStarted</code> and <code>MouseReleased</code> are the left, middle and right buttons (a click shorter than a frame is not lost), and <code>Wheel</code> is how far the wheel turned in the frame.</li>
+<li><strong>Resizing:</strong> the frame follows the terminal window, and a game with a <code>Resize(width, height int)</code> method is told its size.</li>
+<li><strong>Frame numbers:</strong> a game with a <code>Stats(engine.Stats)</code> method is told after every frame how it went: frames a second, the time of <code>Update</code>, <code>Draw</code> and the write to the terminal, and the bytes sent. See <a href="#frame-numbers">Frame numbers</a>.</li>
+<li><strong>Testing:</strong> <code>engine.Keyboard</code> presses keys for a game&#39;s <code>Update</code>, a <code>FrameBuffer</code> prints as text or draws as a picture, and <code>Config.Input</code> and <code>Config.Output</code> let a whole <code>Run</code> be driven without a terminal. See <a href="#testing-a-game">Testing a game</a>.</li>
+</ul>
+<h2 id="install">Install</h2>
+<pre tabindex="0"><code>go get glonk.dev
+</code></pre>
+<p>Requires Go 1.26 or newer. glonk has no package at its root, so import the packages you use (<code>glonk.dev/engine</code>, and <code>glonk.dev/mesh</code> for 3D) and run <code>go mod tidy</code> once, which records the dependencies they need; without it <code>go run</code> stops with a missing <code>go.sum</code> entry.</p>
+<h3 id="moved-to-glonkdev">Moved to glonk.dev</h3>
+<p>Up to v0.1.0 glonk was imported as <code>github.com/kyrokohan/glonk</code>. From v0.2.0 it is <code>glonk.dev</code>; the code is still hosted on GitHub. To move a project that uses v0.1.0, run this in its module root (it needs <code>perl</code>, which macOS and most Linux systems have):</p>
+<pre tabindex="0"><code>go mod edit -droprequire github.com/kyrokohan/glonk
+grep -rl &#39;github.com/kyrokohan/glonk&#39; --include=&#39;*.go&#39; . | xargs perl -pi -e &#39;s#github.com/kyrokohan/glonk#glonk.dev#g&#39;
+go get glonk.dev@latest
+go mod tidy
+</code></pre>
+<h2 id="run-the-examples">Run the examples</h2>
+<table>
+<tbody>
+<tr><td><a href="/media/cube3d.gif"><img src="/media/cube3d.png" width="840" height="560" alt="Shaded blocks, a tree and a cube of lines on a dotted floor."></a><br><strong>cube3d</strong>: walk around a floor of shaded cubes, a tree that is a picture, and a cube drawn as lines.</td><td><a href="/media/viewer.gif"><img src="/media/viewer.png" width="840" height="560" alt="A small house with a red roof, turning."></a><br><strong>viewer</strong>: look at the bundled OBJ models and shapes, solid or as lines, faceted or smooth.</td></tr>
+<tr><td><a href="/media/sprites.gif"><img src="/media/sprites.png" width="840" height="560" alt="A ship of text characters steered round a rock on a blue sea."></a><br><strong>sprites</strong>: a ship you steer round a rock, a walking figure and a blinking ghost.</td><td><a href="/media/world.gif"><img src="/media/world.png" width="840" height="560" alt="A small figure walking a level of walls, grass and water, collecting coins."></a><br><strong>world</strong>: a level bigger than the screen, with walls, coins, a coin panel and a pause menu.</td></tr>
+</tbody>
+</table>
+<p>The pictures are what the engine drew: each example plays a script of key presses with no terminal, and its frames are shown as a terminal shows them.</p>
+<p>An example runs without a clone:</p>
+<pre tabindex="0"><code>go run glonk.dev/examples/viewer@latest
+</code></pre>
+<p>and so do <code>cube3d</code>, <code>sprites</code>, <code>world</code>, <code>bounce2d</code> and <code>input</code>. In a clone:</p>
+<pre tabindex="0"><code>make run                                      # bounce2d: a ball in a box that fills the window (Esc quits)
+make run EXAMPLE=./examples/sprites          # sprites: a ship you steer around a rock, a walking figure and a blinking ghost on a colored floor
+make run EXAMPLE=./examples/world            # world: a level bigger than the screen to walk around, with walls to slide along, coins to collect, a coin panel with a coin picture in it, and a pause menu (Esc)
+make run EXAMPLE=./examples/cube3d            # cube3d: walk around a floor with six shaded cubes and a wireframe one
+make run EXAMPLE=./examples/viewer            # viewer: look at the bundled OBJ models and shapes
+make run EXAMPLE=./examples/viewer ARGS=my.obj  # viewer: look at your own model (its .mtl beside it gives it colors)
+make run EXAMPLE=./examples/input             # input: see what your terminal sends, as glonk reads it: every key event with its modifiers, the text typed, what is pasted, and which keys are held
+</code></pre>
+<p>cube3d controls:</p>
+<table>
+<thead>
+<tr><th>Keys</th><th>Action</th></tr>
+</thead>
+<tbody>
+<tr><td>W / S</td><td>move forward / back</td></tr>
+<tr><td>A / D</td><td>strafe left / right</td></tr>
+<tr><td>Q / E, Left / Right</td><td>turn left / right</td></tr>
+<tr><td>Up / Down</td><td>look up / down</td></tr>
+<tr><td>M</td><td>switch between character shading and half-block pixels (the wireframe cube becomes pixel lines too)</td></tr>
+<tr><td>B</td><td>in half-block mode, switch between exact and solid edges</td></tr>
+<tr><td>Esc</td><td>quit</td></tr>
+</tbody>
+</table>
+<p>viewer controls:</p>
+<table>
+<thead>
+<tr><th>Keys</th><th>Action</th></tr>
+</thead>
+<tbody>
+<tr><td>Arrows</td><td>orbit the model</td></tr>
+<tr><td>+ / - or W / S</td><td>zoom</td></tr>
+<tr><td>R</td><td>spin on and off</td></tr>
+<tr><td>N</td><td>next model (the bundled ones end with a sphere, a cylinder and a cone)</td></tr>
+<tr><td>V</td><td>wireframe or solid</td></tr>
+<tr><td>M, B</td><td>character shading or half-block pixels (with V, the wireframe is pixel lines); exact or solid pixel edges</td></tr>
+<tr><td>D</td><td>draw both sides of every face (for models that look inside out)</td></tr>
+<tr><td>C</td><td>change color (a model with colors of its own, like the bundled house and octahedron or one with a texture, goes from them through the six palette colors and back)</td></tr>
+<tr><td>F</td><td>smooth or faceted shading for this model (a model without normals is smoothed from its faces)</td></tr>
+<tr><td>L</td><td>light from the sun, or from a lamp held up and to the left of the camera</td></tr>
+<tr><td>Esc</td><td>quit</td></tr>
+</tbody>
+</table>
+<p>Letters work in either case. Ctrl-C quits any program built on glonk.</p>
+<h2 id="loading-models">Loading models</h2>
+<p>This sits inside your <code>Draw</code> method, with <code>fb</code>, <code>cam</code> and <code>lights</code> (a <code>[]mesh.Light</code>) set up as in the examples; <code>ExampleLoadOBJ</code> in <code>mesh/example_test.go</code> is a complete, runnable version.</p>
+<pre tabindex="0"><code>//go:embed ship.obj
+var shipOBJ []byte
+
+ship, err := mesh.LoadOBJ(bytes.NewReader(shipOBJ))
+if err != nil {
+	log.Fatal(err) // names the line that went wrong, e.g. &#34;obj line 12: bad number&#34;
+}
+ship = ship.Fit(2) // centered on the origin, longest side 2
+ship.Transform.Position = geometry.Vector3{Z: 6}
+
+ship.Material.Color = engine.Palette(208)
+ship.DrawShaded(fb, cam, lights...) // or ship.Draw for a wireframe
+</code></pre>
+<p>To have the colors of a model&#39;s materials, load it with <code>LoadOBJFS(fsys, name, maxBytes)</code> from an <code>fs.FS</code> (<code>os.DirFS</code>, an <code>embed.FS</code>, a zip). It follows the OBJ&#39;s <code>mtllib</code> to the <code>.mtl</code> beside it and gives each face the color of its <code>usemtl</code> material in <code>Mesh.FaceColors</code>: the <code>Kd</code>, or the color of the material&#39;s <code>map_Kd</code> picture (a JPEG or PNG beside the OBJ) at the face&#39;s texture coordinates. A face with a color is drawn in it, still lit, and the others use <code>Material.Color</code>; the limit and errors are those of <code>LoadOBJLimit</code>. The picture itself comes with the mesh, in <code>Material.Texture</code> and <code>Mesh.FaceTexCoords</code>, and a face is drawn in its pixels (see &#34;Textures&#34; below).</p>
+<pre tabindex="0"><code>//go:embed ship.obj ship.mtl
+var shipFiles embed.FS
+
+ship, err := mesh.LoadOBJFS(shipFiles, &#34;ship.obj&#34;, 8&lt;&lt;20)
+</code></pre>
+<p>A mesh is placed by its <code>Transform</code> (<code>Position</code>, <code>Yaw</code>, <code>Pitch</code>, <code>Roll</code>, <code>Scale</code>; angles in radians, and positive pitch tips the front up, as it does for the camera) and looks the way its <code>Material</code> says (<code>Color</code>, and a <code>Ramp</code> of brightness characters). <code>DrawShaded</code> takes any number of lights: <code>mesh.Ambient</code>, <code>mesh.Directional</code>, <code>mesh.Point</code> (a lamp that fades with distance), or a type of your own with a <code>Brightness</code> method.</p>
+<p><code>LoadOBJ</code> reads any <code>io.Reader</code>, so a file, an embedded asset or a download all work. For input you do not control, use <code>LoadOBJLimit(r, maxBytes)</code>: it fails with <code>mesh.ErrOBJTooLarge</code> instead of reading without end (a plain <code>io.LimitReader</code> would quietly cut the model short).</p>
+<ul>
+<li><strong>Understood:</strong> vertices (<code>v</code>, with a color after them if the file has one: <code>v x y z r g b</code>), normals (<code>vn</code>), faces (<code>f</code>, with or without texture and normal indices, any number of corners, negative indices) and lines (<code>l</code>). Faces with more than three corners are split into triangles for shading, and the wireframe shows the original polygons.</li>
+<li><strong>Skipped:</strong> groups and curves, and texture coordinates and materials too in <code>LoadOBJ</code> and <code>LoadOBJLimit</code>. Everything in the file becomes one mesh, in the color of its <code>Material</code> unless <code>LoadOBJFS</code> gave faces colors of their own. If the faces use normals the mesh is shaded smooth, with a vertex split into one per normal where the file lights it differently on different faces (the sides of a cube); if not, it is shaded flat.</li>
+<li><strong>Colors:</strong> <code>Kd</code>, the diffuse color (three numbers from 0 to 1, or one for a gray), and <code>map_Kd</code>, the picture, are read; the rest of a material is skipped. Colors are used as RGB with no gamma conversion. Each <code>.mtl</code> is read up to 1 MiB (or <code>maxBytes</code>, if less), at most 8 per model, with 10,000 materials; a name must be a plain path inside the OBJ&#39;s folder (no <code>..</code>, no leading <code>/</code>, no backslash); <code>mtllib</code> must come before the <code>usemtl</code> that uses it. A <code>.mtl</code> that is missing, too large or broken never fails the load: the model comes out in its <code>Material</code> color. <code>os.DirFS</code> follows symbolic links in its folder, so give it a folder you trust.</li>
+<li><strong>Textures:</strong> the picture is kept as <code>Material.Texture</code>, with the texture coordinates (<code>vt</code>) of each triangle&#39;s three corners in <code>Mesh.FaceTexCoords</code>, and drawing takes the color of every cell or pixel from the picture&#39;s nearest pixel at its place on the triangle, with the picture repeating beyond (1, 1). A large triangle shows the picture at its own size, not one flat color. <code>FaceColors</code> still holds the color of the picture at the middle of each triangle, for a program that drops the picture. A mesh has one picture, the first a triangle has coordinates in, and the triangles of another keep one color. A pixel with an alpha under 128 is a hole, as in a leaf or a fence: nothing is drawn there and what is behind shows. Where a corner has no coordinates, or the picture could not be had, the triangle keeps the material&#39;s <code>Kd</code>, if any; a material with both shows the picture. Only the plain <code>map_Kd name</code> form is read, and only JPEG and PNG, found by what is in the file; the picture sits beside the OBJ, under the same name rules as <code>mtllib</code>, and is read when the first face that uses it comes. A picture is refused by the size in its header, before it is decoded: 4096 by 4096 pixels (16,777,216) may be decoded for one model in all, 8 pictures are tried, and each file is read up to 64 MiB (or <code>maxBytes</code>, if less). A picture that is missing, broken, cut short, of another kind or too big never fails the load: its faces keep their <code>Kd</code> or the <code>Material</code> color. The <code>vt</code> lines and the <code>mtllib</code> must come before the faces that use them.</li>
+<li><strong>Orientation:</strong> OBJ files are right-handed and look down -Z; glonk looks down +Z. <code>LoadOBJ</code> flips Z and reverses each face so a model keeps its outside and is not mirrored left to right. Its front faces a camera placed on the -Z side.</li>
+<li><strong>Inside out or invisible?</strong> Some exporters wind faces the other way. Set <code>Mesh.DoubleSided = true</code> to draw both sides.</li>
+<li><strong>Untrusted files:</strong> malformed input returns an error naming the line, never a panic, and the time taken grows in step with the input size. Memory use is roughly 25 times the input size, up to 35 for a file that gives most corners a normal of their own, so bound the input with <code>LoadOBJLimit</code> (or <code>LoadOBJFS</code>, which also bounds the <code>.mtl</code> files and pictures it reads, and while it loads holds a decoded picture, up to 128 MiB, and 16 bytes for each <code>vt</code> line, then keeps the picture it uses as a <code>Bitmap</code>, up to 64 MiB, and 48 bytes for each triangle) when you do not trust the source.</li>
+</ul>
+<h2 id="shapes-and-smooth-shading">Shapes and smooth shading</h2>
+<p><code>mesh.Cube</code>, <code>Sphere</code>, <code>Cylinder</code>, <code>Cone</code>, <code>Plane</code> (a flat rectangle facing up) and <code>Grid</code> (lines for a floor) make meshes without a file. They stand on the y axis, centered on the origin, and are placed with <code>Transform</code> like any model.</p>
+<pre tabindex="0"><code>ball := mesh.Sphere(1.5, 24, 12) // radius, segments around, rings from pole to pole
+ball.Transform.Position = geometry.Vector3{Z: 4}
+lamp := mesh.Point{Position: geometry.Vector3{X: -2, Y: 2}, Range: 8}
+ball.DrawShaded(fb, cam, mesh.Ambient{Level: 0.1}, lamp)
+</code></pre>
+<p>A mesh with no <code>Normals</code> is lit face by face, one brightness for each, so a round shape shows its facets. With a normal for each vertex (<code>Mesh.Normals</code>, in model space, any length) every cell is lit on its own, from the position and the normal blended across the face, so the shape looks round, and a lamp near a big flat face makes a pool of light on it.</p>
+<ul>
+<li><strong>Where normals come from:</strong> <code>Sphere</code>, <code>Cylinder</code>, <code>Cone</code> and <code>Plane</code>; a model file that has them; or <code>Mesh.SmoothNormals()</code>, which returns a copy with each vertex&#39;s normal averaged over the faces that share it, weighted by angle so that how a surface is cut into triangles does not change how it is lit.</li>
+<li><strong>Hard edges need their own vertices.</strong> <code>SmoothNormals</code> averages across shared vertices only, so a cube made of 8 comes out looking like a ball. A cylinder&#39;s caps and a cone&#39;s base have vertices of their own for the same reason, and <code>LoadOBJ</code> splits a vertex that a file lights differently on different faces.</li>
+<li><strong>Back to facets:</strong> draw a copy with <code>Normals</code> set to nil. A zero normal means none here: that corner takes the face&#39;s own. Normals turn with the <code>Transform</code>, whatever its scale.</li>
+<li><strong>Cost:</strong> about 12 to 23% more than facets on a scene of spheres, and none for a mesh without normals. Drawing allocates nothing either way.</li>
+<li><strong>Shape limits:</strong> segments go from 3 to 512 and rings from 2 to 512, so a careless argument cannot ask for gigabytes, and a size that is negative or not a finite number counts as 0. <code>Point</code> lights: <code>Range</code> 0 means no fading, and a negative <code>Range</code> gives no light.</li>
+<li><strong>Your own lights:</strong> <code>Light.Brightness(point, normal)</code> is asked about every cell of a mesh with normals, with the place on the surface and the unit normal there, and once for each face of one without. <code>mesh.Brightness(lights, point, normal)</code> adds lights up the way the drawing does, so that a marker, a billboard or anything else you draw into the scene is lit as the meshes around it are, whatever the rule becomes.</li>
+<li><strong>Many lamps are cheap.</strong> A <code>Point</code> with a <code>Range</code> is not asked about a mesh that is wholly beyond it, so a level can have a lamp in every room and each mesh asks the few that reach it (16 lamps along a corridor of floor chunks, each reaching a few of them: 40 microseconds a frame in cells and 71 in pixels, where it took 86 and 168). The picture is bit for bit the same. A light of your own opts in with a method <code>Reach() (center geometry.Vector3, radius float64)</code>, a ball outside which it gives nothing; promise only what it gives, since a light that gives more than it says loses light at the edge. It applies to a mesh with its bounds: the shapes and models the package makes have them, and a mesh built by hand calls <code>UpdateBounds</code>. A light without <code>Reach</code>, <code>Directional</code> and <code>Ambient</code> are always asked.</li>
+</ul>
+<h2 id="vertex-colors">Vertex colors</h2>
+<p><code>Mesh.VertexColors</code> gives each vertex a color, and a face fades from one corner&#39;s color to the next.</p>
+<pre tabindex="0"><code>tri := mesh.Mesh{
+	Vertices:     []geometry.Vector3{{X: -2, Y: -1}, {X: 2, Y: -1}, {Y: 2}},
+	Faces:        [][3]int{{0, 1, 2}},
+	VertexColors: []engine.Color{engine.RGB(255, 0, 0), engine.RGB(0, 255, 0), engine.RGB(0, 0, 255)},
+	DoubleSided:  true,
+}
+tri.Transform.Position = geometry.Vector3{Z: 6}
+tri.DrawShaded(fb, cam, mesh.Ambient{Level: 1}) // or DrawShadedPixels into a Canvas
+</code></pre>
+<ul>
+<li><strong>A blend at every cell.</strong> Each cell is drawn in the blend of its face&#39;s three corner colors, worked out like the blend of normals in smooth shading, with perspective, flat or smooth, in cells and in pixels. Brightness is still shown by the character or the shade. The blend is linear in the colors&#39; red, green and blue, with no gamma, and a face cut by the near plane blends as the whole face would.</li>
+<li><strong>With face colors.</strong> A face that has its own color (<code>FaceColors</code>, from a model&#39;s material) is tinted by the vertex colors: each channel is multiplied, so white leaves it as it is and gray darkens it. A face without one is drawn in the vertex colors as they are, and <code>Material.Color</code> is only what a corner without a color takes. A corner with the zero <code>Color</code> is &#34;none here&#34; and takes what the face would be without vertex colors, and a default color reads as black, as <code>Shade</code> reads it. A face none of whose corners has a color is drawn as before.</li>
+<li><strong>Limits.</strong> Wireframes (<code>Draw</code>, <code>DrawDepth</code>) ignore vertex colors. A list that is not one color for each vertex is not used, and <code>Validate</code> says so. <code>Clone</code> copies it, and <code>Fit</code> and <code>SmoothNormals</code> keep it.</li>
+<li><strong>From OBJ files.</strong> A vertex line of the form <code>v x y z r g b</code>, exactly six numbers, gives the vertex a color; <code>LoadOBJ</code>, <code>LoadOBJLimit</code> and <code>LoadOBJFS</code> all read it. The numbers go from 0 to 1 and are clamped, so a tool that writes 0 to 255 gives white. Any other count (a <code>w</code> after the coordinates is one), or numbers that are not understood, gives none and never fails the load. A model with colors only on some vertices has the zero <code>Color</code> on the rest, and a vertex split for its normals keeps its color. Files that carried colors which <code>LoadOBJ</code> used to ignore now load with them.</li>
+<li><strong>Cost.</strong> A face with a colored corner asks for a color in every cell, which costs more than a flat color; a mesh without vertex colors draws the same cells and allocates nothing, but when vertex colors arrived in v0.4.0 the shaded benchmarks took 1 to 4% longer, which was put down to <code>Mesh</code> being 24 bytes larger and being copied (the wireframe benchmark, whose code did not change, moved 1 to 2% in the same runs). Since v0.11.0 a draw copies a <code>Mesh</code> once, not once for each helper it calls (#86). Reading a six-number vertex line takes about 77 ns longer.</li>
+<li><strong>See it:</strong> the viewer&#39;s bundled octahedron has a color on each corner (<code>N</code> twice); <code>C</code> puts its colors aside for the palette and back.</li>
+</ul>
+<h2 id="textures">Textures</h2>
+<p><code>Material.Texture</code> is a <code>*bitmap.Bitmap</code>, and <code>Mesh.FaceTexCoords</code> pins the three corners of each face to places in it, so that a wall of two triangles shows a picture of any size.</p>
+<pre tabindex="0"><code>wall := mesh.Mesh{
+	Vertices: []geometry.Vector3{{X: -2, Y: -1}, {X: -2, Y: 1}, {X: 2, Y: 1}, {X: 2, Y: -1}},
+	Faces:    [][3]int{{0, 1, 2}, {0, 2, 3}},
+	FaceTexCoords: [][3]geometry.Vector2{
+		{{X: 0, Y: 1}, {X: 0, Y: 0}, {X: 2, Y: 0}}, // the bottom left, top left, top right of the wall,
+		{{X: 0, Y: 1}, {X: 2, Y: 0}, {X: 2, Y: 1}}, // and the picture twice across
+	},
+	Material: mesh.Material{Texture: brick}, // a *bitmap.Bitmap: bitmap.Decode, or bitmap.New and Set
+}
+wall.Transform.Position = geometry.Vector3{Z: 5}
+wall.DrawShaded(fb, cam, lights...) // or DrawShadedPixels into a Canvas
+</code></pre>
+<ul>
+<li><strong>Coordinates.</strong> Corner <code>k</code> of face <code>i</code> is at <code>FaceTexCoords[i][k]</code>, one triple for each face, so a wall that shares its corners with the ones beside it needs no vertices of its own. (0, 0) is the top left of the picture and (1, 1) the bottom right, as <code>Bitmap.At</code> counts, and the picture repeats: 2 is the picture twice over. A zero triple means none, and that face is drawn as before.</li>
+<li><strong>A color for every cell.</strong> Each cell or pixel takes the nearest pixel of the picture at its own place on the face, worked out with the perspective-correct weights that smooth shading uses, so the picture is seen at a slant and a face cut by the near or far plane keeps its coordinates. There is no blending between pixels. In cells a picture of 16 by 16 on a wall that fills the screen is 16 by 16 blocks of characters; with <code>DrawShadedPixels</code> the blocks are twice as fine from top to bottom.</li>
+<li><strong>Lit like a color.</strong> The picture&#39;s color is the face&#39;s color, in place of <code>FaceColors</code> and <code>Material.Color</code>, and is lit and faded in fog as they are. A vertex color tints it, each channel multiplied, and a corner without one lets all of it through. A pixel that is see-through is a hole: nothing is drawn there, depth included, so what is behind shows through it, whichever was drawn first (a pixel of a <code>bitmap.New</code> picture that was never set, or with an alpha under 128 in one that was decoded). A face with a coordinate that is not finite draws nothing.</li>
+<li><strong>Limits.</strong> One picture for a mesh; for two, make two meshes, or put both in one picture. Wireframes ignore it. A <code>Bitmap</code> that is a <code>Shaded</code> or <code>Tinted</code> view is drawn in the colors of the picture it is a view of. A list that is not one triple for each face, or a face with a coordinate that is not finite, is not used, and <code>Validate</code> says so. <code>Clone</code> copies the list and shares the picture, and <code>Fit</code> and <code>SmoothNormals</code> keep both.</li>
+<li><strong>From OBJ files.</strong> <code>LoadOBJFS</code> keeps a model&#39;s <code>map_Kd</code> picture and its <code>vt</code> coordinates this way, with <code>v</code> turned over because an OBJ counts it from the bottom. <code>FaceColors</code> still holds the one color for each triangle that it gave before.</li>
+<li><strong>Cost.</strong> A face with a picture asks for a color in every cell, which costs more than one flat color and far less than the faces a picture used to be cut into: a wall of two triangles with a picture of 16 by 16 takes 7 microseconds in cells on 80 by 24 and 13 in pixels, where the same wall made of 512 faces of one color takes 60 and 62 (on 200 by 60: 41 and 76, against 92 and 102). A face with a picture goes through a fill that can leave a pixel alone, for holes, which costs 5 to 10% more than a color for each pixel. A mesh without a picture draws the same cells and allocates nothing, and costs what it did in v0.9.0 (v0.10.0 drew it 3 to 6% slower, which v0.11.0 took back; see the CHANGELOG and #86); <code>Mesh</code> is 40 bytes larger with the fields of this and of <code>Opacity</code>.</li>
+<li><strong>See it:</strong> <code>go run ./examples/viewer model.obj</code> draws a model that has a <code>map_Kd</code> picture in its pixels; <code>C</code> puts the picture aside for the palette and back.</li>
+</ul>
+<h2 id="see-through-faces">See-through faces</h2>
+<p>A pixel of a picture that is see-through is a hole (see &#34;Textures&#34;), and <code>Material.Opacity</code> makes a whole mesh see-through: the part of its color that shows, from 0 to 1, mixed over what is already drawn.</p>
+<pre tabindex="0"><code>wall.DrawShaded(fb, cam, lights...) // solids first
+pane := mesh.Mesh{
+	Vertices: []geometry.Vector3{{X: -1, Y: -1}, {X: -1, Y: 1}, {X: 1, Y: 1}, {X: 1, Y: -1}},
+	Faces:    [][3]int{{0, 1, 2}, {0, 2, 3}},
+	Material: mesh.Material{Color: engine.RGB(0, 100, 240), Opacity: 0.4}, // 40% blue glass
+}
+pane.Transform.Position = geometry.Vector3{Z: 3}
+pane.DrawShaded(fb, cam, lights...) // then see-through meshes, from far to near
+</code></pre>
+<ul>
+<li><strong>Mixed over what is there.</strong> Each cell or pixel of the face is <code>engine.Mix(behind, color, Opacity)</code>, where the color is the face&#39;s own, picture or vertex colors included, lit and faded in fog first. In pixels the pixel is mixed. In cells the character and attributes of the cell behind stay, and its foreground and background are each mixed, so glass over a blank cell shows as a block of its color.</li>
+<li><strong>Over nothing.</strong> An empty pixel or blank cell counts as black, as <code>Mix</code> and <code>Shade</code> read the default color, so a ghost shows against the background at its part of its color. Fill the canvas first for another background. (<code>Canvas.BlendRect</code> leaves an empty pixel empty, since a rectangle has no color of its own.)</li>
+<li><strong>The order is yours.</strong> A see-through face is tested against depth, so a nearer solid hides it, but does not store it. Draw the solid meshes first, and then the see-through ones from far to near: a see-through mesh drawn before a solid that is behind it is covered by it, and two panes are mixed in the order drawn. glonk does not sort, between meshes or the faces of one, which blend in the order of <code>Faces</code>.</li>
+<li><strong>From behind.</strong> As for a solid, a face that faces away is skipped unless <code>DoubleSided</code>, and then it is lit as the side the camera sees. A closed shape such as a glass ball, drawn on both sides, is mixed in face order, so list the faces of its far side first, or make two meshes.</li>
+<li><strong>Values.</strong> <code>Opacity</code> 0, the default, means 1: the mesh is solid, as <code>Light.Intensity</code> 0 means 1. NaN and anything not between 0 and 1 is solid too. One value for a mesh; there is no opacity for each face or for a pixel of a picture, and an MTL file&#39;s <code>d</code> is not read.</li>
+<li><strong>Cost.</strong> About what a solid costs, a little more for reading what is behind: a pane of two triangles over a wall takes 17 microseconds in cells on 80 by 24 and 26 in pixels, where the same pane solid takes 14 and 22. A fence of 16 by 16 pixels, half of them holes, takes 7 microseconds in cells on 80 by 24 as two triangles with a picture, against 34 as the 256 faces it had to be cut into, and 13 against 34 in pixels. On 200 by 60 it is 38 against 61 in cells, and 72 against 66 in pixels, where the picture&#39;s lookup in every pixel costs more than the cut-up wall&#39;s flat colors.</li>
+</ul>
+<h2 id="wireframes-and-depth">Wireframes and depth</h2>
+<p><code>Mesh.Draw</code> paints a mesh&#39;s edges over whatever is already on screen, so a wireframe shows through solids and has to be drawn first to stay behind them. <code>Mesh.DrawDepth</code> gives each cell of each edge a depth instead: a nearer surface hides it, it hides a farther one, and the order of drawing stops mattering.</p>
+<pre tabindex="0"><code>cube.DrawShaded(fb, cam, lights...)
+ghost.DrawDepth(fb, cam, engine.Cell{Character: &#39;#&#39;}) // hidden where the cube is nearer
+</code></pre>
+<p>And as pixels, into the same canvas as the solids and before <code>Compose</code>:</p>
+<pre tabindex="0"><code>canvas := fb.Canvas()
+cube.DrawShadedPixels(canvas, cam, lights...)
+ghost.DrawDepthPixels(canvas, cam, engine.RGB(0, 220, 220)) // hidden to the pixel
+canvas.Compose()
+</code></pre>
+<ul>
+<li><strong>Half-block pixels count.</strong> <code>Canvas.Compose</code> gives each cell it fills the depth of its nearer pixel, so anything drawn with a depth afterwards (<code>DrawDepth</code>, <code>FillTriangle</code>, <code>FrameBuffer.DrawLineDepth</code>, <code>SetDepth</code>) is hidden behind pixel solids that are nearer.</li>
+<li><strong>Wireframes can be pixels too.</strong> <code>Mesh.DrawPixels</code> and <code>Mesh.DrawDepthPixels</code> are <code>Draw</code> and <code>DrawDepth</code> for a <code>Canvas</code>: the same edges, drawn as lines of pixels, twice as fine from top to bottom, and <code>DrawDepthPixels</code> is hidden by the solids drawn into the same canvas to the pixel. <code>Canvas.DrawLine</code> and <code>Canvas.DrawLineDepth</code> draw your own lines. A line is one pixel thick, so half a cell tall where it runs sideways; on a <code>Seamless</code> canvas (Apple&#39;s Terminal) it is a row of whole cells.</li>
+<li><strong>Your own drawing joins in.</strong> <code>Camera.ProjectPixels(p, canvas)</code> says which pixel a world point is in, as fractional coordinates to floor with <code>math.Floor</code>, and how deep it is: its distance along <code>Camera.Look</code>, not the straight-line distance. Give both to <code>Canvas.SetDepth</code>, or the depth to <code>Canvas.DrawLineDepth</code>, and a marker, a billboard or a particle is hidden by the solids in front of it and hides those behind it, as the mesh&#39;s own pixels do.</li>
+<li><strong>And the way back.</strong> <code>Camera.Ray(x, y, w, h)</code> and <code>Camera.RayPixels(x, y, canvas)</code> give the ray through a place on the screen, the reverse of <code>Project</code> and <code>ProjectPixels</code>: an origin, which is the camera&#39;s <code>Position</code>, and a direction. The direction is one deep along <code>Look</code>, not a unit vector, so the point <code>origin + t*direction</code> is exactly <code>t</code> deep, the depth <code>SetDepth</code> takes, and the ray through the middle of the screen is <code>Look</code> itself; call <code>Normalize</code> for a unit vector. Use it to find what is under the crosshair or the pointer, to drop something where the player points, or to fill a canvas ray by ray. The ray through the middle of pixel <code>(i, j)</code> is <code>RayPixels(i+0.5, j+0.5, canvas)</code>, and a place off the screen has a ray too. <code>Camera.Up()</code> is the unit vector up, beside <code>Forward</code>, <code>Right</code> and <code>Look</code>.</li>
+<li><strong>Ties keep what is there.</strong> With <code>DrawDepth</code> a line that lies on a surface ties with it: a grid on a floor, a box round the thing that is selected, a mark on a wall, the edges of a mesh over its own faces. Where the line is a hair behind the surface it is lost, which across a floor seen at a low angle is half of it or all of it, and no lift is right at every distance: measured with a 1 by 1 outline on a floor at five distances from 1.5 to 12 away, only a lift of a tenth of its size kept all of it, and then it floats above the floor. Use <code>DrawOnSurface</code> for it.</li>
+<li><strong>Lines on a surface.</strong> <code>Mesh.DrawOnSurface</code> and <code>DrawOnSurfacePixels</code>, and <code>FrameBuffer.DrawLineOnSurface</code> and <code>Canvas.DrawLineOnSurface</code> for lines of your own, draw the same lines as <code>DrawDepth</code>, after the surface, to lie on it. A cell of a line is drawn if it is no farther than what is stored there plus the slope of that surface across a cell, which is read from the depths stored around it, so it works on any surface that is drawn into the same <code>FrameBuffer</code> or <code>Canvas</code>: a floor under a grid, a wall under a mark, a mesh under its own edges. The outline in the measurement above is whole at every distance with no lift, and a nearer solid still hides it, as do the faces of a cube in front of its own far edges. A line that lies on the surface leaves its depth as it was, and one in front of it keeps its own, as <code>DrawDepth</code>&#39;s does.</li>
+</ul>
+<pre tabindex="0"><code>floor.DrawShaded(fb, cam, lights...)
+cube.DrawShaded(fb, cam, lights...)
+grid.DrawOnSurface(fb, cam, engine.Cell{Character: &#39;+&#39;}) // on the floor, whole at any distance
+cube.DrawOnSurface(fb, cam, engine.Cell{Character: &#39;#&#39;}) // its edges, on its own faces
+</code></pre>
+<ul>
+<li><strong>What it does not do.</strong> The most a line may be behind a surface is a quarter of the depth there, whatever the slope, so a line farther behind is hidden; a line a hair behind a surface that is seen edge-on shows, since no depth test can tell the two apart. The slope is read from what is drawn, so draw the surface first. Only a mesh&#39;s <code>Edges</code> are drawn, one pixel thick. It costs a little more than <code>DrawDepth</code> for the depths it reads: the 12 edges of a cube take 2.5 microseconds in cells on 80 by 24, against 2.0.</li>
+<li><strong>A far plane ends the world.</strong> <code>Camera.Far</code> is the distance, along the view direction, beyond which nothing is drawn: a face or an edge that crosses it is cut where it crosses, as at the near plane, a mesh wholly beyond it is skipped without being looked at, and a point beyond it is not visible to <code>Project</code> and <code>ProjectPixels</code>. A point exactly <code>Far</code> away is drawn. It saves the time to draw the far end of a scene, and hides where a floor that runs on to the horizon ends. <code>Far</code> must be beyond <code>Near</code>; 0, the default, means no limit. A <code>Ray</code> is not limited by it.</li>
+<li><strong>Fog fades the far end.</strong> <code>Camera.Fog = &amp;mesh.Fog{Color: c, Start: 10, End: 40}</code> fades every shaded mesh toward <code>c</code> by how deep it is: nothing before <code>Start</code>, <code>c</code> itself from <code>End</code>, a straight line between. In cells the color fades and the character, which shows the brightness, stays; in pixels the shaded color fades. Give the camera a <code>Far</code> that <code>End</code> is at or before, and the world ends in the fog and not in a line. The distance is the depth along <code>Look</code>, the same number as <code>Far</code>, <code>SetDepth</code> and <code>ProjectPixels</code>, so <code>Fog.Apply(color, depth)</code> fades a marker or a billboard you draw yourself in step with the meshes. Wireframes are not fogged. It costs a color for every cell and pixel: a big floor takes about 46 percent longer in cells and 65 in pixels, a thousand cubes 6 and 15; a camera with no <code>Fog</code> draws as it did. <code>engine.Mix(a, b, t)</code> is the color arithmetic, public.</li>
+<li><strong>Off-screen meshes are skipped.</strong> Drawing starts by asking whether any of a mesh can be on screen, by a sphere that holds its vertices, so a scene of many meshes costs little for those out of view. No picture changes. The shapes and models the package makes know their sphere; a mesh you build by hand with its vertices where they are in the world, as a level built in place is, should call <code>level.UpdateBounds()</code> once after setting <code>Vertices</code>, or its sphere is round the world&#39;s origin and holds everything. An 8,000-vertex mesh written in the world and behind the camera then costs about 2 microseconds, where it took 71 for a wireframe and 297 for a shaded one. A vertex changed in place needs <code>UpdateBounds</code> again, and <code>Validate</code> says so.</li>
+</ul>
+<h2 id="pixel-shapes-and-pictures">Pixel shapes and pictures</h2>
+<p>The pixel <code>Canvas</code> draws rectangles and circles next to lines and triangles, blends a color over what is there, and the <code>bitmap</code> package draws a JPEG or PNG on it, or a picture made in code:</p>
+<pre tabindex="0"><code>canvas := fb.Canvas()
+canvas.FillRect(2, 1, 20, 6, engine.RGB(40, 60, 220))
+canvas.DrawRect(0, 0, canvas.Width(), canvas.Height(), engine.RGB(255, 255, 255)) // a border
+canvas.FillCircle(40, 10, 8, engine.RGB(230, 210, 40))
+canvas.DrawCircle(40, 10, 12, engine.RGB(230, 210, 40)) // a ring around it
+canvas.DrawText(2, 2, &#34;SCORE 4210&#34;, engine.RGB(255, 255, 255)) // letters 5 by 7 pixels, in a font that comes with glonk
+title := &#34;GAME OVER&#34;
+canvas.DrawTextScaled((canvas.Width()-engine.PixelTextWidth(title, 3))/2, 20, title, engine.RGB(255, 80, 80), 3) // centered, three times the size
+canvas.BlendRect(0, 0, canvas.Width(), canvas.Height(), engine.RGB(0, 0, 0), 0.5) // all of it half way to black
+
+// once, at start-up: a //go:embed []byte, a file, a download
+logo, err := bitmap.Decode(bytes.NewReader(logoPNG))
+if err != nil {
+	return err
+}
+logo.Draw(canvas, 2, 2)                // at its own size
+logo.DrawScaled(canvas, 60, 2, 32, 16) // or stretched
+canvas.Compose()
+
+// over cells that are already in the frame, such as inside a filled panel: draw the pixels, then put that rectangle down
+widget.Panel{Title: &#34;coins&#34;, Fill: engine.Cell{Background: engine.Palette(236)}}.Draw(fb, 0, 0, 20, 5)
+coin.Draw(canvas, 2, 2) // pixel (2, 2) is cell (2, 1): a cell is 1 pixel across and 2 down
+canvas.ComposeRect(2, 2, coin.Width(), coin.Height())
+</code></pre>
+<ul>
+<li><strong>Rectangles.</strong> <code>FillRect(x, y, w, h, color)</code> fills the pixels from <code>(x, y)</code>, and <code>DrawRect</code> draws a border one pixel thick inside the same rectangle: one under 3 pixels wide or tall is all border. A width or height that is not positive draws nothing.</li>
+<li><strong>Circles.</strong> <code>FillCircle(cx, cy, r, color)</code> is the pixels with (x-cx)² + (y-cy)² &lt;= r², so it is <code>2r+1</code> across and round, since the pixels of a canvas are square. <code>DrawCircle</code> is its outline, a ring one pixel thick. A radius of 0 is one pixel and a negative one draws nothing. The rows come from integer arithmetic, so the same pixels are drawn on every platform.</li>
+<li><strong>Text.</strong> <code>Canvas.DrawText(x, y, text, color)</code> draws the printable ASCII characters, space to <code>~</code>, in a pixel font that comes with glonk: letters 5 pixels wide and 7 tall, 6 apart, so one blank column is left between them. <code>DrawTextScaled(x, y, text, color, scale)</code> makes every pixel of a letter a block of <code>scale</code> by <code>scale</code>, for 2 or 3 times the size, and <code>engine.PixelTextWidth(text, scale)</code> is how wide that is, from the left of the first letter to the right of the last with no gap after it, so a title centers; the height is always <code>7*scale</code>. Only the pixels of the letters are written, so what is behind them shows between the strokes (to have a background, <code>FillRect</code> one first, <code>PixelTextWidth</code> wide), and the zero <code>Color</code> erases them. A character with no letter, an accent, a Chinese character, an emoji, a tab, is drawn as <code>?</code>, as <code>FrameBuffer.DrawText</code> draws what it cannot show, a NUL as a space, and a mark with no width of its own is skipped; there is no wrapping. It takes about 100 nanoseconds a letter at the smallest size and 200 at 3 times, and allocates nothing. The font is data in the repo, drawn for glonk. <code>FrameBuffer.DrawText</code> still draws cells; use it where the text is part of the grid, and this where it is part of a picture.</li>
+<li><strong>Over cells.</strong> The canvas is under every cell, so a filled <code>Panel</code> drawn after a picture covers it. <code>Canvas.ComposeRect(x, y, w, h)</code> puts one rectangle of the canvas down over the cells that are already in the frame, in pixels, the numbers the picture was drawn with: draw the panel, draw the picture (or the text, or a shape) on the canvas, then <code>ComposeRect</code>. Every cell the rectangle touches is put down, a cell being two pixels tall, so a picture on an odd pixel row works. A see-through pixel shows what the cell showed in that half: a half block keeps its other half, a space or a letter its background, and <code>Reverse</code> is read. <strong>A cell that holds a letter loses it when a pixel is put down in it</strong>, since a half block cannot hold one, while a cell whose two pixels are both empty is not touched and keeps its letter. On a <code>Seamless</code> canvas a cell with a pixel is one solid color, as for <code>Compose</code>, so what was under it is not kept. Where the canvas also holds a world that <code>Compose</code> has put down, <code>Clear</code> it first and draw the picture on the empty canvas. <code>Compose</code> is as it was and still puts the whole canvas down. Only the cells on the frame are visited, no position or size can overflow, and nothing is allocated. <code>examples/world</code> has a coin in its filled panel.</li>
+<li><strong>Blending.</strong> <code>BlendRect(x, y, w, h, color, t)</code> mixes <code>color</code> over the pixels of a rectangle by the part <code>t</code> from 0 to 1: each pixel that is there becomes <code>engine.Mix(pixel, color, t)</code>. A dim behind a menu, a fade to black, a red flash and a see-through panel are one call, and the whole canvas is <code>BlendRect(0, 0, canvas.Width(), canvas.Height(), ...)</code>. A pixel that is empty stays empty, since the terminal&#39;s own background is not known and there is nothing to mix with, so fill first where the tint should show there. A palette pixel becomes the exact RGB color it stands for, depth is never read or written, and nothing allocates: a whole 200 by 120 canvas takes about 44 microseconds.</li>
+<li><strong>As lines are.</strong> Shapes and pictures clip, replace the pixels under them whatever their depth (they never read or write it), and erase with the zero <code>Color</code>. Only the pixels on the canvas are visited, so a shape far off screen costs nothing and no number is too large. None allocates: a rectangle over a whole 200 by 120 canvas takes about 9 microseconds, a disc of radius 50 about 4, its ring about 1.</li>
+<li><strong>Pictures.</strong> <code>bitmap.Decode</code> reads a JPEG or PNG, found by what it holds and not by its name, once, into the colors of the canvas. <code>Draw</code> and <code>DrawScaled</code> then copy pixels and allocate nothing: 64 by 64 pixels take about 4 microseconds, or about 29 stretched to 128 by 96. A PNG pixel with an alpha of 128 or more is drawn as an opaque color and a lighter one is left alone, so what is under it shows. There is no blending, since a canvas pixel has no alpha and the terminal&#39;s own background is not known. Black is a color and is drawn. <code>DrawScaled</code> takes the pixel of the picture under the middle of each pixel it draws, with no smoothing, so a picture at its own size comes out exactly.</li>
+<li><strong>Pictures made in code.</strong> <code>bitmap.New(w, h)</code> makes a picture of see-through pixels, and <code>Set(x, y, color)</code> colors one: a generated texture, a sprite in other colors, a small map of a level. <code>bitmap.FromImage(img)</code> copies any <code>image.Image</code> with the alpha rule of <code>Decode</code>, so nothing has to be written out as a PNG and read back. <code>FromImage</code> has no limits, since its pixels are already in memory, but <code>New</code> gives an empty picture for a size of more than 4,194,304 pixels, as a size can come from a file.</li>
+<li><strong>Part of a picture.</strong> <code>Sub(x, y, w, h)</code> is a view of one rectangle of a picture that shares its pixels, so a strip of animation frames is one picture drawn a frame at a time: <code>strip.Sub(2*16, 0, 16, 16).Draw(canvas, x, y)</code>. Every call works on a view as on a picture, <code>Set</code> on either changes the other, a rectangle that runs off the picture is cut to it, and nothing is copied, so make the views once, at start-up. <code>Mirrored()</code> is a view with its columns reversed, for a thing that faces the other way: <code>frame.Mirrored().Draw(canvas, x, y)</code>.</li>
+<li><strong>Darker, and in one color.</strong> <code>Shaded(brightness)</code> is a view drawn darker, for a thing in a lit scene, and <code>Tinted(color, part)</code> one mixed toward a color: a part of 1 draws the shape all in the color, for the letters of a font made from one white picture or a hit that flashes white. They share the pixels, <code>Sub</code> and <code>Mirrored</code> keep them, setting again replaces rather than adds, and the shade comes first and the tint over it. <code>At</code> and <code>Set</code> keep the picture&#39;s own colors. Each pixel is a <code>Shade</code> and a <code>Mix</code>, so a 64 by 64 picture takes about 20 microseconds instead of 4.</li>
+<li><strong>Pictures in a 3D scene.</strong> <code>Draw</code> and <code>DrawScaled</code> never read or write depth, which is right for a logo or a HUD. <code>DrawScaledDepth(canvas, x, y, w, h, depth)</code> is <code>DrawScaled</code> for a picture of a thing that stands in the scene, an enemy, a pickup or a tree: a nearer surface hides it, it hides a farther one, in whatever order they are drawn, and a tie keeps what is there. The depth is one number for the whole picture, the distance along the camera&#39;s view direction, and <code>Camera.ProjectPixels</code> gives it with the pixel to draw at: project the foot and the top of the thing, and stretch the picture between them. It costs about 4 to 5 percent more than <code>DrawScaled</code> and allocates nothing.</li>
+<li><strong>Files that cannot be trusted.</strong> A small file can claim a picture of billions of pixels, so <code>Decode</code> reads the size from the header and refuses a picture over 32 MiB, or of more than 4,194,304 pixels (2,048 by 2,048), before decoding it. <code>DecodeLimit</code> takes limits of your own, and a source that never ends is read only up to the limit. The decoders are linked only into programs that import <code>bitmap</code>, which adds about 220 KB to a stripped program.</li>
+<li><strong>Not included.</strong> Smooth scaling and anti-aliasing, animated formats, ellipses, rounded rectangles, lines thicker than a pixel, and blending partial alpha.</li>
+</ul>
+<h2 id="sprites">Sprites</h2>
+<p>A sprite is a picture at a position: one <code>Cell</code>, a <code>Frame</code> of several made from text art, or an <code>Animation</code> of frames. A <code>Layer</code> draws its sprites in the order they were added.</p>
+<pre tabindex="0"><code>ship := sprite.FromLines(engine.Cell{Foreground: engine.Palette(208)},
+	` /\ `,
+	`/__\`,
+)
+walk := sprite.NewAnimation(8, frame0, frame1, frame2, frame3) // 8 frames a second
+walk.Loop = true
+
+layer := sprite.NewLayer()
+layer.Add(&amp;sprite.Sprite{Position: geometry.Vector2{X: 2, Y: 1}, Frame: ship, Overlay: true})
+layer.Add(&amp;sprite.Sprite{Position: geometry.Vector2{X: 20, Y: 5}, Animation: walk, Overlay: true})
+
+// in Update:
+walk.Advance(dt)
+// in Draw:
+layer.Draw(fb)
+</code></pre>
+<ul>
+<li><strong>A space is a hole.</strong> <code>FromLines</code> puts the style&#39;s colors on every rune that is not a space; per-cell colors come from <code>NewFrame</code> and <code>Frame.Set</code>.</li>
+<li><strong><code>Overlay</code> makes a sprite see-through.</strong> Off, a sprite replaces the cells under it, blanks included. On, its blank cells show what is behind them, and a colored letter keeps the background of the floor it stands on. It is off by default, so every sprite written before it draws as it did. Do not overlay sprites on half-block pixels: only the background of those cells is kept.</li>
+<li><strong>Animations run in time.</strong> <code>Advance(dt)</code> from <code>Update</code> plays them at the same speed at any frame rate. They stop on the last frame (<code>Done</code>) unless <code>Loop</code> is set.</li>
+<li><strong>The position is the top left of the frame</strong>, and a frame that runs off an edge is cut off cell by cell.</li>
+<li><strong>Frames are shared by pointer.</strong> Two sprites with one <code>Frame</code> see each other&#39;s <code>Set</code>; <code>Clone</code> makes a copy.</li>
+</ul>
+<p><code>examples/sprites</code> has a ship, a walking figure and a ghost, on a sea and a beach, and a rock the ship cannot sail through. Against a grid of tiles, <code>tilemap.Map.Move</code> does the pushing for you; see Tile maps and a camera.</p>
+<h2 id="collision">Collision</h2>
+<p>A sprite&#39;s box is where it is, as wide and tall as what it draws, and <code>geometry.Rect</code> says what two boxes share.</p>
+<pre tabindex="0"><code>wall := geometry.NewRect(30, 0, 2, 20)
+
+// in Update, after moving the player:
+if push := player.Bounds().PushOutOf(wall); push != (geometry.Vector2{}) {
+	player.Position = player.Position.Add(push)
+}
+for enemy := range enemies.Hits(player.Bounds()) {
+	hurt(enemy)
+}
+</code></pre>
+<ul>
+<li><strong>Boxes.</strong> <code>Sprite.Bounds()</code> is a <code>Rect</code> from <code>Position</code>, as it is and not floored, by the size of the animation&#39;s current frame, else the frame, else 1 by 1. The whole frame counts, holes included, so a ghost with empty corners still touches at its corners. A sprite with nothing to draw, or at a NaN or infinite position, has an empty box and touches nothing.</li>
+<li><strong>Half-open.</strong> A <code>Rect</code> covers <code>Min</code> up to but not including <code>Max</code>, like the cells a sprite covers: a sprite at X=2 that is 3 wide covers 2 up to 5, and one at X=5 does not touch it.</li>
+<li><strong>Asking.</strong> <code>Rect.Overlaps</code>, <code>Rect.Intersect</code>, <code>Rect.Contains</code>, <code>Sprite.Overlaps</code> and <code>Layer.Hits(box)</code>, which lists the sprites whose boxes overlap one, in draw order and allocating nothing (1,000 sprites take about 4 microseconds). A sprite in the layer hits its own box, so skip it by comparing pointers; <code>Layer.All()</code> ranges over the whole layer. The layer must not change while either runs.</li>
+<li><strong>Pushing out.</strong> <code>Rect.PushOutOf(wall)</code> is the smallest move, along one axis, that takes a box out of another: the axis on which they overlap least and the way that is shorter, so steering into a wall at an angle slides along it. It is the zero vector when they do not overlap.</li>
+<li><strong>Two habits.</strong> A push leaves a sprite against the wall to within rounding, which can be a hair short of a whole cell, and drawing floors the position, so round it after pushing (to a millionth) or it can rest a cell short. And a push does not know where the sprite came from, so one that moves farther than its own size in a frame can come out the other side: cap the time of the step. <code>examples/sprites</code> does both.</li>
+<li><strong>Not included.</strong> No pixel-perfect or swept collision, no collision layers: boxes only, and you keep a separate <code>Layer</code> or list for each kind of thing.</li>
+</ul>
+<h2 id="tile-maps-and-a-camera">Tile maps and a camera</h2>
+<p>A <code>tilemap.Map</code> is a level bigger than the screen: a grid of tiles, written as text art, drawn through a camera that is just a <code>Rect</code>, with walls that stop a moving box.</p>
+<pre tabindex="0"><code>level := tilemap.FromLines(map[rune]tilemap.Tile{
+	&#39;#&#39;: {Cell: engine.Cell{Character: &#39;#&#39;}, Solid: true},
+	&#39;.&#39;: {Cell: engine.Cell{Character: &#39;.&#39;}},
+},
+	&#34;##########&#34;,
+	&#34;#........#&#34;,
+	&#34;##########&#34;,
+)
+
+// in Update, after reading the keys:
+moved, hitX, hitY := level.Move(player.Bounds(), geometry.Vector2{X: dx, Y: dy})
+player.Position = moved.Min
+
+// the way round the walls to the player, for every enemy at once
+route.To(level, player.Bounds().Center()) // when the player&#39;s tile changes
+if next, ok := route.Next(enemy.Bounds().Center()); ok { /* steer toward next, then level.Move */ }
+
+// can the enemy see the player, and what does a shot hit?
+sees := level.Sees(enemy.Bounds().Center(), player.Bounds().Center())
+hit, _ := level.Cast(muzzle, aim) // hit.X, hit.Y, hit.Point, hit.Distance
+
+// the camera: the screen&#39;s rectangle, centered on the player, kept inside the level
+screen := geometry.NewRect(0, 0, float64(fb.Width()), float64(fb.Height()))
+view := screen.CenterOn(player.Bounds().Center()).Within(level.Bounds())
+
+// in Draw:
+level.Draw(fb, view)
+sprites.DrawView(fb, view)
+// a score or a hint is text for the screen, drawn after, with no view
+</code></pre>
+<ul>
+<li><strong>A level as text art.</strong> <code>FromLines(legend, lines...)</code> makes a map from a legend of what each rune is; a rune that is not in it, a space included, is the empty tile. <code>New(w, h, fill)</code> makes a map of one tile, and <code>Set</code> changes a cell. A <code>Tile</code> is an <code>engine.Cell</code>, whether it is <code>Solid</code>, and its <code>Kind</code>. A map holds up to 4,194,304 cells and 65,535 kinds of tile (two bytes a cell); a bigger one is empty.</li>
+<li><strong>A tile says what it is.</strong> <code>FromLines</code> gives each tile of its legend the rune that made it as its <code>Kind</code>, so <code>level.At(x, y).Kind == &#39;X&#39;</code> tells a crate from a wall that looks and acts the same, and a game need not keep the text of its level beside the map. A <code>Kind</code> the legend has is kept, and a rune the legend does not list is the empty tile, with no kind: list a marker such as <code>P</code> as <code>&#39;P&#39;: {}</code> to find it. Tiles that differ only in kind are different tiles, so runes whose tiles look alike are no longer one tile, though a cell is still two bytes.</li>
+<li><strong>Holes and layers.</strong> A tile whose cell is a hole (blank, no background, no attributes) is not drawn and shows what is under it, as a see-through sprite does, so one map can be laid over another. Any other tile replaces the cell under it.</li>
+<li><strong>The edge of the world is a wall.</strong> <code>Solid</code> is true outside the map, and a map is empty and solid on a nil pointer.</li>
+<li><strong>The camera is a <code>Rect</code>.</strong> <code>Rect.CenterOn(p)</code> centers it on a point and <code>Rect.Within(level)</code> keeps it inside, or centers it where the level is smaller than the screen. <code>Map.Draw(fb, view)</code> and <code>Layer.DrawView(fb, view)</code> use only its top left corner, floored in the world, so a sprite stands on its tile however the view moves and the picture moves a whole cell at a time. For a smooth follow, ease the view toward the player yourself with <code>Vector2.Lerp</code>.</li>
+<li><strong>Moving through the map.</strong> <code>Map.Move(box, delta)</code> moves a box along X, stopping at the first solid tile, then along Y, so a box that goes into a wall at an angle slides along it. It looks at every tile on the way, so a long frame cannot carry the box through a thin wall, and it stops with the box&#39;s edge exactly on the tile&#39;s edge, so there is no rounding gap and the box rests against a wall the same at any frame rate: neither habit of the Collision section is needed. It reports whether it was stopped on each axis. Only the tiles a box moves into stop it, so one that starts inside a wall can move on, and one outside the map cannot move.</li>
+<li><strong>Line of sight and ray casts.</strong> <code>Map.Sees(a, b)</code> says whether a straight line between two points crosses no solid tile, and <code>Map.Cast(from, direction)</code> shoots a ray and returns a <code>Hit</code>: the first solid tile it meets, where it enters it (<code>Point</code>, on the tile&#39;s edge) and how far (<code>Distance</code>, in cells). Both walk the grid one tile at a time, exactly, so no wall is thin enough to miss and the work is at most the size of the map. A point is in the tile it floors to, so a point at whole numbers is in its own tile, and a line through a corner is stopped only by the tile that holds the corner. Outside the map is solid, so a ray from inside always hits something. A 400 by 200 map crossed corner to corner takes about 1.4 microseconds and none of it allocates.</li>
+<li><strong>Walking to a target.</strong> <code>Route.To(level, targets...)</code> searches the tiles that are not solid, breadth first, for how many steps each is from the nearest target, and <code>Route.Next(point)</code> gives the center of the neighbor tile to step to be one step nearer, to steer to and <code>Move</code>: an enemy that walks straight at the player is stopped by the first wall, and one that follows the route goes round it. <code>Route.Steps(point)</code> is the distance. One <code>Route</code> serves every mover that wants the same target, so search again when the target changes tile, not once a mover. A step goes to any of 8 neighbors, a diagonal one only if both tiles beside it are open, so that a mover does not cut through the corner of a wall. A route is a snapshot of the map, reuses its memory, and searching a 400 by 200 map takes about 1.6 to 2.8 milliseconds with none allocated.</li>
+<li><strong>Cost.</strong> Drawing 200 by 60 cells takes about 20 microseconds and a move about 24 nanoseconds, neither allocating. <code>Layer.Draw</code> is as fast as before: <code>DrawView</code> has a loop of its own.</li>
+<li><strong>Not included.</strong> Tiles of other sizes than one cell (write a tile twice across for a squarer look), tile animation (<code>Set</code> the cell in your own <code>Update</code>), loading maps from files, parallax and camera shake.</li>
+</ul>
+<p><code>examples/world</code> is a level a screen and a half either way: walk it, slide along the walls, and collect the coins.</p>
+<h2 id="widgets">Widgets</h2>
+<p>The <code>widget</code> package draws the pieces of a HUD and a menu in screen space: a <code>Label</code>, a <code>Panel</code>, a <code>Bar</code> and a <code>Menu</code>. Each is a value with exported fields and a <code>Draw</code> method that takes a position in cells, like <code>DrawBox</code>.</p>
+<pre tabindex="0"><code>// in Draw, after the world:
+widget.Panel{Title: &#34;Status&#34;}.Draw(fb, 0, 0, 20, 4)
+widget.Label{Text: &#34;coins 3/12&#34;}.Draw(fb, 2, 1, 16)
+widget.Bar{Value: float64(coins) / float64(total)}.Draw(fb, 2, 2, 16)
+
+// a menu keeps its selection, so keep it in the game:
+menu := widget.Menu{Items: []string{&#34;Resume&#34;, &#34;Quit&#34;}}
+
+// in Update:
+if choice, chosen := menu.Update(in); chosen &amp;&amp; choice == 1 {
+	return engine.ErrQuit
+}
+
+// in Draw:
+menu.Draw(fb, 2, 5, 16, 2)
+</code></pre>
+<ul>
+<li><strong>Style.</strong> A style is an <code>engine.Cell</code>: its colors and attributes are used and its <code>Character</code> is not. A <code>Bar</code> is made of the cells <code>Full</code> and <code>Empty</code>, which are <code>█</code> and <code>░</code> by default.</li>
+<li><strong>Text.</strong> Labels, titles and menu items are counted in cells as <code>DrawText</code> counts them (<code>engine.TextWidth</code> returns that number), cut off at their width, and aligned <code>Left</code>, <code>Center</code> or <code>Right</code> for a <code>Label</code>.</li>
+<li><strong>A panel&#39;s fill.</strong> A <code>Fill</code> that is blank, with no background and no attributes, as the zero value is, is a hole: the panel leaves its inside alone and shows what is under it, as tiles and sprites do. A title is shown from 7 cells wide.</li>
+<li><strong>The menu.</strong> Up and Down move the selection and wrap around, Enter chooses, and <code>Update</code> returns the index of the item. Escape and every other key are left to the game, which can use Escape to open and close the menu. The selected row is drawn reversed, and a list longer than its rows scrolls to keep the selected item in the middle row. Test it with <code>engine.Keyboard</code>.</li>
+<li><strong>Always safe.</strong> What runs off the frame is cut off, a size that is not positive draws nothing, and numbers as large as an <code>int</code> cannot wrap around onto the frame. Nothing allocates.</li>
+<li><strong>Not included.</strong> Mouse input, text entry, layouts, and focus or nesting: a widget is drawn where you say.</li>
+</ul>
+<p><code>examples/world</code> has a coin panel with a coin picture, a count and a bar, and a pause menu.</p>
+<h2 id="quickstart">Quickstart</h2>
+<pre tabindex="0"><code>package main
+
+import (
+	&#34;context&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+
+	&#34;glonk.dev/engine&#34;
+)
+
+type game struct{ x float64 }
+
+func (g *game) Update(dt float64, in *engine.Input) error {
+	if in.Pressed(engine.KeyEscape) {
+		return engine.ErrQuit
+	}
+	g.x += 20 * dt // cells per second
+	return nil
+}
+
+func (g *game) Draw(fb *engine.FrameBuffer) {
+	fb.DrawBox(0, 0, fb.Width(), fb.Height(), engine.Color{}) // the default color
+	fb.Set(int(g.x)%fb.Width(), fb.Height()/2, engine.Cell{Character: &#39;@&#39;, Foreground: engine.Palette(208)})
+}
+
+func main() {
+	// Width and Height of 0 fill the terminal and follow resizes.
+	if err := engine.Run(context.Background(), &amp;game{}, engine.Config{FPS: 30}); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+</code></pre>
+<p><code>Run</code> owns the terminal. Each frame it calls <code>Update</code> (move things, read input) and then <code>Draw</code> (write cells into the <code>FrameBuffer</code>), then prints the frame. The terminal is restored when <code>Run</code> returns, and Ctrl-C, <code>kill</code> and a closing window (SIGINT, SIGTERM, SIGHUP) end it cleanly (<code>Run</code> returns <code>nil</code>), so the game needs no signal handler. When your <code>context</code> ends it, <code>Run</code> returns the context&#39;s error. The full API is in each package&#39;s documentation, with runnable examples: <code>go doc glonk.dev/engine</code>, or the package pages on pkg.go.dev.</p>
+<h2 id="frame-numbers">Frame numbers</h2>
+<p>A game that has a <code>Stats(engine.Stats)</code> method is called after every frame, once it has been written, with how that frame went:</p>
+<pre tabindex="0"><code>func (g *game) Stats(s engine.Stats) { g.stats = s }
+
+// in Draw:
+fb.DrawText(1, 1, fmt.Sprintf(&#34;%.0f fps  %d bytes&#34;, g.stats.FPS, g.stats.Bytes), engine.Color{})
+</code></pre>
+<p><code>Stats</code> has <code>FPS</code> (frames a second, averaged over about the last ten), <code>Update</code>, <code>Draw</code> and <code>Write</code> (the time of each part of the frame; <code>Write</code> is working out which cells changed and writing them, which is where a slow terminal shows) and <code>Bytes</code> (what was sent for the frame, 0 when nothing on the screen changed). The bytes decide whether a program works over ssh: a moving 3D scene in half-block pixels is about 7 KB a frame, and a frame where every pixel changes is 66 KB in 256 colors and 110 KB in true color for 100 by 30 cells, so a program that can see the number can draw less on a slow link. A game without the method is not timed, so asking is the only way to pay for it. A headless <code>Run</code> gives the same numbers, with every frame sent whole, so a test can check the bytes of a frame; see <code>ExampleStatsReceiver</code>. <code>cube3d</code> and the viewer show them.</p>
+<h2 id="testing-a-game">Testing a game</h2>
+<p><code>Update</code> and <code>Draw</code> are plain methods, so a game is tested by calling them. <code>engine.Keyboard</code> stands in for the terminal&#39;s keyboard, and a <code>FrameBuffer</code> prints as text, one line per row:</p>
+<pre tabindex="0"><code>func TestEscapeQuits(t *testing.T) {
+	kb := engine.NewKeyboard()
+	kb.Press(engine.KeyEscape)
+
+	err := (&amp;game{}).Update(1.0/30, kb.Input())
+
+	if !errors.Is(err, engine.ErrQuit) {
+		t.Errorf(&#34;wanted ErrQuit, got %v&#34;, err)
+	}
+}
+
+func TestTheDotMovesAcrossTheScreen(t *testing.T) {
+	g := &amp;game{}
+	g.Update(0.25, engine.NewKeyboard().Input()) // a quarter of a second at 20 cells a second
+
+	fb, _ := engine.NewFrameBuffer(12, 3)
+	g.Draw(fb)
+
+	want := &#34;┌──────────┐\n&#34; +
+		&#34;│    @     │\n&#34; +
+		&#34;└──────────┘&#34;
+	if got := fb.String(); got != want {
+		t.Errorf(&#34;wanted\n%s\ngot\n%s&#34;, want, got)
+	}
+}
+</code></pre>
+<p>A <code>Keyboard</code> from <code>NewKeyboard</code> acts like a terminal that reports key releases: a key is down from <code>Press</code> until <code>Release</code>, <code>Input.Pressed</code> and <code>Input.Started</code> are true for one frame, and <code>EndFrame</code> ends that frame the way <code>Run</code> does. A <code>Press</code> of a key that is already down is a key repeat: <code>Pressed</code> is true again, <code>Started</code> is not, so a test can hold a key. <code>PressWith(mods, keys...)</code> presses a chord such as Ctrl+S, and <code>Type(text)</code> types characters, for a game that reads <code>KeyEvents</code> and <code>Text</code>, and <code>Paste(text)</code> pastes. Tests are exact and need no clock. <code>NewLegacyKeyboard</code> acts like a terminal that reports none, for a game that asks <code>Input.Exact</code> and changes what it does: a key stays held for about 150 ms after its last <code>Press</code>, <code>Release</code> does nothing, and <code>Advance</code> moves the clock so that a test can let a key go. <code>String</code> leaves off the trailing spaces of each line and shows characters only, not colors.</p>
+<p>To test a whole run (start-up, key bytes in, frames out), give <code>Config.Input</code> and <code>Config.Output</code> a reader and a writer that are not a terminal: <code>Run</code> then runs headless at the <code>Width</code> and <code>Height</code> you set. See <code>ExampleRun_headless</code>.</p>
+<p>A frame can also be a picture, which <code>String()</code> cannot show: colors, and the two pixels of every half-block cell. <code>fb.Image</code> returns an <code>*image.RGBA</code> that is <code>Width*Scale</code> by <code>2*Height*Scale</code> pixels, so a frame drawn with a <code>Canvas</code> comes out pixel for pixel at <code>Scale: 1</code>. A test can write it for a person to look at when it is asked to, and compare it with a picture it stored earlier:</p>
+<pre tabindex="0"><code>func TestSceneLooksRight(t *testing.T) {
+	g := newScene()
+	fb, _ := engine.NewFrameBuffer(40, 12)
+	g.Draw(fb)
+	img := fb.Image(engine.ImageOptions{Scale: 4})
+
+	if path := os.Getenv(&#34;GLONK_SCREENSHOT&#34;); path != &#34;&#34; { // GLONK_SCREENSHOT=/tmp/scene.png go test
+		f, _ := os.Create(path)
+		defer f.Close()
+		png.Encode(f, img)
+	}
+	// Compare with a stored picture: decode it with png.Decode and check each pixel of img.
+}
+</code></pre>
+<p>What it draws: a half-block cell as its two pixels, a space as its background and <code>█</code> as its foreground. Any other character is a mark, a rectangle in its foreground color over the middle of the cell, which shows where text is and in what color but not what it says (<code>String()</code> says that). <code>Reverse</code> swaps a cell&#39;s colors; Bold, Dim and Underline are not drawn. The default colors of a terminal are its own, so a cell that leaves them out is light gray on black unless <code>ImageOptions.Foreground</code> and <code>Background</code> say otherwise, and <code>Colors: engine.Colors256</code> shows RGB as the nearest of the 256 palette colors, as a terminal without true color does. A picture of more than 4,194,304 pixels is not made. Pixels set on a <code>Canvas</code> are in the picture once <code>Compose</code> has put them in the cells. <code>ExampleFrameBuffer_Image</code> is a runnable version.</p>
+<h2 id="packages">Packages</h2>
+<table>
+<thead>
+<tr><th>Package</th><th>Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td><code>engine</code></td><td>The loop, <code>FrameBuffer</code>, pixel <code>Canvas</code> (lines, rectangles, circles, triangles), drawing helpers, keyboard <code>Input</code></td></tr>
+<tr><td><code>geometry</code></td><td>2D and 3D vector math, and <code>Rect</code> for boxes, collision and cameras</td></tr>
+<tr><td><code>mesh</code></td><td>3D meshes (wireframe and shaded), shapes, OBJ loading, lights, and the perspective <code>Camera</code></td></tr>
+<tr><td><code>sprite</code></td><td>Sprites (a <code>Cell</code>, a text-art <code>Frame</code> or an <code>Animation</code> at a position, optionally see-through) drawn in layers, through a view, with bounds and collision queries</td></tr>
+<tr><td><code>tilemap</code></td><td>Tile maps written as text art, drawn through a camera, with solid tiles that stop a moving box</td></tr>
+<tr><td><code>widget</code></td><td>A label, a panel, a bar and a menu for a HUD or a pause screen, drawn in screen space</td></tr>
+<tr><td><code>bitmap</code></td><td>JPEG and PNG pictures, or ones made in code, drawn on the pixel <code>Canvas</code> at their own size or stretched, with limits for files that cannot be trusted</td></tr>
+</tbody>
+</table>
+<h2 id="compatibility-and-limits">Compatibility and limits</h2>
+<p>Built to work in most terminals. The basics need only the alternate screen, cursor movement, and 256-color escape codes (24-bit colors are used on top of that where the terminal says it has them); line wrapping is turned off while a program runs, and the kitty keyboard protocol and focus reporting are used where the terminal has them. All of it is undone when <code>Run</code> returns. It is developed on macOS and tested mainly in Ghostty.</p>
+<ul>
+<li><strong>Without key releases, held keys are a timing guess.</strong> Most terminals report presses and repeats but never releases, so a key counts as held until about 150 ms pass without a repeat, with a short pause when you first hold one. <code>Input.Started</code> has the same limit: it is true once when a key goes down and not for the repeats, but the OS waits longer than 150 ms before it repeats, so a key held past that delay starts twice. glonk detects the kitty keyboard protocol at startup and uses it where it exists; everywhere else this is what you get.</li>
+<li><strong>Without key releases, only one key stays held at a time.</strong> The OS repeats just the most recently pressed key, so holding W and then pressing E stops W and you cannot walk and turn together (Terminal.app, for one). Set <code>Config.LegacyKeys</code> to force this behavior if a terminal misbehaves with the protocol. <code>Input.Exact</code> says which of the two a run has, so a game can warn the player or change to controls that work one key at a time; it is true in a headless <code>Run</code> unless <code>LegacyKeys</code> is set.</li>
+<li><strong>Escape waits 50 ms, and without the kitty protocol Alt and Ctrl are guesses.</strong> An Escape press and the start of an arrow key are the same byte, so the Escape key counts only after 50 ms with nothing following it. Alt+key arrives as Escape plus the key, and glonk reads it as Alt+key in <code>Input.KeyEvents</code> (so an Escape pressed and then a key within one read is read as Alt+key too). Ctrl+letter arrives as a control byte, which is why Ctrl+I is Tab, Ctrl+M is Enter and Ctrl+H is Backspace. Shift is the case of a letter there, not a modifier of it; the arrows, Home, End, Page Up and Down, Insert, Delete and F1 to F12 carry their modifiers in the sequence they send. Only the kitty protocol says every modifier exactly. <code>Input.Text</code> is the characters as they arrive, or, on a terminal with the protocol but not its text flag, the keys with Shift applied to ASCII letters only. Hyper and Meta chords are not read.</li>
+<li><strong>A paste is one string only where the terminal has bracketed paste.</strong> glonk asks for it as it takes the terminal over (and turns it off when it gives it back, and across Ctrl-Z) and reads the markers whether it asked or not, but a terminal that does not know the mode sends a paste as the key presses it is, with a newline as Enter, and <code>Input.Paste</code> is empty. A paste is cut at 1 MiB, with what is beyond it dropped; its text is valid UTF-8 with U+FFFD for what is not, and its line breaks are newlines. A paste that stalls for half a second before its end is delivered as it stands, so that a broken one cannot swallow every key after it.</li>
+<li><strong>The mouse is opt-in, and needs the terminal&#39;s decimal mouse mode.</strong> Set <code>Config.Mouse</code> and glonk asks for every movement, the buttons and the wheel (modes 1003 and 1006, with focus reporting) as it takes the terminal over, and turns them off when it gives it back and across Ctrl-Z. While it is on, the terminal no longer selects text with the mouse for you (Shift with the mouse does, in most terminals), which is why a program that does not read the mouse is left as it was. The cell is counted from 0 at the top left of the terminal, so a canvas pixel at the top of it is <code>(x, 2*y)</code>, and it can be outside a frame smaller than the terminal. A terminal sends nothing for a pointer outside its window, so the pointer stays where it was last reported, and a button held when the window loses focus is let go then, not when you let go of it. Only the left, middle and right buttons and the wheel are reported, with no modifiers (Shift and a drag is often the terminal&#39;s own), and no pixel position. A terminal with the mouse but not mode 1006 sends an older form, which is dropped, so <code>MousePos</code> says <code>ok</code> is false there. Terminal.app and Ghostty were tried on macOS and both send the decimal form; <code>examples/input</code> shows what yours does.</li>
+<li><strong>Ctrl-Z suspends, and some endings cannot be cleaned up.</strong> Ctrl-Z restores the terminal, stops the program, and takes the terminal over again on <code>fg</code>; Windows has no suspend. <code>os.Exit</code>, <code>log.Fatal</code>, a panic in a goroutine you started, <code>kill -9</code> and <code>kill -QUIT</code> skip the cleanup and leave the terminal raw; type <code>reset</code> to repair it. After the first quit signal a second one kills a game that is stuck, unless your program catches those signals itself.</li>
+<li><strong>Bad meshes and cameras draw nothing instead of failing.</strong> Edges and faces that name a missing vertex are skipped, and normals that are not one per vertex or not finite numbers are not used (the mesh is shaded flat); <code>Mesh.Validate</code> finds both, a <code>Camera</code> field left at 0 uses a default (a 90 degree FOV, a Near of 0.1, a <code>CellAspect</code> of 2, no <code>Far</code>), a nonsense FOV, Near, Far or <code>CellAspect</code> sees nothing, a mesh whose <code>Transform</code> has a number that is not finite or a negative <code>Scale</code> is not drawn, and sprites at NaN or infinite positions are not drawn.</li>
+<li><strong>One character is one column.</strong> A cell holds a single character one column wide. Wide characters (CJK, most emoji) are drawn as <code>?</code>, combining marks and joiners are skipped by <code>DrawText</code>, and control characters, escape sequences in text included, are drawn as <code>?</code> too, so nothing a file name or a game contains can send commands to the terminal. A NUL character is shown as a space, so <code>Cell{Background: engine.Palette(4)}</code> is a colored blank. Wide characters are not supported.</li>
+<li><strong>True color is used where the terminal says it has it.</strong> An <code>RGB</code> color is sent exactly when <code>COLORTERM</code> is <code>truecolor</code> or <code>24bit</code> (terminals that can show it set that themselves) and as the closest of palette colors 16 to 255 otherwise; <code>Attrs</code> adds bold, dim, underline and reverse. Inside tmux or over ssh <code>COLORTERM</code> often does not arrive: export <code>COLORTERM=truecolor</code>, or set <code>Config.Colors</code> to <code>engine.ColorsTrue</code>, if the terminal can show it (and to <code>engine.Colors256</code> to turn it off). A terminal that cannot but is told it can shows wrong colors. A <code>Palette</code> color is always sent as a palette color, so colors 0 to 15 follow the user&#39;s theme. <code>Shade</code> gives exact RGB, so shades are finer on a true color terminal. Apple&#39;s Terminal does not set <code>COLORTERM</code> and keeps the 256-color look.</li>
+<li><strong>Cells are taken to be twice as tall as wide.</strong> That is what makes a cube look like a cube in most fonts; set <code>Camera.CellAspect</code> for a font that differs.</li>
+<li><strong>Box drawing and half blocks need a Unicode font.</strong> <code>DrawBox</code> uses <code>┌─┐│└┘</code> and the pixel canvas uses <code>▀▄</code>; nearly every monospace font has them. Character shading (<code>DrawShaded</code>) needs only ASCII and stays the default in the examples.</li>
+<li><strong>Apple&#39;s Terminal draws a faint line along half-block edges.</strong> Its block characters fall a little short of the cell. glonk detects it (<code>TERM_PROGRAM=Apple_Terminal</code>) and <code>Canvas.Compose</code> then draws solid cells instead of half blocks, so there is no line but silhouettes are a pixel blockier and pixel lines are rows of whole cells. Set <code>Canvas.Seamless</code> yourself to override, for instance inside tmux, which hides that variable.</li>
+<li><strong>A fixed-size frame larger than the terminal is cut off.</strong> Only the top-left part that fits is shown, and the screen is cleared when the window changes size. Leave <code>Width</code> and <code>Height</code> at 0 to fill the terminal.</li>
+<li><strong>A terminal that reports no size is taken as 80 by 24.</strong> A pseudo-terminal that nobody gave a size reports 0 by 0, as under <code>script</code> started from a CI step or in some container consoles. <code>Run</code> then uses 80 columns or 24 rows for each axis you left at 0, until the terminal reports a size, and follows it from then on. Set <code>Width</code> and <code>Height</code> to choose a size yourself.</li>
+<li><strong><code>FPS</code> runs from 1 to 1000;</strong> <code>Run</code> returns an error outside that range. A key pressed during start-up, while glonk asks the terminal about the keyboard protocol, arrives as a tap rather than a hold.</li>
+<li><strong>Without a terminal there is no terminal handling.</strong> A headless <code>Run</code> (see <code>Config.Output</code>) treats a key as held from its press to its release, as the kitty keyboard protocol reports them, unless <code>LegacyKeys</code> is set; a plain letter with no release then stays held. Ctrl-Z does nothing and quit signals are left to your program. Reading from an input that never ends a read (a pipe nobody closes) leaves one goroutine waiting after <code>Run</code> returns.</li>
+<li><strong>Only changes are sent, so do not print to the terminal yourself.</strong> Each frame sends just the cells that differ from the last, as one synchronized update (terminals that do not know that mode ignore it). Text that something else writes while <code>Run</code> is running stays on screen until those cells change, the window is resized, or the window comes back to the front; log to a file instead.</li>
+<li><strong>Resizing can flicker for one frame.</strong></li>
+<li><strong>Windows is untested.</strong></li>
+</ul>
+<h2 id="planned">Planned</h2>
+<p>What is planned is in <a href="https://github.com/kyrokohan/glonk/issues">GitHub issues</a>, grouped by <a href="https://github.com/kyrokohan/glonk/milestones">milestone</a> for the release it is aimed at. Ideas, not promises.</p>
+</article>
+</main>
+
+<footer>
+  <nav aria-label="More">
+    <a href="https://pkg.go.dev/glonk.dev">pkg.go.dev</a>
+    <a href="https://github.com/kyrokohan/glonk">GitHub</a>
+    <a href="https://github.com/kyrokohan/glonk/blob/main/CONTRIBUTING.md">Contributing</a>
+    <a href="https://github.com/kyrokohan/glonk/blob/main/SECURITY.md">Security</a>
+    <a href="https://github.com/kyrokohan/glonk/blob/main/BRAND.md">Brand</a>
+    <a href="https://github.com/kyrokohan/glonk/blob/main/LICENSE">MIT license</a>
+  </nav>
+  <p class="fine">Early and pre-1.0: the API may change. Built to work in most terminals; Windows is untested.</p>
+</footer>
+
+</div>
+</body>
+</html>

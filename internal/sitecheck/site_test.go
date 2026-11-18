@@ -5,9 +5,11 @@ package sitecheck
 
 import (
 	"encoding/json"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -19,7 +21,40 @@ const (
 	wantSource = "glonk.dev https://github.com/kyrokohan/glonk https://github.com/kyrokohan/glonk/tree/main{/dir} https://github.com/kyrokohan/glonk/blob/main{/dir}/{file}#L{line}"
 )
 
-var pages = []string{"index.html", "404.html"}
+// pages are the HTML files of the site, by their paths in site/: the two written by hand and
+// those internal/sitepages makes. The folder of recordings and fonts has none.
+var pages = func() []string {
+	var found []string
+	site := filepath.Join("..", "..", "site")
+	err := filepath.WalkDir(site, func(path string, d fs.DirEntry, err error) error {
+		switch {
+		case err != nil:
+			return err
+		case d.IsDir() && d.Name() == "media":
+			return filepath.SkipDir
+		case !d.IsDir() && filepath.Ext(path) == ".html":
+			rel, err := filepath.Rel(site, path)
+			if err != nil {
+				return err
+			}
+			found = append(found, filepath.ToSlash(rel))
+		}
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
+	return found
+}()
+
+// The tests below go over every page that is found. This one fails if a page was not.
+func TestTheSiteHasItsPages(t *testing.T) {
+	for _, want := range []string{"index.html", "404.html", "manual/index.html", "changelog/index.html"} {
+		if !slices.Contains(pages, want) {
+			t.Errorf("wanted %s among the pages of the site, got %v", want, pages)
+		}
+	}
+}
 
 // read returns the text of a file of the repository, given its path from the root.
 func read(t *testing.T, path ...string) string {
@@ -213,7 +248,9 @@ func TestNothingIsLoadedFromAnotherSite(t *testing.T) {
 	}
 }
 
-// A link to this site must name a file that is in it.
+// A link to this site must name a file that is in it, and a link to a part of a page, on this
+// page or another, an id that the page has. The manual's links between its sections come from
+// the README, where they are made for GitHub's ids.
 func TestLocalLinksNameFilesOfTheSite(t *testing.T) {
 	link := regexp.MustCompile(`(?:href|src|srcset)="([^"]*)"`)
 	noRecordings := noMedia()
@@ -222,25 +259,42 @@ func TestLocalLinksNameFilesOfTheSite(t *testing.T) {
 
 		found := 0
 		for _, m := range link.FindAllStringSubmatch(page, -1) {
-			target := m[1]
-			if strings.HasPrefix(target, "#") || regexp.MustCompile(`^[a-z][a-z0-9+.-]*:`).MatchString(target) {
-				continue // inside the page, or another site
+			if regexp.MustCompile(`^[a-z][a-z0-9+.-]*:`).MatchString(m[1]) {
+				continue // another site
 			}
-			found++
-			target, _, _ = strings.Cut(target, "#")
+			target, part, _ := strings.Cut(m[1], "#")
 			target, _, _ = strings.Cut(target, "?")
-			if target == "/" || target == "" {
-				target = "index.html"
+			in := page
+			if target != "" {
+				found++
+				if strings.HasSuffix(target, "/") {
+					target += "index.html"
+				}
+				if noRecordings && strings.HasPrefix(target, "/media/") {
+					continue
+				}
+				data, err := os.ReadFile(filepath.Join("..", "..", "site", strings.TrimPrefix(target, "/")))
+				if err != nil {
+					t.Errorf("%s: wanted %q to be a file of the site, got %v", name, m[1], err)
+					continue
+				}
+				in = string(data)
 			}
-			if noRecordings && strings.HasPrefix(target, "/media/") {
-				continue
-			}
-			if _, err := os.Stat(filepath.Join("..", "..", "site", strings.TrimPrefix(target, "/"))); err != nil {
-				t.Errorf("%s: wanted %q to be a file of the site, got %v", name, m[1], err)
+			if part != "" && !strings.Contains(in, `id="`+part+`"`) {
+				t.Errorf("%s: wanted %q to name an id of the page it leads to", name, m[1])
 			}
 		}
 		if found == 0 {
 			t.Errorf("%s: wanted at least the stylesheet among local links", name)
+		}
+
+		// Of two parts with one id, a link reaches the first only.
+		seen := map[string]bool{}
+		for _, m := range regexp.MustCompile(` id="([^"]*)"`).FindAllStringSubmatch(page, -1) {
+			if seen[m[1]] {
+				t.Errorf("%s: wanted the id %q once", name, m[1])
+			}
+			seen[m[1]] = true
 		}
 	}
 }

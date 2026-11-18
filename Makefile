@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help fmt fmtcheck test vet lint vuln fuzz bench benchcmp brand record run build check
+.PHONY: help fmt fmtcheck test vet lint vuln fuzz bench benchcmp brand record site run build check
 
 help:
 	@echo "Available targets:"
@@ -14,6 +14,7 @@ help:
 	@echo "  benchcmp - Compare the benchmarks with those of BASE (default origin/main), the packages that differ"
 	@echo "  brand    - Write the logo files and the site's icons again from internal/brand"
 	@echo "  record   - Play the examples' scripts and write the recordings, as asciicasts, into CASTS (default casts)"
+	@echo "  site     - Write the manual and the changelog of glonk.dev again from README.md and CHANGELOG.md"
 	@echo "  run      - Run an example (default bounce2d; EXAMPLE=./examples/cube3d; ARGS= passes arguments)"
 	@echo "  build    - Compile every package"
 	@echo "  check    - Check formatting, run tests and vet"
@@ -96,6 +97,13 @@ CASTS ?= casts
 record:
 	@echo "Recording the examples into $(CASTS)..."
 	go test ./examples/cube3d ./examples/viewer ./examples/sprites ./examples/world -run '^TestRecord$$' -record '$(abspath $(CASTS))'
+
+# The manual and the changelog on glonk.dev are README.md and CHANGELOG.md as pages. The test in
+# internal/sitepages makes them, and fails under make check when one of the two files has changed
+# and its page has not.
+site:
+	@echo "Writing the manual and the changelog of glonk.dev..."
+	go test ./internal/sitepages -run TestThePagesAreWhatTheRepositorySays -update
 
 EXAMPLE ?= ./examples/bounce2d
 ARGS ?=

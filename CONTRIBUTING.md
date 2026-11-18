@@ -47,6 +47,7 @@ Every change, the maintainer's included, goes in through a pull request; nobody 
 - The website at glonk.dev is the plain HTML in `site/`, deployed from `main` by Cloudflare as Workers static assets, configured in `wrangler.jsonc`, whose 404 page is what answers a request for any other path with the `go-import` tags. Its install line must match the README's and the module in `go.mod`, and both pages must keep their `go-import` tags at the top of the head, because the import path depends on them. `internal/sitecheck` checks all of that.
 - The logo files in `brand/` and the site's icons are drawn by the test in `internal/brand`, from the pixels and the terminal color numbers written there. Change them there and run `make brand`; do not edit the files. `BRAND.md` says how the mark, the colors and the type are used.
 - The recordings in `site/media/` show what four of the examples play from the scripts in their `record_test.go`. `make record` plays them again and writes the frames as asciicasts; the pictures are those frames as a terminal shows them. Re-record an example when what it draws changes. The folder has a `go.mod` of its own so that Go leaves it out of the module: do not put anything there that a package needs.
+- The manual and the changelog on glonk.dev (`site/manual/` and `site/changelog/`) are `README.md` and `CHANGELOG.md` as pages, made by the test in `internal/sitepages`. After a change to either file run `make site`, or `make check` fails; do not edit the pages. The test knows the Markdown the two files use (headings, paragraphs, flat lists, tables, code, bold, links and pictures) and refuses anything else until it is taught it.
 
 ## Measuring speed
 
@@ -70,6 +71,7 @@ The maintainer makes releases from `main` once CI there is green. While glonk is
    - In `CHANGELOG.md`, `## [Unreleased]` becomes `## [X.Y.Z] - YYYY-MM-DD`, opened by one sentence on what the release adds and whether anything was removed, renamed or changed. An empty `## [Unreleased]` goes above it.
    - The links at the bottom: `[Unreleased]` compares `vX.Y.Z...HEAD`, and a new `[X.Y.Z]` compares the previous tag with `vX.Y.Z`.
    - `SECURITY.md` supports `vX.Y.x`.
+   - `make site`, which writes the changelog page of glonk.dev again.
 
    The date is the day the tag is pushed. If the tag goes out on a later day, change the date first.
 2. Merge the pull request once its checks pass (by rebase if it has other commits, so the prep commit stays last and keeps its message), then wait for CI on `main`.
