@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2" shape-rendering="crispEdges">
+<title>glonk</title>
+<style>.t{fill:#d7af00}.f{fill:#875f00}@media (prefers-color-scheme:dark){.t{fill:#ffd700}.f{fill:#af8700}}</style>
+<path class="t" d="M0 0h2v1h-2z"/>
+<path class="f" d="M0 1h2v1h-2z"/>
+</svg>

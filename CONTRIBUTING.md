@@ -45,6 +45,7 @@ Every change, the maintainer's included, goes in through a pull request; nobody 
 - Text and cell contents reach the terminal only through the frame buffer, which checks every cell. Do not send them by another route. Control sequences are built in one place, `engine/escape.go`.
 - Comments say why, not what.
 - The website at glonk.dev is the plain HTML in `site/`, deployed from `main` by Cloudflare as Workers static assets, configured in `wrangler.jsonc`, whose 404 page is what answers a request for any other path with the `go-import` tags. Its install line must match the README's and the module in `go.mod`, and both pages must keep their `go-import` tags at the top of the head, because the import path depends on them. `internal/sitecheck` checks all of that.
+- The logo files in `brand/` and the site's icons are drawn by the test in `internal/brand`, from the pixels and the terminal color numbers written there. Change them there and run `make brand`; do not edit the files. `BRAND.md` says how the mark, the colors and the type are used.
 
 ## Measuring speed
 

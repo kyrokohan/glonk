@@ -1,21 +1,22 @@
+/* The two grounds of BRAND.md: paper, and night where the visitor's system is dark. */
 :root {
   color-scheme: light dark;
-  --bg: #ffffff;
-  --fg: #1a1a1a;
-  --muted: #5c5c5c;
-  --link: #0b5cad;
-  --code-bg: #f4f4f5;
-  --border: #d4d4d8;
+  --bg: #e7ecf0;
+  --fg: #14213d;
+  --muted: #46567a;
+  --link: #14213d;
+  --code-bg: #dbe2e8;
+  --border: #9fadbd;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #121214;
-    --fg: #ececee;
-    --muted: #a1a1aa;
-    --link: #7db7f5;
-    --code-bg: #1c1c20;
-    --border: #34343a;
+    --bg: #000000;
+    --fg: #e4e4e4;
+    --muted: #8a8a8a;
+    --link: #ffd700;
+    --code-bg: #121212;
+    --border: #3a3a3a;
   }
 }
 

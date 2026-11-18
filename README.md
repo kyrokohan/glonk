@@ -1,4 +1,11 @@
-# glonk
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="brand/glonk-night.svg">
+    <img src="brand/glonk-paper.svg" alt="glonk" width="336" height="80">
+  </picture>
+</h1>
+
+Every game starts with a block.
 
 A terminal rendering engine for Go. Draw 2D, 3D, or both in the same frame, using plain terminal cells.
 
