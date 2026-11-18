@@ -14,6 +14,8 @@ import (
 	"flag"
 	"fmt"
 	"image"
+	"image/color"
+	"image/draw"
 	"image/png"
 	"io"
 	"math"
@@ -25,6 +27,8 @@ import (
 	"testing"
 
 	"glonk.dev/engine"
+	"glonk.dev/geometry"
+	"glonk.dev/mesh"
 )
 
 var update = flag.Bool("update", false, "write the logo files again from this source")
@@ -100,23 +104,120 @@ func markFrame(t *testing.T, g ground) *engine.FrameBuffer {
 	return fb
 }
 
-// lockupFrame draws the mark and the name on the ground, with the clear space around them.
-func lockupFrame(t *testing.T, g ground) *engine.FrameBuffer {
-	w, h := markSize+gap+len(name[0])+2*clear, len(name)+2*clear
+// lockupFrame draws the mark and the name on the ground, with pad pixels of it around them.
+func lockupFrame(t *testing.T, g ground, pad int) *engine.FrameBuffer {
+	w, h := markSize+gap+len(name[0])+2*pad, len(name)+2*pad
 	fb := frame(t, w, h)
 	c := fb.Canvas()
 	c.FillRect(0, 0, w, h, g.page)
-	c.FillRect(clear, clear+markTop, markSize, markSize/2, g.top)
-	c.FillRect(clear, clear+markTop+markSize/2, markSize, markSize/2, g.front)
+	c.FillRect(pad, pad+markTop, markSize, markSize/2, g.top)
+	c.FillRect(pad, pad+markTop+markSize/2, markSize, markSize/2, g.front)
 	for y, row := range name {
 		for x, r := range row {
 			if r == '#' {
-				c.Set(clear+markSize+gap+x, clear+y, g.word)
+				c.Set(pad+markSize+gap+x, pad+y, g.word)
 			}
 		}
 	}
 	c.Compose()
 	return fb
+}
+
+// cardLines is what the card says glonk is, on two lines, as Departure Mono draws them at its
+// own size: one character a pixel, ten rows a line.
+var cardLines = [][]string{
+	{
+		"...#............#............................#..................###....................................#..................#................................................#...........................###........................###................",
+		"..#.#...........#.................................................#....................................#..............................................................................................#..........................#...#...............",
+		".#...#.........#####...###...##.##..##.#...###....#.##....###.....#...........##.##...###...#.##....##.#...###...##.##..###....#.##....##.#..........###...#.##....##.#..###....#.##....###..........#####...###...##.##.........#.......###.....#...",
+		".#...#..........#.....#...#...##....#.#.#....#....##..#......#....#............##....#...#..##..#..#..##..#...#...##......#....##..#..#..##.........#...#..##..#..#..##....#....##..#..#...#..........#.....#...#...##...........#......#...#....#...",
+		".#####..........#.....#####...#.....#.#.#....#....#...#...####....#............#.....#####..#...#..#...#..#####...#.......#....#...#..#...#.........#####..#...#..#...#....#....#...#..#####..........#.....#...#...#............#..##..#...#........",
+		".#...#..........#.....#.......#.....#.#.#....#....#...#..#...#....#............#.....#......#...#..#...#..#.......#.......#....#...#..#...#.........#......#...#..#...#....#....#...#..#..............#.....#...#...#............#...#..#...#........",
+		".#...#..........#..#..#...#...#.....#.#.#....#....#...#..#..##....#............#.....#...#..#...#..#..##..#...#...#.......#....#...#..#..##.........#...#..#...#..#..##....#....#...#..#...#..........#.....#...#...#............#...#..#...#....#...",
+		".#...#...........##....###...####...#.#.#..#####..#...#...##.#..#####.........####....###...#...#...##.#...###...####...#####..#...#...##.#..........###...#...#...##.#..#####..#...#...###..........####....###...####...........###....###.....#...",
+		"..........................................................................................................................................#...........................#..............................................................................",
+		".......................................................................................................................................###.........................###...............................................................................",
+	},
+	{
+		"..###...####..................###...####......................................#..............#.....#...............#................................................###....................................",
+		".#...#..#...#................#...#..#...#.....................................#..............#.....#...............................................................#.......................................",
+		".....#..#...#....................#..#...#.................###...##.##.........#.##....###...#####..#.##..........###....#.##...........###...#.##....###..........#####..##.##...###...##.#....###.........",
+		"....#...#...#..................##...#...#................#...#...##...........##..#..#...#...#.....##..#...........#....##..#.........#...#..##..#..#...#..........#......##........#..#.#.#..#...#........",
+		"...#....#...#....................#..#...#................#...#...#............#...#..#...#...#.....#...#...........#....#...#.........#...#..#...#..#####..........#......#......####..#.#.#..#####........",
+		"..#.....#...#....................#..#...#................#...#...#............#...#..#...#...#.....#...#...........#....#...#.........#...#..#...#..#..............#......#.....#...#..#.#.#..#............",
+		".#......#...#....#...........#...#..#...#....#...........#...#...#............##..#..#...#...#..#..#...#...........#....#...#.........#...#..#...#..#...#..........#......#.....#..##..#.#.#..#...#....#...",
+		".#####..####.....#............###...####.....#............###...####..........#.##....###.....##...#...#.........#####..#...#..........###...#...#...###..........####...####....##.#..#.#.#...###.....#...",
+		"................#...........................#..............................................................................................................................................................",
+		"...........................................................................................................................................................................................................",
+	},
+}
+
+// linesFrame draws one line of text, given as rows of pixels, on the ground.
+func linesFrame(t *testing.T, g ground, rows []string) *engine.FrameBuffer {
+	fb := frame(t, len(rows[0]), len(rows))
+	c := fb.Canvas()
+	c.FillRect(0, 0, len(rows[0]), len(rows), g.page)
+	for y, row := range rows {
+		for x, r := range row {
+			if r == '#' {
+				c.Set(x, y, g.ink)
+			}
+		}
+	}
+	c.Compose()
+	return fb
+}
+
+// The card is the picture shown beside a link to glonk: the logo, what glonk is, and something
+// it drew. It is 1280 by 640, the size GitHub asks for, with 80 pixels kept clear at the sides.
+const (
+	cardW, cardH = 1280, 640
+	cardMargin   = 80
+	sceneScale   = 8 // a pixel of the scene is this many of the card, so that it reads as a pixel
+)
+
+// cardScene draws what the card shows of glonk's own work: a gold block lit from above on a floor
+// of lines, with grey blocks behind it that fade into the night. Every game starts with a block.
+func cardScene(t *testing.T) *engine.FrameBuffer {
+	fb := frame(t, cardW/sceneScale, 40)
+	c := fb.Canvas()
+	cam := mesh.Camera{
+		Position: geometry.Vector3{Y: 2.1, Z: -7.6}, Pitch: -0.2, FOV: 0.56,
+		Fog: &mesh.Fog{Color: night.page, Start: 7, End: 20},
+	}
+	lights := []mesh.Light{mesh.Ambient{Level: 0.44}, mesh.Directional{Direction: geometry.Vector3{X: 0.25, Y: -1, Z: 0.5}}}
+	block := func(x, z float64, color engine.Color) {
+		m := mesh.Cube(2)
+		m.Transform.Position = geometry.Vector3{X: x, Z: z}
+		m.Material.Color = color
+		m.DrawShadedPixels(c, cam, lights...)
+	}
+	floor := mesh.Grid(48, 24)
+	floor.Transform.Position.Y = -1
+	floor.DrawDepthPixels(c, cam, engine.Palette(236))
+	for _, at := range [][2]float64{{-5, 5}, {4.4, 3.4}, {-2.6, 9.5}, {7.5, 11}, {1.5, 14}, {-9, 12}} {
+		block(at[0], at[1], engine.Palette(242))
+	}
+	block(0, 0, night.top)
+	c.Compose()
+	return fb
+}
+
+// card puts the three together, each made larger by a whole number.
+func card(t *testing.T) *image.RGBA {
+	img := image.NewRGBA(image.Rect(0, 0, cardW, cardH))
+	r, g, b := night.page.RGB()
+	draw.Draw(img, img.Bounds(), image.NewUniform(color.RGBA{R: r, G: g, B: b, A: 255}), image.Point{}, draw.Src)
+	place := func(fb *engine.FrameBuffer, scale, x, y int) {
+		part := fb.Image(engine.ImageOptions{Scale: scale})
+		draw.Draw(img, part.Bounds().Add(image.Pt(x, y)), part, image.Point{}, draw.Src)
+	}
+	scene := cardScene(t)
+	place(scene, sceneScale, 0, cardH-2*scene.Height()*sceneScale)
+	place(lockupFrame(t, night, 0), 12, cardMargin, 64)
+	place(linesFrame(t, night, cardLines[0]), 4, cardMargin, 216)
+	place(linesFrame(t, night, cardLines[1]), 4, cardMargin, 264)
+	return img
 }
 
 // picture is a frame as a PNG, scale pixels of the picture to one of the frame.
@@ -249,10 +350,17 @@ var files = []file{
 	{"brand/glonk-night.svg", func(*testing.T) []byte { return lockupSVG(night) }},
 	{"brand/glonk-paper.svg", func(*testing.T) []byte { return lockupSVG(paper) }},
 	{"brand/mark.svg", func(*testing.T) []byte { return markSVG(night) }},
-	{"brand/glonk-night.png", func(t *testing.T) []byte { return picture(t, lockupFrame(t, night), 16) }},
-	{"brand/glonk-paper.png", func(t *testing.T) []byte { return picture(t, lockupFrame(t, paper), 16) }},
+	{"brand/glonk-night.png", func(t *testing.T) []byte { return picture(t, lockupFrame(t, night, clear), 16) }},
+	{"brand/glonk-paper.png", func(t *testing.T) []byte { return picture(t, lockupFrame(t, paper, clear), 16) }},
 	{"brand/mark.png", func(t *testing.T) []byte { return picture(t, markFrame(t, night), 256) }},
 	{"site/favicon.svg", func(*testing.T) []byte { return iconSVG() }},
+	{"site/card.png", func(t *testing.T) []byte {
+		var buf bytes.Buffer
+		if err := png.Encode(&buf, card(t)); err != nil {
+			t.Fatal(err)
+		}
+		return buf.Bytes()
+	}},
 	{"site/apple-touch-icon.png", func(t *testing.T) []byte { return picture(t, markFrame(t, night), 90) }},
 	{"site/favicon.ico", func(t *testing.T) []byte {
 		var pngs [][]byte
@@ -455,6 +563,34 @@ func TestTheSiteWearsBothGrounds(t *testing.T) {
 			if !strings.Contains(string(css), hex(c)) {
 				t.Errorf("site/style.css does not use %s's %s, %s", g.title, what, hex(c))
 			}
+		}
+	}
+}
+
+// The card is the size a link preview wants and light enough to load at once, and its text is
+// whole: every row of a line is as wide as the others.
+func TestTheCardIsWhatALinkPreviewWants(t *testing.T) {
+	data, err := os.ReadFile(root("site/card.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(data) >= 1_000_000 {
+		t.Errorf("wanted the card under 1 MB, it is %d bytes", len(data))
+	}
+	if b := decode(t, "site/card.png", data).Bounds(); b.Dx() != cardW || b.Dy() != cardH {
+		t.Errorf("wanted a card of %d by %d, got %v", cardW, cardH, b)
+	}
+	for i, rows := range cardLines {
+		if len(rows) != len(name) {
+			t.Errorf("line %d: wanted %d rows, as the name has, got %d", i, len(name), len(rows))
+		}
+		for y, row := range rows {
+			if len(row) != len(rows[0]) {
+				t.Errorf("line %d: row %d is %d wide, wanted %d", i, y, len(row), len(rows[0]))
+			}
+		}
+		if w := cardMargin + 4*len(rows[0]); w > cardW-cardMargin {
+			t.Errorf("line %d ends at %d, past the %d pixels kept clear at the right", i, w, cardMargin)
 		}
 	}
 }

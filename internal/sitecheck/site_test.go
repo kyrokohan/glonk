@@ -148,6 +148,25 @@ func TestEveryPageLinksTheIcons(t *testing.T) {
 	}
 }
 
+// What a chat or a social site shows beside a link to glonk.dev comes from these tags. The picture
+// is named by its full address, which the test for local links does not follow, so it is checked
+// here that the address is a file of the site.
+func TestTheLinkPreviewNamesAFileOfTheSite(t *testing.T) {
+	index := read(t, "site", "index.html")
+	for _, tag := range []string{`<meta property="og:title" content="`, `<meta property="og:description" content="`, `<meta property="og:image:alt" content="`, `<meta name="twitter:card" content="summary_large_image">`} {
+		if !strings.Contains(index, tag) {
+			t.Errorf("index.html: wanted %s", tag)
+		}
+	}
+	m := regexp.MustCompile(`<meta property="og:image" content="https://glonk\.dev/([^"]+)">`).FindStringSubmatch(index)
+	if m == nil {
+		t.Fatal(`index.html: wanted <meta property="og:image"> with an address on glonk.dev`)
+	}
+	if _, err := os.Stat(filepath.Join("..", "..", "site", m[1])); err != nil {
+		t.Errorf("index.html: wanted the picture of the link preview, %q, to be a file of the site, got %v", m[1], err)
+	}
+}
+
 // A link to this site must name a file that is in it.
 func TestLocalLinksNameFilesOfTheSite(t *testing.T) {
 	link := regexp.MustCompile(`(?:href|src|srcset)="([^"]*)"`)

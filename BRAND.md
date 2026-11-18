@@ -74,5 +74,6 @@ The files in `brand/` are under the MIT license, as the rest of this repository 
 | `brand/glonk-paper.svg`, `brand/glonk-paper.png` | The same on a light page |
 | `brand/mark.svg`, `brand/mark.png` | The mark alone |
 | `site/favicon.svg`, `site/favicon.ico`, `site/apple-touch-icon.png` | The icons of glonk.dev |
+| `site/card.png` | The card shown beside a link to glonk: the logo, what glonk is, and a block the engine drew |
 
-Their source is `internal/brand/brand_test.go`: the name as rows of pixels and the mark's colors as terminal color numbers, drawn with glonk itself. `make brand` writes the files again, and `make check` fails if one of them is not what the source draws.
+Their source is `internal/brand/brand_test.go`: the name and the card's words as rows of pixels, the mark's colors as terminal color numbers, and the card's block as a scene, all drawn with glonk itself. `make brand` writes the files again, and `make check` fails if one of them is not what the source draws.
