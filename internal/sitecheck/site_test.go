@@ -1,6 +1,6 @@
 // Package sitecheck holds the tests of the website in ../../site. It has no code of
 // its own: it sits under internal so that it stays out of the documentation and out of
-// the folder Cloudflare Pages serves.
+// the folder Cloudflare serves.
 package sitecheck
 
 import (
@@ -127,6 +127,23 @@ func TestPagesAreSelfContainedAndPlain(t *testing.T) {
 		// Cloudflare rewrites email addresses it finds in a page.
 		if m := email.FindString(page); m != "" {
 			t.Errorf("%s: wanted no email address, found %q", name, m)
+		}
+	}
+}
+
+// Every page names the three icons, which internal/brand draws: one for browsers that take an
+// SVG, one for those that do not, and one for a phone's home screen.
+func TestEveryPageLinksTheIcons(t *testing.T) {
+	for _, name := range pages {
+		page := read(t, "site", name)
+		for _, link := range []string{
+			`<link rel="icon" href="/favicon.ico" sizes="32x32">`,
+			`<link rel="icon" href="/favicon.svg" type="image/svg+xml">`,
+			`<link rel="apple-touch-icon" href="/apple-touch-icon.png">`,
+		} {
+			if !strings.Contains(page, link) {
+				t.Errorf("%s: wanted %s", name, link)
+			}
 		}
 	}
 }
