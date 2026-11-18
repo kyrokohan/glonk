@@ -101,6 +101,31 @@ func (k *Keyboard) Paste(text string) {
 	k.in.event(keyEvent{key: KeyUnknown, kind: kindPaste, text: pasteText(text)}, k.now)
 }
 
+// MouseMove moves the pointer to a cell, counted from 0 at the top left, as a terminal reports one: the
+// cell is in Input.MousePos and nothing else changes. A cell outside 0 to 32,767 is brought into it.
+func (k *Keyboard) MouseMove(x, y int) {
+	k.in.event(keyEvent{key: cellKey(x, y), kind: kindMouseMove}, k.now)
+}
+
+// MouseDown presses a button where the pointer is, which is the cell 0, 0 until a MouseMove. A button that
+// is already down stays down and is not started again; a value that is no MouseButton does nothing.
+func (k *Keyboard) MouseDown(b MouseButton) {
+	k.in.event(keyEvent{key: cellKey(k.in.mouse.x, k.in.mouse.y), kind: kindMouseDown, btn: uint8(b)}, k.now)
+}
+
+// MouseUp lets a button go. A button that is not down does nothing, as on a terminal.
+func (k *Keyboard) MouseUp(b MouseButton) {
+	k.in.event(keyEvent{key: cellKey(k.in.mouse.x, k.in.mouse.y), kind: kindMouseUp, btn: uint8(b)}, k.now)
+}
+
+// Wheel turns the wheel dx steps right and dy down, or left and up for less than 0, as Input.Wheel says it,
+// where the pointer is, which is the cell 0, 0 until a MouseMove. A frame keeps at most 4,096 steps on each
+// axis, as a real one does.
+func (k *Keyboard) Wheel(dx, dy int) {
+	k.MouseMove(k.in.mouse.x, k.in.mouse.y) // a report says where the pointer is, a wheel's too
+	k.in.addWheel(dx, dy)
+}
+
 // Release lets keys go. A key pressed and released before the frame ends is still
 // seen as down by that frame's Update, as a quick tap is on a real terminal.
 // Releasing a key that is not down does nothing, and neither does releasing one on a

@@ -258,6 +258,9 @@ func allKeyInputs() []string {
 	for _, c := range kittyKeyCases {
 		inputs = append(inputs, c.in)
 	}
+	for _, c := range mouseKeyCases {
+		inputs = append(inputs, c.in)
+	}
 	return inputs
 }
 
@@ -454,6 +457,8 @@ func BenchmarkKeyParserFeed(b *testing.B) {
 		{"kitty releases", strings.Repeat("\x1b[119;1:3u\x1b[15;1:3~", 5)},
 		{"kitty text of 20 keys", strings.Repeat("\x1b[104;;104u\x1b[105;2;73u", 10)},
 		{"ctrl and alt chords", strings.Repeat("\x01\x17\x1bx\x1b[119;5u\x1b[1;5C", 4)},
+		{"mouse motion of 20 reports", strings.Repeat("\x1b[<35;120;40M\x1b[<35;121;40M", 10)},
+		{"mouse clicks and wheel", strings.Repeat("\x1b[<0;12;4M\x1b[<0;12;4m\x1b[<65;12;4M", 7)},
 	} {
 		b.Run(tt.name, func(b *testing.B) {
 			var p keyParser

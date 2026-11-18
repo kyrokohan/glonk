@@ -147,3 +147,88 @@ func TestRunAsksForBracketedPasteAndReadsIt(t *testing.T) {
 		t.Errorf("wanted it turned off before the alternate screen is left")
 	}
 }
+
+// collect reads everything written to a pty, on its own goroutine, and returns what has been read so far.
+func collect(r io.Reader) func() string {
+	var mu sync.Mutex
+	var out bytes.Buffer
+	go func() {
+		buf := make([]byte, 4096)
+		for {
+			n, err := r.Read(buf)
+			mu.Lock()
+			out.Write(buf[:n])
+			mu.Unlock()
+			if err != nil {
+				return
+			}
+		}
+	}()
+	return func() string {
+		mu.Lock()
+		defer mu.Unlock()
+		return out.String()
+	}
+}
+
+// Run asks for the mouse only when the program asked, reads the reports a terminal sends, and turns the mouse
+// off before it gives the terminal back.
+func TestRunAsksForTheMouseOnlyWhenConfiguredAndReadsIt(t *testing.T) {
+	for _, mouse := range []bool{false, true} {
+		t.Run(fmt.Sprintf("mouse=%v", mouse), func(t *testing.T) {
+			master, slave := openPty(t)
+			written := collect(master)
+
+			var last atomic.Value
+			var wheel atomic.Int64
+			game := scriptedGame{update: func(_ float64, in *Input) error {
+				if x, y, ok := in.MousePos(); ok && in.MouseStarted(MouseLeft) {
+					last.Store(fmt.Sprintf("%d,%d", x, y))
+				}
+				_, dy := in.Wheel()
+				wheel.Add(int64(dy))
+				return nil
+			}}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			done := make(chan error, 1)
+			go func() {
+				done <- Run(ctx, game, Config{FPS: 60, Width: 20, Height: 5, Input: slave, Output: slave, Mouse: mouse})
+			}()
+
+			waitFor(t, "the terminal to be taken over", func() bool { return strings.Contains(written(), "\x1b[?2004h") })
+			// The reports are read whether or not they were asked for.
+			if _, err := master.WriteString(sgr(35, 2, 2, 'M') + sgr(0, 5, 3, 'M') + sgr(65, 5, 3, 'M')); err != nil {
+				t.Fatalf("sending the reports: %v", err)
+			}
+			waitFor(t, "the click and the wheel to reach the game", func() bool { return last.Load() != nil && wheel.Load() == 1 })
+			if got := last.Load().(string); got != "4,2" {
+				t.Errorf("wanted the click at 4,2, got %q", got)
+			}
+
+			cancel()
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Fatalf("wanted Run to end within 5 s of its context being canceled")
+			}
+			waitFor(t, "the alternate screen to be left", func() bool { return strings.Contains(written(), "\x1b[?1049l") })
+			all := written()
+
+			if got := strings.Contains(all, "\x1b[?1003h\x1b[?1006h"); got != mouse {
+				t.Errorf("wanted the mouse asked for: %v, got %v", mouse, got)
+			}
+			if got := strings.Contains(all, "\x1b[?1004h"); got != mouse {
+				t.Errorf("wanted focus reported with the mouse and not without it (there is no keyboard protocol here): %v, got %v", mouse, got)
+			}
+			// Turned off in the reverse order, before the alternate screen is left.
+			off := "\x1b[?1004l\x1b[?1006l\x1b[?1003l\x1b[?2004l"
+			if got := strings.Contains(all, off); got != mouse {
+				t.Errorf("wanted the mouse turned off in reverse order (%q): %v, got %v", off, mouse, got)
+			}
+			if mouse && strings.LastIndex(all, off) > strings.LastIndex(all, "\x1b[?1049l") {
+				t.Errorf("wanted the mouse turned off before the alternate screen is left")
+			}
+		})
+	}
+}

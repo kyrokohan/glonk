@@ -89,7 +89,9 @@ const (
 // release in it may have been lost and Input must forget which keys are held.
 // kindPaste carries KeyUnknown and the pasted text, and kindPasteStart is the parser's
 // own: the marker that opens a paste was read, and the keyParser, which never hands
-// it on, collects what follows.
+// it on, collects what follows. The mouse kinds are not about a key either: key holds the cell the
+// pointer was in (see cellKey), btn the button or the wheel direction (see mouse.go), and a
+// kindMouseMove has no button.
 type keyKind uint8
 
 const (
@@ -101,6 +103,10 @@ const (
 	kindReset
 	kindPaste
 	kindPasteStart
+	kindMouseMove
+	kindMouseDown
+	kindMouseUp
+	kindWheel
 )
 
 // keyEvent is one decoded key event.
@@ -113,6 +119,7 @@ type keyEvent struct {
 	// the key typed; where it is empty, Input works it out from the key (see textOf).
 	mods  Mods
 	chord bool
+	btn   uint8 // which button or wheel direction a mouse event is about: it fits where the struct has padding
 	text  string
 }
 
@@ -249,6 +256,21 @@ func parse(b []byte, final bool) (events []keyEvent, consumed int) {
 				if b[j] == '~' && string(b[i+2:j]) == "200" {
 					// A paste is text, not keys: what follows is the keyParser's to collect.
 					return append(events, keyEvent{key: KeyUnknown, kind: kindPasteStart}), j + 1
+				}
+				if b[j] == 'M' && j == i+2 {
+					// The old mouse report, ESC [ M and a byte each for button, column and row, which a terminal
+					// sends where it has the mouse and not the decimal form glonk asks for. No key is this, so it
+					// is dropped with its three bytes, which would otherwise be read as typed characters.
+					if j+3 >= len(b) {
+						if !final {
+							return events, i
+						}
+						events = append(events, keyEvent{key: KeyUnknown, kind: kindReset})
+						i = len(b)
+						continue
+					}
+					i = j + 4
+					continue
 				}
 				events = appendCSI(events, b[i+2:j], b[j])
 				i = j + 1
@@ -421,8 +443,11 @@ func (p *keyParser) Flush() []keyEvent {
 // its key event, if it is one we understand. Anything else is dropped.
 func appendCSI(events []keyEvent, params []byte, final byte) []keyEvent {
 	// '<' to '?' as the first parameter byte marks a private sequence, such as a
-	// protocol reply, not a key.
+	// protocol reply, not a key. CSI < ... M and m are the one kind we read: a mouse report.
 	if len(params) > 0 && params[0] >= '<' && params[0] <= '?' {
+		if params[0] == '<' && (final == 'M' || final == 'm') {
+			return appendMouse(events, params[1:], final)
+		}
 		return events
 	}
 

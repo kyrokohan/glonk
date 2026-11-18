@@ -21,6 +21,7 @@ type terminal struct {
 	state    *term.State
 	out      io.Writer
 	keyboard bool // whether we pushed protocol flags that Teardown must pop
+	mouse    bool // whether Config.Mouse asked for the pointer, which Setup turns on and Teardown off
 
 	// A headless terminal is no terminal at all: a fixed size, and nothing written
 	// to out but the frames.
@@ -63,6 +64,11 @@ func (t *terminal) enterSequence() *sequenceBuilder {
 	sb.EraseInDisplay(2)
 	sb.HideCursor()
 	sb.EnableBracketedPaste()
+	if t.mouse {
+		// Focus too, so that a button held when the window loses focus is let go: no release comes.
+		sb.EnableMouse()
+		sb.EnableFocusReporting()
+	}
 	return sb
 }
 
@@ -109,7 +115,12 @@ func (t *terminal) exitSequence() *sequenceBuilder {
 	sb := newSequenceBuilder()
 	if t.keyboard {
 		sb.PopKeyboardFlags()
+	}
+	if t.keyboard || t.mouse {
 		sb.DisableFocusReporting()
+	}
+	if t.mouse {
+		sb.DisableMouse()
 	}
 	sb.DisableBracketedPaste()
 	sb.ShowCursor()

@@ -35,6 +35,11 @@ const (
 	disableFocusSeq = "\x1b[?1004l"
 
 	// Bracketed paste: the terminal wraps what is pasted in ESC [ 200 ~ and ESC [ 201 ~.
+	// Mouse reporting: 1003 is every movement, with or without a button, and 1006 the decimal
+	// form of a report that has no limit on the column. Turned off in the reverse order.
+	enableMouseSeq  = "\x1b[?1003h\x1b[?1006h"
+	disableMouseSeq = "\x1b[?1006l\x1b[?1003l"
+
 	enablePasteSeq  = "\x1b[?2004h"
 	disablePasteSeq = "\x1b[?2004l"
 )
@@ -191,6 +196,17 @@ func (sb *sequenceBuilder) EnableBracketedPaste() {
 // DisableBracketedPaste turns bracketed paste back off.
 func (sb *sequenceBuilder) DisableBracketedPaste() {
 	sb.Print(disablePasteSeq)
+}
+
+// EnableMouse asks the terminal to report the pointer: where it is when it moves, a button pressed
+// and let go, and the wheel.
+func (sb *sequenceBuilder) EnableMouse() {
+	sb.Print(enableMouseSeq)
+}
+
+// DisableMouse turns mouse reporting back off.
+func (sb *sequenceBuilder) DisableMouse() {
+	sb.Print(disableMouseSeq)
 }
 
 // DisableFocusReporting turns focus reporting back off.

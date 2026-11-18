@@ -24,7 +24,9 @@ const holdTimeout = 150 * time.Millisecond
 // IsDown is for keys held to keep something going, Started for keys that switch something
 // once, and Pressed for keys whose auto-repeat should act again.
 //
-// [Input.Paste] is what was pasted, which is no key at all. [Input.KeyEvents] and [Input.Text] are for what
+// The mouse is [Input.MousePos], [Input.MouseDown], [Input.MouseStarted], [Input.MouseReleased] and [Input.Wheel],
+// and is only reported when [Config.Mouse] is set. [Input.Paste] is what was pasted, which is no key at all.
+// [Input.KeyEvents] and [Input.Text] are for what
 // IsDown, Pressed and Started do not say: which
 // modifiers were held with a key, the keys of a frame in the order they came, and the characters
 // that were typed, for a text field or a shortcut. IsDown, Pressed and Started never see a chord,
@@ -43,6 +45,8 @@ type Input struct {
 	events []KeyEvent // this frame's key events, in order
 	text   []byte     // this frame's typed text
 	paste  string     // this frame's pasted text
+
+	mouse mouseState
 }
 
 // newInput returns an Input with no keys held. exact says whether the terminal
@@ -68,6 +72,9 @@ func (in *Input) event(e keyEvent, at time.Time) {
 	case kindPaste:
 		in.addPaste(e.text)
 		return // text, not keys: it is in no list of keys and in no map
+	case kindMouseMove, kindMouseDown, kindMouseUp, kindWheel:
+		in.mouseEvent(e)
+		return
 	}
 
 	in.list(e)
@@ -125,6 +132,7 @@ func (in *Input) beginsHold(e keyEvent, at time.Time) bool {
 // and the real releases will never arrive.
 func (in *Input) releaseAll() {
 	clear(in.held)
+	in.releaseMouse()
 }
 
 // beginFrame sets the time IsDown measures against.
@@ -141,6 +149,7 @@ func (in *Input) endFrame() {
 	in.events = in.events[:0]
 	in.text = in.text[:0]
 	in.paste = ""
+	in.endMouseFrame()
 }
 
 // KeyEvents returns what happened to the keys since the previous frame, in the order it happened: each

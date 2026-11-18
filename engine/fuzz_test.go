@@ -3,6 +3,7 @@ package engine
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"math"
 	"regexp"
 	"slices"
@@ -68,6 +69,16 @@ func FuzzParseEvents(f *testing.F) {
 				if len(e.text) > maxPaste || !utf8.ValidString(e.text) || strings.Contains(e.text, "\r") {
 					t.Fatalf("wanted a paste of valid text with newlines for line breaks, got %q from %q", e.text, b)
 				}
+			case kindMouseMove, kindMouseDown, kindMouseUp, kindWheel:
+				if e.key < 0 || e.key>>16 > maxMouseCell || e.key&0xffff > maxMouseCell || e.mods != 0 || e.chord || e.text != "" {
+					t.Fatalf("wanted a mouse event of a cell and a button and nothing else, got %+v from %q", e, b)
+				}
+				if limit := map[keyKind]uint8{kindMouseMove: 0, kindMouseDown: 2, kindMouseUp: 2, kindWheel: 3}[e.kind]; e.btn > limit {
+					t.Fatalf("wanted a button of 0 to %d for kind %d, got %+v from %q", limit, e.kind, e, b)
+				}
+				if !strings.Contains(string(b), "\x1b[<") {
+					t.Fatalf("wanted a mouse event only from a CSI < sequence, got %+v from %q", e, b)
+				}
 			default:
 				t.Fatalf("wanted a known event kind, got %+v from %q", e, b)
 			}
@@ -80,7 +91,7 @@ func FuzzParseEvents(f *testing.F) {
 			}
 
 			// Modifiers, chords and text: only what a terminal can mean.
-			if e.kind == kindPaste {
+			if e.kind == kindPaste || e.kind >= kindMouseMove {
 				continue
 			}
 			if e.mods&^modsMask != 0 {
@@ -161,6 +172,49 @@ func FuzzPasteSplit(f *testing.F) {
 		}
 		if len(want) != 2 || want[0].kind != kindPaste || want[1].key != 'k' {
 			t.Fatalf("wanted the paste and a key for %q, got %+v", whole, want)
+		}
+	})
+}
+
+// FuzzMouseReport holds the decoding of a report to the xterm numbering, for any numbers: the button number's
+// bits, the cell counted from 1 and brought into range, whatever the numbers are, however big.
+func FuzzMouseReport(f *testing.F) {
+	f.Add(uint16(0), uint64(1), uint64(1), false)
+	f.Add(uint16(35), uint64(120), uint64(40), false)
+	f.Add(uint16(65), uint64(0), uint64(0), false)
+	f.Add(uint16(32), uint64(1<<63), uint64(1<<64-1), true)
+	f.Add(uint16(300), uint64(5), uint64(5), true)
+	f.Fuzz(func(t *testing.T, cb uint16, col, row uint64, release bool) {
+		final := byte('M')
+		if release {
+			final = 'm'
+		}
+		in := fmt.Sprintf("\x1b[<%d;%d;%dM", cb, col, row)
+		in = in[:len(in)-1] + string(final)
+		cell := func(n uint64) int { // from 1, and 0 is the first too
+			if n == 0 {
+				return 0
+			}
+			return int(min(n-1, maxMouseCell))
+		}
+		var want []keyEvent
+		x, y := cell(col), cell(row)
+		code := uint8(cb & 3)
+		switch {
+		case cb > 255 || cb&128 != 0:
+		case cb&64 != 0:
+			if !release && cb&32 == 0 {
+				want = []keyEvent{mouseEv(kindWheel, code, x, y)}
+			}
+		case cb&32 != 0 || code == 3:
+			want = []keyEvent{mouseEv(kindMouseMove, 0, x, y)}
+		case release:
+			want = []keyEvent{mouseEv(kindMouseUp, code, x, y)}
+		default:
+			want = []keyEvent{mouseEv(kindMouseDown, code, x, y)}
+		}
+		if got := parseEvents([]byte(in)); !slices.Equal(got, want) {
+			t.Fatalf("%q: wanted %v, got %v", in, want, got)
 		}
 	})
 }

@@ -594,3 +594,36 @@ func TestRunHeadlessDeliversAPasteAsOneEvent(t *testing.T) {
 		t.Errorf("wanted no key event from a paste, got %d", keys)
 	}
 }
+
+// Mouse reports reach Update as a position, buttons and a wheel, and a headless run, which has no terminal to
+// ask, writes no mode for it.
+func TestRunHeadlessDeliversMouseReports(t *testing.T) {
+	type seen struct {
+		x, y                      int
+		ok, down, started, relsed bool
+		dx, dy                    int
+	}
+	var got seen
+	game := scriptedGame{update: func(_ float64, in *Input) error {
+		if x, y, ok := in.MousePos(); ok {
+			dx, dy := in.Wheel()
+			got = seen{x, y, ok, in.MouseDown(MouseLeft), in.MouseStarted(MouseLeft), in.MouseReleased(MouseLeft), dx, dy}
+			return ErrQuit
+		}
+		return nil
+	}}
+
+	// Moves, clicks and turns the wheel twice, all in the one read.
+	input := sgr(35, 2, 2, 'M') + sgr(0, 6, 4, 'M') + sgr(65, 6, 4, 'M') + sgr(65, 6, 4, 'M') + sgr(0, 6, 4, 'm')
+	var out bytes.Buffer
+	if err := runHeadless(t, game, Config{Input: strings.NewReader(input), Output: &out, Mouse: true}); err != nil {
+		t.Fatalf("wanted the run to end by the game's ErrQuit, got %v", err)
+	}
+
+	if want := (seen{5, 3, true, false, true, true, 0, 2}); got != want {
+		t.Errorf("wanted %+v, got %+v", want, got)
+	}
+	if strings.Contains(out.String(), "\x1b[?") {
+		t.Errorf("wanted no mode written by a run with no terminal, got %q", out.String())
+	}
+}
