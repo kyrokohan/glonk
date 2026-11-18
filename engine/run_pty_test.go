@@ -135,6 +135,9 @@ func TestRunAsksForBracketedPasteAndReadsIt(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatalf("wanted Run to end within 5 s of its context being canceled")
 	}
+	// Run has written it all, but the goroutine above may not have read it yet: the alternate screen is the last
+	// thing the exit sequence leaves, so once it is read, what comes before it is too.
+	waitFor(t, "the alternate screen to be left", func() bool { return strings.Contains(written(), "\x1b[?1049l") })
 	all := written()
 	on, off := strings.LastIndex(all, "\x1b[?2004h"), strings.LastIndex(all, "\x1b[?2004l")
 	if off < on || off < 0 {
