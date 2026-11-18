@@ -82,6 +82,30 @@ li {
   overflow-wrap: anywhere;
 }
 
+img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin-top: 0.5rem;
+  border: 1px solid var(--border);
+}
+
+/* A picture that moves by itself for more than a few seconds needs a way to stop it, and the
+   page has no script: the checkbox swaps the recording for one frame of it. */
+.held,
+.hold:checked ~ .moving {
+  display: none;
+}
+
+.hold:checked ~ .held {
+  display: block;
+}
+
+.hold:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
 pre {
   margin: 0.5rem 0;
   padding: 0.75rem 1rem;

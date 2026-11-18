@@ -9,6 +9,8 @@ Every game starts with a block.
 
 A terminal rendering engine for Go. Draw 2D, 3D, or both in the same frame, using plain terminal cells.
 
+![A walk among shaded blocks, past a tree and into a cube drawn as lines: half-block pixels in a terminal, with lines of text above and below.](site/media/cube3d.gif)
+
 Website: [glonk.dev](https://glonk.dev)
 
 > Early and pre-1.0: the API may change.
@@ -46,6 +48,21 @@ go mod tidy
 ```
 
 ## Run the examples
+
+| | |
+|---|---|
+| [![Shaded blocks, a tree and a cube of lines on a dotted floor.](site/media/cube3d.gif)](site/media/cube3d.gif)<br>**cube3d**: walk around a floor of shaded cubes, a tree that is a picture, and a cube drawn as lines. | [![A small house with a red roof, turning.](site/media/viewer.gif)](site/media/viewer.gif)<br>**viewer**: look at the bundled OBJ models and shapes, solid or as lines, faceted or smooth. |
+| [![A ship of text characters steered round a rock on a blue sea.](site/media/sprites.gif)](site/media/sprites.gif)<br>**sprites**: a ship you steer round a rock, a walking figure and a blinking ghost. | [![A small figure walking a level of walls, grass and water, collecting coins.](site/media/world.gif)](site/media/world.gif)<br>**world**: a level bigger than the screen, with walls, coins, a coin panel and a pause menu. |
+
+The pictures are what the engine drew: each example plays a script of key presses with no terminal, and its frames are shown as a terminal shows them.
+
+An example runs without a clone:
+
+```
+go run glonk.dev/examples/viewer@latest
+```
+
+and so do `cube3d`, `sprites`, `world`, `bounce2d` and `input`. In a clone:
 
 ```
 make run                                      # bounce2d: a ball in a box that fills the window (Esc quits)

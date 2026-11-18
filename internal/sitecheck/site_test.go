@@ -150,7 +150,12 @@ func TestEveryPageLinksTheIcons(t *testing.T) {
 
 // A link to this site must name a file that is in it.
 func TestLocalLinksNameFilesOfTheSite(t *testing.T) {
-	link := regexp.MustCompile(`(?:href|src)="([^"]*)"`)
+	link := regexp.MustCompile(`(?:href|src|srcset)="([^"]*)"`)
+	// The recordings are a module of their own, so that a download of glonk leaves them out (see
+	// site/media/go.mod). A copy of glonk in the module cache therefore has no such folder, and
+	// only there are links into it let through.
+	_, err := os.Stat(filepath.Join("..", "..", "site", "media"))
+	noRecordings := os.IsNotExist(err)
 	for _, name := range pages {
 		page := read(t, "site", name)
 
@@ -165,6 +170,9 @@ func TestLocalLinksNameFilesOfTheSite(t *testing.T) {
 			target, _, _ = strings.Cut(target, "?")
 			if target == "/" || target == "" {
 				target = "index.html"
+			}
+			if noRecordings && strings.HasPrefix(target, "/media/") {
+				continue
 			}
 			if _, err := os.Stat(filepath.Join("..", "..", "site", strings.TrimPrefix(target, "/"))); err != nil {
 				t.Errorf("%s: wanted %q to be a file of the site, got %v", name, m[1], err)
