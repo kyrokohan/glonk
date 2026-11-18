@@ -46,7 +46,7 @@ glonk.dev follows the visitor's light or dark setting. A picture that is publish
 
 Both are under the SIL Open Font License 1.1. A cell is one wide and two tall, and a page is laid out on that grid: text in Departure Mono sits one character to a cell.
 
-On glonk.dev a cell is 14 by 28 pixels, which is Departure Mono at 22 pixels, twice its drawn size. Headings are that at two and three times, and prose is Literata at 19 pixels on the 28 pixel rows. The page is 84 cells wide, or 60 where 84 do not fit. On a phone the cell is three quarters of that, 10.5 by 21, and code is at the face's drawn size of 11 pixels. The fonts are files of the site, in `site/media/fonts/` with their licenses: the page asks no other site for anything.
+On glonk.dev a cell is 14 by 28 pixels, which is Departure Mono at 22 pixels, twice its drawn size. Headings are that at two and three times, and prose is Literata at 19 pixels on the 28 pixel rows. The page is 84 cells wide, or 60 where 84 do not fit. On a phone the cell is three quarters of that, 10.5 by 21, and code is at the face's drawn size of 11 pixels. In the manual and the changelog, code and the contents list are at three quarters too, 16.5 pixels, so that 64 characters of code fit the 50 cells of text. The fonts are files of the site, in `site/media/fonts/` with their licenses: the page asks no other site for anything.
 
 ## Voice
 
