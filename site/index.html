@@ -16,21 +16,35 @@
 <meta property="og:image:height" content="640">
 <meta property="og:image:alt" content="The glonk logo, the words: a terminal rendering engine for Go: 2D, 3D, or both in one frame, and a gold block on a dark floor of lines.">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="preload" href="/media/fonts/DepartureMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/style.css">
 <link rel="icon" href="/favicon.ico" sizes="32x32">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 </head>
 <body>
-<main>
-  <header>
-    <h1>glonk</h1>
-    <p class="lede">A terminal rendering engine for Go. Draw 2D, 3D, or both in the same frame, using plain terminal cells.</p>
-    <p class="note">Early and pre-1.0: the API may change.</p>
-  </header>
+<a class="skip" href="#main">Skip to the page</a>
+<div class="page">
 
-  <section aria-labelledby="draws">
-    <h2 id="draws">What it draws</h2>
+<header class="top">
+  <a class="name" href="/"><span class="mark" aria-hidden="true"></span>glonk</a>
+  <nav aria-label="glonk">
+    <a href="https://github.com/kyrokohan/glonk#readme">Manual</a>
+    <a href="https://github.com/kyrokohan/glonk/blob/main/CHANGELOG.md">Changelog</a>
+    <a href="https://github.com/kyrokohan/glonk/tree/main/examples">Examples</a>
+    <a href="https://github.com/kyrokohan/glonk">GitHub</a>
+  </nav>
+</header>
+
+<main id="main">
+
+<section class="cover">
+  <h1>Every game starts <br>with a block.</h1>
+  <p class="lede">glonk is a terminal rendering engine for Go. It draws 2D, 3D, or both in the same frame, using plain terminal cells.</p>
+  <p class="cmd"><span aria-hidden="true">$</span> <code>go get glonk.dev</code></p>
+  <p class="fine">Requires Go 1.26 or newer. glonk has no package at its root, so import <code>glonk.dev/engine</code> (and <code>glonk.dev/mesh</code> for 3D) and run <code>go mod tidy</code> once; without it <code>go run</code> stops with a missing <code>go.sum</code> entry.</p>
+
+  <figure class="lead">
     <input type="checkbox" id="hold" class="hold">
     <label for="hold">Hold the picture still</label>
     <picture class="moving">
@@ -38,47 +52,195 @@
       <img src="/media/cube3d.gif" width="840" height="560" alt="A walk among shaded blocks, past a tree and into a cube drawn as lines, in half-block pixels with lines of text above and below.">
     </picture>
     <img class="held" src="/media/cube3d.png" width="840" height="560" alt="A walk among shaded blocks, past a tree and into a cube drawn as lines, in half-block pixels with lines of text above and below.">
-    <p class="note">The cube3d example, as the engine drew it: 120 by 40 terminal cells, two pixels to a cell.</p>
-  </section>
+    <figcaption>Fig. 0&ensp;The cube3d example, as the engine drew it: 120 by 40 terminal cells, two pixels to a cell.</figcaption>
+  </figure>
+</section>
 
-  <section aria-labelledby="what">
-    <h2 id="what">What it does</h2>
-    <ul>
-      <li><strong>2D:</strong> cells with colors and text attributes, lines, boxes, text and sprites.</li>
-      <li><strong>3D:</strong> wireframe or shaded meshes through a perspective camera, lit by directional, ambient and point lights, faceted or smooth.</li>
-      <li><strong>Models:</strong> shapes, and OBJ files with the colors of their materials.</li>
-      <li><strong>Half blocks:</strong> a pixel canvas with twice the vertical detail, shaded by color.</li>
-      <li><strong>Input and testing:</strong> held keys and one-shot presses, and a whole game can be driven without a terminal.</li>
-    </ul>
-  </section>
+<section aria-labelledby="path">
+  <h2 id="path">From a block to a world</h2>
+  <p class="lede">Six steps, each a few lines of Go. The pictures are what the engine drew.</p>
 
-  <section aria-labelledby="install">
-    <h2 id="install">Install</h2>
-    <pre><code>go get glonk.dev</code></pre>
-    <p>Requires Go 1.26 or newer. glonk has no package at its root, so import <code>glonk.dev/engine</code> (and <code>glonk.dev/mesh</code> for 3D) and run <code>go mod tidy</code> once; without it <code>go run</code> stops with a missing <code>go.sum</code> entry.</p>
-  </section>
+  <article class="step">
+    <h3><span class="n">1</span>A block</h3>
+    <div class="say">
+      <p>A terminal draws characters in cells, each about twice as tall as it is wide. glonk writes a character and two colors into any cell.</p>
+      <p>With the upper half block as the character, the two colors are two pixels, one above the other. That is the pixel canvas, and it is the mark at the top of this page.</p>
+    </div>
+    <figure>
+      <img src="/block.png" width="420" height="168" alt="A gold block lit from above on a dark floor of lines, with grey blocks behind it.">
+      <figcaption>Fig. 1&ensp;A block: 140 by 56 pixels, two to a cell.</figcaption>
+    </figure>
+    <pre tabindex="0"><code>fb.Set(10, 5, engine.Cell{Character: '@', Foreground: engine.Palette(208)})
 
-  <section aria-labelledby="try">
-    <h2 id="try">Try it</h2>
-    <pre><code>git clone https://github.com/kyrokohan/glonk
-cd glonk
-make run EXAMPLE=./examples/viewer</code></pre>
-  </section>
+canvas := fb.Canvas() // two pixels to a cell
+canvas.FillRect(2, 1, 20, 6, engine.Palette(220))
+canvas.Compose()</code></pre>
+  </article>
 
-  <section aria-labelledby="links">
-    <h2 id="links">Links</h2>
-    <ul>
-      <li><a href="https://github.com/kyrokohan/glonk">Source on GitHub</a></li>
-      <li><a href="https://pkg.go.dev/glonk.dev">Documentation on pkg.go.dev</a></li>
-      <li><a href="https://github.com/kyrokohan/glonk/blob/main/CHANGELOG.md">Changelog</a></li>
-      <li><a href="https://github.com/kyrokohan/glonk/tree/main/examples">Examples</a></li>
-      <li><a href="https://github.com/kyrokohan/glonk/blob/main/SECURITY.md">Security policy</a></li>
-      <li><a href="https://github.com/kyrokohan/glonk/blob/main/LICENSE">MIT license</a></li>
-    </ul>
-  </section>
+  <article class="step">
+    <h3><span class="n">2</span>Sprites</h3>
+    <div class="say">
+      <p>A sprite is a picture at a position: one cell, a frame made from text art, or an animation of frames.</p>
+      <p>A layer draws its sprites in the order they were added. A space in the art is a hole, so a see-through sprite shows what is behind it.</p>
+    </div>
+    <figure>
+      <a href="/media/sprites.gif"><img src="/media/sprites.png" width="420" height="280" alt="A ship of text characters on a blue sea beside a grey rock, a walking figure on the sand and a ghost. Opens the recording."></a>
+      <figcaption>Fig. 2&ensp;The sprites example. The picture opens its recording.</figcaption>
+    </figure>
+    <pre tabindex="0"><code>ship := sprite.FromLines(engine.Cell{Foreground: engine.Palette(208)},
+	` /\ `,
+	`/__\`,
+)
+layer := sprite.NewLayer()
+layer.Add(&amp;sprite.Sprite{
+	Position: geometry.Vector2{X: 2, Y: 1},
+	Frame:    ship,
+	Overlay:  true, // see-through where the art has a space
+})
+layer.Draw(fb)</code></pre>
+  </article>
+
+  <article class="step">
+    <h3><span class="n">3</span>A level and a camera</h3>
+    <div class="say">
+      <p>A tile map is a level bigger than the screen, written as text art. Solid tiles stop a moving box, so a player slides along a wall.</p>
+      <p>The camera is a rectangle: the screen, centered on the player and kept inside the level.</p>
+    </div>
+    <figure>
+      <a href="/media/world.gif"><img src="/media/world.png" width="420" height="280" alt="A small figure in a level of walls, grass and water with coins, and a panel counting the coins. Opens the recording."></a>
+      <figcaption>Fig. 3&ensp;The world example. The picture opens its recording.</figcaption>
+    </figure>
+    <pre tabindex="0"><code>level := tilemap.FromLines(map[rune]tilemap.Tile{
+	'#': {Cell: engine.Cell{Character: '#'}, Solid: true},
+	'.': {Cell: engine.Cell{Character: '.'}},
+}, "##########", "#........#", "##########")
+
+moved, _, _ := level.Move(player.Bounds(), geometry.Vector2{X: dx, Y: dy})
+player.Position = moved.Min
+
+screen := geometry.NewRect(0, 0, float64(fb.Width()), float64(fb.Height()))
+view := screen.CenterOn(player.Bounds().Center()).Within(level.Bounds())</code></pre>
+  </article>
+
+  <article class="step">
+    <h3><span class="n">4</span>Solids and light</h3>
+    <div class="say">
+      <p>A mesh is drawn as lines or as shaded faces through a perspective camera, lit by a sun, lamps and ambient light, faceted or smooth.</p>
+      <p>Cubes, spheres, cylinders and cones come with glonk, and an OBJ file loads with the colors and pictures of its materials.</p>
+    </div>
+    <figure>
+      <a href="/media/viewer.gif"><img src="/media/viewer.png" width="420" height="280" alt="A small house with a red roof, shaded and turning. Opens the recording."></a>
+      <figcaption>Fig. 4&ensp;The viewer example. The picture opens its recording.</figcaption>
+    </figure>
+    <pre tabindex="0"><code>cube := mesh.Cube(2)
+cube.Material.Color = engine.Palette(208)
+cam := mesh.Camera{Position: geometry.Vector3{Z: -4}}
+sun := mesh.Directional{Direction: geometry.Vector3{X: 0.4, Y: -1, Z: 0.6}}
+
+cube.DrawShaded(fb, cam, mesh.Ambient{Level: 0.2}, sun)</code></pre>
+  </article>
+
+  <article class="step">
+    <h3><span class="n">5</span>Both in one frame</h3>
+    <div class="say">
+      <p>3D and 2D share the frame and its depth. Solids are drawn in half-block pixels, a picture stands among them and is hidden where a solid is nearer, and text and widgets go on top.</p>
+      <p>The recording at the top of this page is this step.</p>
+    </div>
+    <figure>
+      <a href="/media/cube3d.gif"><img src="/media/cube3d.png" width="420" height="280" alt="Shaded blocks, a cube drawn as lines and a tree, with lines of text above and below. Opens the recording."></a>
+      <figcaption>Fig. 5&ensp;The cube3d example. The picture opens its recording.</figcaption>
+    </figure>
+    <pre tabindex="0"><code>canvas := fb.Canvas()
+cube.DrawShadedPixels(canvas, cam, lights...)   // solids, in pixels
+tree.DrawScaledDepth(canvas, x, y, w, h, depth) // a picture among them
+canvas.Compose()
+fb.DrawText(1, 1, "25 fps", engine.Color{}) // and text on top</code></pre>
+  </article>
+
+  <article class="step">
+    <h3><span class="n">6</span>Keys, the mouse, and tests</h3>
+    <div class="say">
+      <p>Input is held keys and new presses, key events with their modifiers, typed text, pastes and the mouse.</p>
+      <p><code>Update</code> and <code>Draw</code> are plain methods, so a test presses keys with <code>engine.Keyboard</code> and reads the frame as text. Every recording on this page was made that way, with no terminal.</p>
+    </div>
+    <pre tabindex="0"><code>kb := engine.NewKeyboard()
+kb.Press('w')
+g.Update(1.0/30, kb.Input()) // one frame with W held
+
+fb, _ := engine.NewFrameBuffer(40, 12)
+g.Draw(fb)
+fmt.Print(fb.String()) // the frame, as text</code></pre>
+  </article>
+</section>
+
+<section aria-labelledby="start">
+  <h2 id="start">Start</h2>
+  <p class="lede">The smallest program: a box that fills the window, and an @ that walks across it. Esc quits.</p>
+  <pre tabindex="0"><code>package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+
+	"glonk.dev/engine"
+)
+
+type game struct{ x float64 }
+
+func (g *game) Update(dt float64, in *engine.Input) error {
+	if in.Pressed(engine.KeyEscape) {
+		return engine.ErrQuit
+	}
+	g.x += 20 * dt // cells per second
+	return nil
+}
+
+func (g *game) Draw(fb *engine.FrameBuffer) {
+	fb.DrawBox(0, 0, fb.Width(), fb.Height(), engine.Color{})
+	fb.Set(int(g.x)%fb.Width(), fb.Height()/2,
+		engine.Cell{Character: '@', Foreground: engine.Palette(208)})
+}
+
+func main() {
+	err := engine.Run(context.Background(), &amp;game{}, engine.Config{FPS: 30})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}</code></pre>
+  <p class="lede">Or run an example with nothing cloned:</p>
+  <p class="cmd"><span aria-hidden="true">$</span> <code>go run glonk.dev/<wbr>examples/<wbr>viewer@latest</code></p>
+  <p class="fine">The same works for <code>cube3d</code>, <code>sprites</code>, <code>world</code>, <code>bounce2d</code> and <code>input</code>.</p>
+</section>
+
+<section aria-labelledby="box">
+  <h2 id="box">What is in the box</h2>
+  <dl class="box">
+    <dt>engine</dt><dd>The loop, the frame of cells, the pixel canvas, drawing helpers, and input from the keyboard and the mouse.</dd>
+    <dt>geometry</dt><dd>2D and 3D vectors, and rectangles for boxes, collision and cameras.</dd>
+    <dt>mesh</dt><dd>3D meshes as lines or shaded faces, shapes, OBJ loading, lights, and the perspective camera.</dd>
+    <dt>sprite</dt><dd>Sprites drawn in layers: a cell, a frame of text art or an animation, with bounds and collision queries.</dd>
+    <dt>tilemap</dt><dd>Levels written as text art, drawn through a camera, with solid tiles, routes round walls and lines of sight.</dd>
+    <dt>widget</dt><dd>A label, a panel, a bar and a menu, for a HUD or a pause screen.</dd>
+    <dt>bitmap</dt><dd>JPEG and PNG pictures, or ones made in code, drawn on the pixel canvas.</dd>
+  </dl>
+  <p class="fine">Every package is documented, with examples that run, on <a href="https://pkg.go.dev/glonk.dev">pkg.go.dev</a>.</p>
+</section>
+
 </main>
+
 <footer>
-  <p>glonk is open source under the MIT license.</p>
+  <nav aria-label="More">
+    <a href="https://pkg.go.dev/glonk.dev">pkg.go.dev</a>
+    <a href="https://github.com/kyrokohan/glonk">GitHub</a>
+    <a href="https://github.com/kyrokohan/glonk/blob/main/SECURITY.md">Security</a>
+    <a href="https://github.com/kyrokohan/glonk/blob/main/BRAND.md">Brand</a>
+    <a href="https://github.com/kyrokohan/glonk/blob/main/LICENSE">MIT license</a>
+  </nav>
+  <p class="fine">Early and pre-1.0: the API may change. Built to work in most terminals; Windows is untested.</p>
 </footer>
+
+</div>
 </body>
 </html>

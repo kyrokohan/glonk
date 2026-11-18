@@ -176,13 +176,14 @@ const (
 	sceneScale   = 8 // a pixel of the scene is this many of the card, so that it reads as a pixel
 )
 
-// cardScene draws what the card shows of glonk's own work: a gold block lit from above on a floor
-// of lines, with grey blocks behind it that fade into the night. Every game starts with a block.
-func cardScene(t *testing.T) *engine.FrameBuffer {
-	fb := frame(t, cardW/sceneScale, 40)
+// blockScene draws glonk's own work for the card and for the first step of the site: a gold block
+// lit from above on a floor of lines, with grey blocks behind it that fade into the night. Every
+// game starts with a block. It is w by h pixels, seen through a camera with that field of view.
+func blockScene(t *testing.T, w, h int, fov float64) *engine.FrameBuffer {
+	fb := frame(t, w, h)
 	c := fb.Canvas()
 	cam := mesh.Camera{
-		Position: geometry.Vector3{Y: 2.1, Z: -7.6}, Pitch: -0.2, FOV: 0.56,
+		Position: geometry.Vector3{Y: 2.1, Z: -7.6}, Pitch: -0.2, FOV: fov,
 		Fog: &mesh.Fog{Color: night.page, Start: 7, End: 20},
 	}
 	lights := []mesh.Light{mesh.Ambient{Level: 0.44}, mesh.Directional{Direction: geometry.Vector3{X: 0.25, Y: -1, Z: 0.5}}}
@@ -212,7 +213,7 @@ func card(t *testing.T) *image.RGBA {
 		part := fb.Image(engine.ImageOptions{Scale: scale})
 		draw.Draw(img, part.Bounds().Add(image.Pt(x, y)), part, image.Point{}, draw.Src)
 	}
-	scene := cardScene(t)
+	scene := blockScene(t, cardW/sceneScale, 40, 0.56)
 	place(scene, sceneScale, 0, cardH-2*scene.Height()*sceneScale)
 	place(lockupFrame(t, night, 0), 12, cardMargin, 64)
 	place(linesFrame(t, night, cardLines[0]), 4, cardMargin, 216)
@@ -354,6 +355,9 @@ var files = []file{
 	{"brand/glonk-paper.png", func(t *testing.T) []byte { return picture(t, lockupFrame(t, paper, clear), 16) }},
 	{"brand/mark.png", func(t *testing.T) []byte { return picture(t, markFrame(t, night), 256) }},
 	{"site/favicon.svg", func(*testing.T) []byte { return iconSVG() }},
+	// 140 by 56 pixels at 6 times: shown at half that on the site, where a pixel is then 3 across
+	// and the picture 30 cells by 6 rows.
+	{"site/block.png", func(t *testing.T) []byte { return picture(t, blockScene(t, 140, 56, 0.72), 6) }},
 	{"site/card.png", func(t *testing.T) []byte {
 		var buf bytes.Buffer
 		if err := png.Encode(&buf, card(t)); err != nil {

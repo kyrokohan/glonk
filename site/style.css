@@ -1,4 +1,27 @@
-/* The two grounds of BRAND.md: paper, and night where the visitor's system is dark. */
+/* glonk.dev. The grounds, the faces and the cell are BRAND.md's: paper, and night where the
+   visitor's system is dark; Departure Mono for what sits in cells and Literata for prose. */
+
+@font-face {
+  font-family: "Departure Mono";
+  src: url("/media/fonts/DepartureMono-Regular.woff2") format("woff2");
+  font-display: swap;
+}
+
+@font-face {
+  font-family: Literata;
+  src: url("/media/fonts/Literata-latin-400-normal.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: Literata;
+  src: url("/media/fonts/Literata-latin-400-italic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
 :root {
   color-scheme: light dark;
   --bg: #e7ecf0;
@@ -7,6 +30,18 @@
   --link: #14213d;
   --code-bg: #dbe2e8;
   --border: #9fadbd;
+  --rule: rgba(20, 33, 61, 0.07);
+  --strong: #14213d;
+  --top: #d7af00;
+  --front: #875f00;
+
+  /* A cell. Departure Mono at 22 pixels is exactly 14 wide, and a row is twice that. The page is
+     84 cells across with 3 kept clear at each side. */
+  --cw: 14px;
+  --rh: 28px;
+  --cols: 84;
+  --side: 3;
+  --mono: 22px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -17,6 +52,27 @@
     --link: #ffd700;
     --code-bg: #121212;
     --border: #3a3a3a;
+    --rule: rgba(255, 255, 255, 0.06);
+    --strong: #ffffff;
+    --top: #ffd700;
+    --front: #af8700;
+  }
+}
+
+/* Where 84 cells do not fit: 60, the width of a recording. */
+@media (max-width: 1203px) {
+  :root {
+    --cols: 60;
+  }
+}
+
+/* A phone: a smaller cell, three quarters of the other, and the page as wide as the screen. */
+@media (max-width: 867px) {
+  :root {
+    --cw: 10.5px;
+    --rh: 21px;
+    --side: 2;
+    --mono: 16.5px;
   }
 }
 
@@ -32,66 +88,194 @@ html {
 
 body {
   margin: 0;
-  padding: 2.5rem 16px 3rem;
   background: var(--bg);
   color: var(--fg);
-  font: 1rem/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font: 400 19px / var(--rh) Literata, Georgia, serif;
 }
 
-main,
-footer {
-  max-width: 42rem;
+/* The page is ruled in cells, as the paper of BRAND.md is. */
+.page {
+  width: calc(var(--cols) * var(--cw));
+  max-width: 100%;
   margin: 0 auto;
+  padding: var(--rh) calc(var(--side) * var(--cw)) calc(3 * var(--rh));
+  background-image: linear-gradient(to right, var(--rule) 1px, transparent 1px), linear-gradient(to bottom, var(--rule) 1px, transparent 1px);
+  background-size: var(--cw) var(--rh);
+}
+
+/* What sits in cells: one character to a cell, on the rows. */
+h1,
+h2,
+h3,
+nav,
+pre,
+code,
+dt,
+label,
+.name,
+.cmd {
+  font-family: "Departure Mono", ui-monospace, Menlo, Consolas, monospace;
+  font-size: var(--mono);
+  font-weight: 400;
+  line-height: var(--rh);
+  letter-spacing: 0;
 }
 
 h1,
 h2,
+h3,
+p,
 pre,
-code {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+dl,
+figure {
+  margin: 0;
 }
 
+a {
+  color: var(--link);
+  text-underline-offset: 0.15em;
+}
+
+a:focus-visible,
+pre:focus-visible,
+.hold:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.skip {
+  position: absolute;
+  left: -200vw;
+}
+
+.skip:focus {
+  left: var(--cw);
+  top: var(--rh);
+  z-index: 1;
+  padding: 0 var(--cw);
+  background: var(--bg);
+}
+
+/* The top: the mark, the name, and where to go. The mark is two cells of the upper half block. */
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0 calc(2 * var(--cw));
+}
+
+.name {
+  display: flex;
+  color: var(--strong);
+  text-decoration: none;
+}
+
+.mark {
+  width: calc(2 * var(--cw));
+  height: var(--rh);
+  margin-right: var(--cw);
+  background: linear-gradient(to bottom, var(--top) 50%, var(--front) 50%);
+}
+
+nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 calc(2 * var(--cw));
+}
+
+/* The cover. A heading is the same letters at two or three times the cell. */
 h1 {
-  margin: 0 0 0.5rem;
-  font-size: 2.5rem;
-  line-height: 1.1;
-  letter-spacing: -0.02em;
+  margin-top: calc(2 * var(--rh));
+  font-size: calc(3 * var(--mono));
+  line-height: calc(3 * var(--rh));
+  color: var(--strong);
 }
 
 h2 {
-  margin: 2.25rem 0 0.5rem;
-  font-size: 1.1rem;
+  margin-top: calc(4 * var(--rh));
+  font-size: calc(2 * var(--mono));
+  line-height: calc(2 * var(--rh));
+  color: var(--strong);
 }
 
 .lede {
-  margin: 0 0 0.75rem;
-  font-size: 1.2rem;
+  max-width: calc(48 * var(--cw));
+  margin-top: var(--rh);
 }
 
-.note,
-footer {
+.fine {
+  max-width: calc(54 * var(--cw));
+  margin-top: var(--rh);
   color: var(--muted);
 }
 
-ul {
-  padding-left: 1.25rem;
+/* A word of code in a sentence: smaller, and no taller than its letters, so that the line it is
+   in stays on the rows. */
+.fine code,
+.say code {
+  font-size: calc(var(--mono) * 0.75);
+  line-height: 1;
 }
 
-li {
-  margin: 0.35rem 0;
-  overflow-wrap: anywhere;
+/* Something to type: a prompt and a command, in a box three rows tall. */
+.cmd {
+  display: inline-block;
+  max-width: 100%;
+  margin-top: var(--rh);
+  padding: var(--rh) calc(2 * var(--cw));
+  outline: 1px solid var(--muted);
+  outline-offset: -1px;
+  color: var(--strong);
 }
 
+.cmd span {
+  color: var(--link);
+}
+
+/* A picture. One that moves by itself for more than a few seconds needs a way to stop it, and
+   the page has no script: the checkbox swaps the recording for one frame of it. */
 img {
   display: block;
   max-width: 100%;
   height: auto;
-  margin-top: 0.5rem;
-  border: 1px solid var(--border);
 }
 
-/* A picture that moves by itself for more than a few seconds needs a way to stop it, and the
-   page has no script: the checkbox swaps the recording for one frame of it. */
+figcaption {
+  margin-top: var(--rh);
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* The first recording is 60 cells wide. Where the page has 84, its control and its caption stand
+   in the margin beside it, as a note does in a manual. */
+.lead {
+  display: grid;
+  grid-template-columns: calc(60 * var(--cw)) calc(15 * var(--cw));
+  grid-template-areas: "pic hold" "pic cap";
+  grid-template-rows: auto 1fr;
+  column-gap: calc(3 * var(--cw));
+  margin-top: calc(2 * var(--rh));
+}
+
+.lead .hold {
+  grid-area: hold;
+  margin-top: calc((var(--rh) - var(--cw)) / 2);
+}
+
+.lead label {
+  grid-area: hold;
+  margin-left: calc(2 * var(--cw));
+}
+
+.lead picture,
+.lead .held {
+  grid-area: pic;
+}
+
+.lead figcaption {
+  grid-area: cap;
+}
+
 .held,
 .hold:checked ~ .moving {
   display: none;
@@ -101,36 +285,163 @@ img {
   display: block;
 }
 
-.hold:focus-visible {
-  outline: 2px solid currentColor;
-  outline-offset: 2px;
+.hold {
+  width: var(--cw);
+  height: var(--cw);
+  margin: 0;
+  accent-color: var(--fg);
+}
+
+/* A step: its number in a cell of its own, words beside a picture, and the code under both. */
+.step {
+  display: grid;
+  grid-template-columns: calc(44 * var(--cw)) calc(30 * var(--cw));
+  grid-template-areas: "head head" "say fig" "code code";
+  column-gap: calc(4 * var(--cw));
+  margin-top: calc(3 * var(--rh));
+}
+
+h3 {
+  grid-area: head;
+  color: var(--strong);
+}
+
+.n {
+  display: inline-block;
+  width: calc(3 * var(--cw));
+  margin-right: var(--cw);
+  background: var(--fg);
+  color: var(--bg);
+  text-align: center;
+}
+
+.say {
+  grid-area: say;
+}
+
+.say p {
+  margin-top: var(--rh);
+}
+
+.step figure {
+  grid-area: fig;
+  margin-top: var(--rh);
+}
+
+.step pre {
+  grid-area: code;
 }
 
 pre {
-  margin: 0.5rem 0;
-  padding: 0.75rem 1rem;
+  margin-top: var(--rh);
+  padding: var(--rh) var(--cw);
   overflow-x: auto;
   background: var(--code-bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  line-height: 1.5;
+  outline: 1px solid var(--border);
+  outline-offset: -1px;
+  tab-size: 2;
 }
 
-code {
-  font-size: 0.95em;
+/* What is in the box: a name in cells, and what it is for. */
+.box {
+  display: grid;
+  grid-template-columns: calc(11 * var(--cw)) minmax(0, calc(52 * var(--cw)));
+  row-gap: var(--rh);
+  margin-top: var(--rh);
 }
 
-a {
-  color: var(--link);
-  text-underline-offset: 0.15em;
+.box dt {
+  color: var(--strong);
 }
 
-a:focus-visible {
-  outline: 2px solid currentColor;
-  outline-offset: 2px;
+.box dd {
+  margin: 0;
 }
 
 footer {
-  margin-top: 3rem;
-  font-size: 0.9rem;
+  margin-top: calc(4 * var(--rh));
+}
+
+/* The page at 60 cells: one column, and the first recording from edge to edge, where it is
+   exactly as wide as the page. */
+@media (max-width: 1203px) {
+  .step {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "head" "say" "fig" "code";
+  }
+
+  .lead {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "hold" "pic" "cap";
+    grid-template-rows: auto;
+  }
+
+  .lead picture,
+  .lead .held {
+    margin-top: var(--rh);
+    margin-left: calc(-1 * var(--side) * var(--cw));
+    margin-right: calc(-1 * var(--side) * var(--cw));
+  }
+
+  .lead img {
+    max-width: none;
+    width: calc(var(--cols) * var(--cw));
+  }
+}
+
+@media (max-width: 867px) {
+  body {
+    font-size: 17px;
+  }
+
+  .page {
+    width: 100%;
+  }
+
+  h1 {
+    font-size: calc(2 * var(--mono));
+    line-height: calc(2 * var(--rh));
+  }
+
+  h1 br {
+    display: none;
+  }
+
+  h2 {
+    font-size: calc(1.5 * var(--mono));
+  }
+
+  nav {
+    column-gap: var(--cw);
+  }
+
+  /* A finger needs more than one row. */
+  nav a {
+    padding: calc(var(--rh) / 2) 0;
+  }
+
+  /* Code at the face's own size, where a line shows 47 characters and not 31. */
+  pre code {
+    font-size: 11px;
+  }
+
+  .lead picture,
+  .lead .held {
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .lead img {
+    max-width: 100%;
+    width: auto;
+  }
+
+  .box {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 0;
+  }
+
+  .box dd {
+    margin-bottom: var(--rh);
+  }
 }

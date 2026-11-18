@@ -46,6 +46,8 @@ glonk.dev follows the visitor's light or dark setting. A picture that is publish
 
 Both are under the SIL Open Font License 1.1. A cell is one wide and two tall, and a page is laid out on that grid: text in Departure Mono sits one character to a cell.
 
+On glonk.dev a cell is 14 by 28 pixels, which is Departure Mono at 22 pixels, twice its drawn size. Headings are that at two and three times, and prose is Literata at 19 pixels on the 28 pixel rows. The page is 84 cells wide, or 60 where 84 do not fit. On a phone the cell is three quarters of that, 10.5 by 21, and code is at the face's drawn size of 11 pixels. The fonts are files of the site, in `site/media/fonts/` with their licenses: the page asks no other site for anything.
+
 ## Voice
 
 glonk says what it does and what was measured, in plain words, and stops.
@@ -75,5 +77,6 @@ The files in `brand/` are under the MIT license, as the rest of this repository 
 | `brand/mark.svg`, `brand/mark.png` | The mark alone |
 | `site/favicon.svg`, `site/favicon.ico`, `site/apple-touch-icon.png` | The icons of glonk.dev |
 | `site/card.png` | The card shown beside a link to glonk: the logo, what glonk is, and a block the engine drew |
+| `site/block.png` | The picture of the first step on glonk.dev: the card's block, drawn by the engine |
 
 Their source is `internal/brand/brand_test.go`: the name and the card's words as rows of pixels, the mark's colors as terminal color numbers, and the card's block as a scene, all drawn with glonk itself. `make brand` writes the files again, and `make check` fails if one of them is not what the source draws.
