@@ -10,8 +10,9 @@ import (
 // FrameBuffer is a width x height grid of Cells that a game draws into each
 // frame; Run presents it to the terminal.
 //
-// It also keeps a depth per cell, used only by SetDepth, so solid 3D surfaces
-// can hide what is behind them. Everything else ignores depth.
+// It also keeps a depth per cell, so solid 3D surfaces can hide what is behind
+// them: SetDepth, the triangles, the depth lines, Canvas.Compose and
+// Canvas.ComposeRect read or write it, and Set and the rest of the 2D drawing ignore it.
 type FrameBuffer struct {
 	width, height int
 	frame         []Cell
@@ -63,6 +64,17 @@ func (fb *FrameBuffer) Clear() {
 	}
 	if fb.canvas != nil {
 		fb.canvas.Clear()
+	}
+}
+
+// ClearDepth resets every cell's depth to infinitely far and keeps the cells, as Canvas.ClearDepth
+// does for pixels, and resets the Canvas's depth too if one has been used, as Clear empties both.
+func (fb *FrameBuffer) ClearDepth() {
+	for i := range fb.depth {
+		fb.depth[i] = math.Inf(1)
+	}
+	if fb.canvas != nil {
+		fb.canvas.ClearDepth()
 	}
 }
 
