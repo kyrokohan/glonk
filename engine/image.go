@@ -26,6 +26,13 @@ type ImageOptions struct {
 	// decides and a program cannot know. The zero Color gives light gray for the foreground and
 	// black for the background.
 	Foreground, Background Color
+
+	// Text draws each printable ASCII character in its cell as a letter of the font that
+	// Canvas.DrawText draws with, in the foreground over the background, and not as a mark. A
+	// letter is drawn at the largest whole size that leaves a blank column beside it, Scale/6, so
+	// letters appear from a Scale of 6; below that, and for any other character, a cell is drawn
+	// as without it.
+	Text bool
 }
 
 // Image draws the frame as a picture, for a test to compare with one it has stored or for a
@@ -40,6 +47,12 @@ type ImageOptions struct {
 // half of the cell, which shows where text is and in what color but not what it says; use
 // [FrameBuffer.String] for that. Reverse swaps a cell's colors; Bold, Dim and Underline are not
 // drawn. Every pixel is opaque.
+//
+// With Text, from a Scale of 6, a printable ASCII character is its letter instead, Scale/6 times the
+// font's 5 by 7 pixels, in the middle of the cell, rounded up and to the left. A wide or control
+// character is drawn as ?, as the terminal is sent one, and box lines, shades and every other
+// character outside ASCII stay marks. At the usual Scale of 4 there is no room for a letter, and
+// nothing changes.
 //
 // A picture of more than 4,194,304 pixels is not made: the result is empty, 0 by 0. The picture is
 // a copy, and the frame can be drawn into again.
@@ -64,6 +77,12 @@ func (fb *FrameBuffer) Image(opts ImageOptions) *image.RGBA {
 	// no room for less.
 	markX0, markX1 := scale/4, scale-scale/4
 	markY0, markY1 := scale/2, 2*scale-scale/2
+	// The size of a letter, 0 for none, and where its top left is in the cell.
+	size := 0
+	if opts.Text {
+		size = scale / fontAdvance
+	}
+	textX, textY := (scale-fontWidth*size)/2, (2*scale-fontHeight*size)/2
 
 	for cy := range fb.height {
 		for cx := range fb.width {
@@ -73,17 +92,28 @@ func (fb *FrameBuffer) Image(opts ImageOptions) *image.RGBA {
 				fg, bg = bg, fg
 			}
 			x0, y0 := cx*scale, 2*cy*scale
-			switch safeRune(cell.Character) {
-			case ' ':
+			switch r := safeRune(cell.Character); {
+			case r == ' ':
 				fillRect(img, x0, y0, x0+scale, y0+2*scale, bg)
-			case upperHalfBlock:
+			case r == upperHalfBlock:
 				fillRect(img, x0, y0, x0+scale, y0+scale, fg)
 				fillRect(img, x0, y0+scale, x0+scale, y0+2*scale, bg)
-			case lowerHalfBlock:
+			case r == lowerHalfBlock:
 				fillRect(img, x0, y0, x0+scale, y0+scale, bg)
 				fillRect(img, x0, y0+scale, x0+scale, y0+2*scale, fg)
-			case '█':
+			case r == '█':
 				fillRect(img, x0, y0, x0+scale, y0+2*scale, fg)
+			case size > 0 && r > ' ' && r <= '~':
+				fillRect(img, x0, y0, x0+scale, y0+2*scale, bg)
+				gx, gy := x0+textX, y0+textY
+				for row, bits := range font[r-' '] {
+					for col := range fontWidth {
+						if bits&(1<<(fontWidth-1-col)) != 0 {
+							px, py := gx+col*size, gy+row*size
+							fillRect(img, px, py, px+size, py+size, fg)
+						}
+					}
+				}
 			default:
 				fillRect(img, x0, y0, x0+scale, y0+2*scale, bg)
 				fillRect(img, x0+markX0, y0+markY0, x0+markX1, y0+markY1, fg)
