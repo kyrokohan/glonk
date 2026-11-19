@@ -156,12 +156,74 @@ func (c Camera) Ray(x, y float64, w, h int) (origin, direction geometry.Vector3,
 // RayPixels is Ray for the pixels of cv, the reverse of ProjectPixels: the ray that
 // ProjectPixels puts at (x, y) passes through the point, and with the depth it returns as t
 // it reaches it. x and y are fractional pixel coordinates, so the ray through the middle of
-// pixel (i, j) is RayPixels(i+0.5, j+0.5, cv). ok is also false for a nil canvas.
+// pixel (i, j) is RayPixels(i+0.5, j+0.5, cv). ok is also false for a nil canvas. For the rays
+// of every pixel, RaysPixels gives them all at once.
 func (c Camera) RayPixels(x, y float64, cv *engine.Canvas) (origin, direction geometry.Vector3, ok bool) {
 	if cv == nil {
 		return geometry.Vector3{}, geometry.Vector3{}, false
 	}
 	return c.Ray(x, y/2, cv.Width(), cv.Height()/2)
+}
+
+// Rays is every ray of a grid of cells, or of the pixels of a canvas, at once: the ray through
+// the middle of cell or pixel (i, j) starts at Origin and goes along First + i*Across + j*Down,
+// the direction Ray or RayPixels gives for it, to within rounding. Camera.Rays and
+// Camera.RaysPixels return it. A program that draws a whole canvas by rays works them out with
+// additions, and not with RayPixels for each pixel, which works out the camera's angles every time.
+type Rays struct {
+	// Origin is where every ray starts: the camera's Position.
+	Origin geometry.Vector3
+
+	// First is the direction of the ray through the middle of cell or pixel (0, 0). Like every
+	// direction here, it is one deep along Look and not of unit length.
+	First geometry.Vector3
+
+	// Across is what a direction gains from one column to the next. It has nothing along Look,
+	// so every ray stays one deep.
+	Across geometry.Vector3
+
+	// Down is what a direction gains from one row to the next, with nothing along Look either.
+	Down geometry.Vector3
+}
+
+// Rays returns the rays through the middle of every cell of a grid of w x h cells, the ones Ray
+// gives. ok is false where Ray's would be: for a camera that sees nothing (see Camera), a grid
+// with no height, and a Position, Yaw or Pitch that is not a number.
+func (c Camera) Rays(w, h int) (rays Rays, ok bool) {
+	return c.rays(0.5, 0.5, 1, w, h)
+}
+
+// RaysPixels is Rays for the pixels of cv: the ray through the middle of pixel (i, j) is the one
+// RayPixels(i+0.5, j+0.5, cv) gives. ok is also false for a nil canvas.
+func (c Camera) RaysPixels(cv *engine.Canvas) (rays Rays, ok bool) {
+	if cv == nil {
+		return Rays{}, false
+	}
+	return c.rays(0.5, 0.25, 0.5, cv.Width(), cv.Height()/2) // a pixel is half a cell tall
+}
+
+// rays is Rays on a grid of w x h cells, with the first ray through the place (x, y) and rows dy
+// cells apart.
+func (c Camera) rays(x, y, dy float64, w, h int) (Rays, bool) {
+	c, usable := c.withDefaults()
+	if !usable || !(h > 0) {
+		return Rays{}, false
+	}
+	p := c.projector(w, h)
+	// The ray of a place is linear in it, so its steps are worked out exactly and turned as Ray
+	// turns a direction.
+	turn := func(v geometry.Vector3) geometry.Vector3 { return v.RotateX(-c.Pitch).RotateY(c.Yaw) }
+	r := Rays{
+		Origin: c.Position,
+		First:  turn(p.ray(x, y)),
+		Across: turn(geometry.Vector3{X: 1 / (p.h / 2 * p.aspect) / p.focal}),
+		Down:   turn(geometry.Vector3{Y: -dy / (p.h / 2) / p.focal}),
+	}
+	if !finite(r.Origin.X, r.Origin.Y, r.Origin.Z, r.First.X, r.First.Y, r.First.Z,
+		r.Across.X, r.Across.Y, r.Across.Z, r.Down.X, r.Down.Y, r.Down.Z) {
+		return Rays{}, false
+	}
+	return r, true
 }
 
 // projectDepth is Project that also returns the depth of p, its view-space z: the distance
