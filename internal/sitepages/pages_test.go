@@ -33,8 +33,8 @@ type page struct {
 	Text        string
 }
 
-// The shell of a page: the head, the top bar and the foot of site/index.html, round the contents
-// and the text. The go-import and go-source tags come first, as internal/sitecheck wants of every
+// The shell of a page: the head, the top bar and the foot of site/index.html, round the contents,
+// where a page has them, and the text. The go-import and go-source tags come first, as internal/sitecheck wants of every
 // page.
 var shell = template.Must(template.New("page").Parse(`<!doctype html>
 <html lang="en">
@@ -75,17 +75,17 @@ var shell = template.Must(template.New("page").Parse(`<!doctype html>
   </nav>
 </header>
 
-<main class="doc">
+<main{{if .Contents}} class="doc"{{end}}>
 <div class="front">
 {{.Front}}</div>
-
+{{if .Contents}}
 <nav class="contents" aria-label="Contents">
 <p>Contents</p>
 <ul role="list">
 {{range .Contents}}<li><a href="#{{.ID}}">{{.Text}}</a></li>
 {{end}}</ul>
 </nav>
-
+{{end}}
 <article class="text" id="text">
 {{.Text}}</article>
 </main>
@@ -94,6 +94,7 @@ var shell = template.Must(template.New("page").Parse(`<!doctype html>
   <nav aria-label="More">
     <a href="https://pkg.go.dev/glonk.dev">pkg.go.dev</a>
     <a href="https://github.com/kyrokohan/glonk">GitHub</a>
+    <a href="/showcase/">Showcase</a>
     <a href="https://github.com/kyrokohan/glonk/blob/main/CONTRIBUTING.md">Contributing</a>
     <a href="https://github.com/kyrokohan/glonk/blob/main/SECURITY.md">Security</a>
     <a href="https://github.com/kyrokohan/glonk/blob/main/BRAND.md">Brand</a>
@@ -295,7 +296,7 @@ func TestThePagesAreWhatTheRepositorySays(t *testing.T) {
 	if _, err := os.Stat(root("site/media")); os.IsNotExist(err) {
 		t.Skip("site/media is not in this copy of glonk")
 	}
-	for _, build := range []func() (page, error){manual, changelog} {
+	for _, build := range []func() (page, error){manual, changelog, showcase} {
 		p, err := build()
 		if err != nil {
 			t.Fatal(err)

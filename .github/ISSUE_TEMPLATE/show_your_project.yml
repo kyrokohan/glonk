@@ -1,0 +1,59 @@
+name: Show your project
+description: Ask for something you built with glonk to be listed on glonk.dev.
+title: "Show: "
+labels: ["showcase"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Projects made with glonk are listed at [glonk.dev/showcase](https://glonk.dev/showcase/). The maintainer may decline or remove a listing.
+  - type: input
+    id: repository
+    attributes:
+      label: Repository
+      description: The link to the public repository.
+      placeholder: https://github.com/you/your-project
+    validations:
+      required: true
+  - type: input
+    id: line
+    attributes:
+      label: What it is
+      description: One sentence, as it should stand on the page.
+    validations:
+      required: true
+  - type: textarea
+    id: picture
+    attributes:
+      label: A screenshot or a recording
+      description: Drag a PNG, or a GIF, in here. It is copied into glonk's repository, so that a listing cannot change after it is accepted.
+    validations:
+      required: true
+  - type: input
+    id: glonk
+    attributes:
+      label: glonk version
+      description: The released version it builds with, as its go.mod names it.
+      placeholder: v0.12.0
+    validations:
+      required: true
+  - type: input
+    id: license
+    attributes:
+      label: License
+      placeholder: MIT
+    validations:
+      required: true
+  - type: checkboxes
+    id: rule
+    attributes:
+      label: The rule for being listed
+      options:
+        - label: The repository is public and under an open source license.
+          required: true
+        - label: It builds against a released version of glonk.
+          required: true
+        - label: Its README says how to run it.
+          required: true
+        - label: Its author agrees to the listing, and to its picture being shown on glonk.dev.
+          required: true

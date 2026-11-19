@@ -424,8 +424,13 @@ footer {
   text-decoration: underline;
 }
 
+/* Text is 50 cells wide at most, also on a page with no contents beside it. */
 .text {
   min-width: 0;
+}
+
+.text > * {
+  max-width: calc(50 * var(--cw));
 }
 
 /* A link to a section leaves a row above its heading. */
@@ -518,6 +523,45 @@ strong {
   margin-top: var(--rh);
 }
 
+/* The badge stands in a sentence, in the middle of its row and no taller than it. */
+.text .badge {
+  display: inline-block;
+  margin-top: calc((var(--rh) - 20px) / 2);
+  vertical-align: top;
+}
+
+/* The projects of the showcase, two to a row. A picture is shown 3 by 2 whatever its shape, on
+   the night ground, so that every entry is as tall as the next and stays on the rows. */
+.text > .entries {
+  display: grid;
+  grid-template-columns: repeat(2, calc(36 * var(--cw)));
+  gap: calc(2 * var(--rh)) calc(6 * var(--cw));
+  max-width: none;
+  padding: 0;
+  list-style: none;
+}
+
+.entries li + li {
+  margin-top: 0;
+}
+
+.entries img {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  object-fit: contain;
+  background: #000000;
+}
+
+.entries h3,
+.entries p {
+  margin-top: 0;
+}
+
+.entries img + h3,
+.entries a + h3 {
+  margin-top: var(--rh);
+}
+
 .text th {
   color: var(--muted);
   font: 400 calc(var(--mono) * 0.75) / var(--rh) "Departure Mono", ui-monospace, Menlo, Consolas, monospace;
@@ -561,6 +605,10 @@ strong {
 
   .contents ul {
     columns: 2;
+  }
+
+  .text > .entries {
+    grid-template-columns: calc(54 * var(--cw));
   }
 }
 
@@ -612,6 +660,10 @@ strong {
 
   .text td img {
     width: calc(15 * var(--cw));
+  }
+
+  .text > .entries {
+    grid-template-columns: calc(30 * var(--cw));
   }
 
   .contents ul {

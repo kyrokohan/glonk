@@ -68,6 +68,12 @@ glonk says what it does and what was measured, in plain words, and stops.
 
 The files in `brand/` are under the MIT license, as the rest of this repository is. Use the mark and the name to say that something is made with glonk, or is about glonk. Please do not use them as the logo of something else, or in a way that suggests glonk endorses it.
 
+For the README of something made with glonk there is a badge, the mark and "made with glonk" on the night ground, at the height of the usual badges and at one address that stays:
+
+```
+[![made with glonk](https://glonk.dev/badge.svg)](https://glonk.dev)
+```
+
 ## Files
 
 | File | For |
@@ -77,6 +83,7 @@ The files in `brand/` are under the MIT license, as the rest of this repository 
 | `brand/mark.svg`, `brand/mark.png` | The mark alone |
 | `site/favicon.svg`, `site/favicon.ico`, `site/apple-touch-icon.png` | The icons of glonk.dev |
 | `site/card.png` | The card shown beside a link to glonk: the logo, what glonk is, and a block the engine drew |
+| `site/badge.svg` | The "made with glonk" badge, served at glonk.dev/badge.svg for the READMEs of other projects |
 | `site/block.png` | The picture of the first step on glonk.dev: the card's block, drawn by the engine |
 
 Their source is `internal/brand/brand_test.go`: the name and the card's words as rows of pixels, the mark's colors as terminal color numbers, and the card's block as a scene, all drawn with glonk itself. `make brand` writes the files again, and `make check` fails if one of them is not what the source draws.

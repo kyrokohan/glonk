@@ -49,7 +49,7 @@ var pages = func() []string {
 
 // The tests below go over every page that is found. This one fails if a page was not.
 func TestTheSiteHasItsPages(t *testing.T) {
-	for _, want := range []string{"index.html", "404.html", "manual/index.html", "changelog/index.html"} {
+	for _, want := range []string{"index.html", "404.html", "manual/index.html", "changelog/index.html", "showcase/index.html"} {
 		if !slices.Contains(pages, want) {
 			t.Errorf("wanted %s among the pages of the site, got %v", want, pages)
 		}
