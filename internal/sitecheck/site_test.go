@@ -248,9 +248,12 @@ func noMedia() bool {
 	return os.IsNotExist(err)
 }
 
-// A visitor's browser asks glonk.dev for the page and nobody else for anything: the fonts, the
-// stylesheet and the pictures are files of the site. What a page loads is what its link tags, its
-// pictures and its stylesheet name; a link to follow is not loaded.
+// The pages ask no other site for anything: the fonts, the stylesheet and the pictures are files
+// of the site. What a page loads is what its link tags, its pictures and its stylesheet name; a
+// link to follow is not loaded. On glonk.dev Cloudflare adds one script at the edge, its Web
+// Analytics beacon, which is a setting of the account and in no file here: it was found on
+// 2026-11-19 and is kept, so every page view on glonk.dev also goes to Cloudflare. Previews and
+// this test do not see it.
 func TestNothingIsLoadedFromAnotherSite(t *testing.T) {
 	local := func(target string) bool {
 		return strings.HasPrefix(target, "/") && !strings.HasPrefix(target, "//")
