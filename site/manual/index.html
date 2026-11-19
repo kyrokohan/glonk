@@ -573,6 +573,7 @@ func TestTheDotMovesAcrossTheScreen(t *testing.T) {
 <li><strong>Without a terminal there is no terminal handling.</strong> A headless <code>Run</code> (see <code>Config.Output</code>) treats a key as held from its press to its release, as the kitty keyboard protocol reports them, unless <code>LegacyKeys</code> is set; a plain letter with no release then stays held. Ctrl-Z does nothing and quit signals are left to your program. Reading from an input that never ends a read (a pipe nobody closes) leaves one goroutine waiting after <code>Run</code> returns.</li>
 <li><strong>Only changes are sent, so do not print to the terminal yourself.</strong> Each frame sends just the cells that differ from the last, as one synchronized update (terminals that do not know that mode ignore it). Text that something else writes while <code>Run</code> is running stays on screen until those cells change, the window is resized, or the window comes back to the front; log to a file instead.</li>
 <li><strong>Resizing can flicker for one frame.</strong></li>
+<li><strong>A build for the browser runs headless only.</strong> glonk compiles for <code>GOOS=js GOARCH=wasm</code>, and CI checks that it still does. A browser has no terminal, so there <code>Run</code> needs <code>Config.Input</code>, <code>Output</code>, <code>Width</code> and <code>Height</code>, and the page has to pass the keys in and draw the frames it writes.</li>
 <li><strong>Windows is untested.</strong></li>
 </ul>
 <h2 id="planned">Planned</h2>

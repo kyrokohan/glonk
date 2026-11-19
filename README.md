@@ -591,6 +591,7 @@ Built to work in most terminals. The basics need only the alternate screen, curs
 - **Without a terminal there is no terminal handling.** A headless `Run` (see `Config.Output`) treats a key as held from its press to its release, as the kitty keyboard protocol reports them, unless `LegacyKeys` is set; a plain letter with no release then stays held. Ctrl-Z does nothing and quit signals are left to your program. Reading from an input that never ends a read (a pipe nobody closes) leaves one goroutine waiting after `Run` returns.
 - **Only changes are sent, so do not print to the terminal yourself.** Each frame sends just the cells that differ from the last, as one synchronized update (terminals that do not know that mode ignore it). Text that something else writes while `Run` is running stays on screen until those cells change, the window is resized, or the window comes back to the front; log to a file instead.
 - **Resizing can flicker for one frame.**
+- **A build for the browser runs headless only.** glonk compiles for `GOOS=js GOARCH=wasm`, and CI checks that it still does. A browser has no terminal, so there `Run` needs `Config.Input`, `Output`, `Width` and `Height`, and the page has to pass the keys in and draw the frames it writes.
 - **Windows is untested.**
 
 ## Planned
