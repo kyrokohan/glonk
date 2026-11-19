@@ -106,7 +106,9 @@
       term.write("\x1b[?25l");
 
       box.addEventListener("keydown", (e) => {
-        if (e.metaKey || e.ctrlKey || e.altKey || e.key === "Tab") return; // Tab leaves the game
+        // Tab leaves the game. xterm.js would keep it for itself, so it must not see it.
+        if (e.key === "Tab") { e.stopPropagation(); return; }
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
         if (sequence(e.key, false)) e.preventDefault();
         if (!e.repeat && !held.has(e.key) && send(e.key, false)) held.add(e.key);
       }, true);
