@@ -17,3 +17,5 @@
 
 # what make record writes
 /casts/
+# Built by make play before each deploy of glonk.dev.
+/site/media/play/

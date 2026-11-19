@@ -259,8 +259,8 @@ figcaption {
 .lead {
   display: grid;
   grid-template-columns: calc(60 * var(--cw)) calc(15 * var(--cw));
-  grid-template-areas: "pic hold" "pic cap";
-  grid-template-rows: auto 1fr;
+  grid-template-areas: "pic play" "pic hold" "pic cap";
+  grid-template-rows: auto auto 1fr;
   column-gap: calc(3 * var(--cw));
   margin-top: calc(2 * var(--rh));
 }
@@ -286,6 +286,81 @@ figcaption {
 
 .held,
 .hold:checked ~ .moving {
+  display: none;
+}
+
+/* The game of the cover, which site/play.js offers where a script runs: a button over the hold
+   control, and while the game runs the game in the recording's place, the recording's size, with
+   its keys where the caption was. */
+.lead .play {
+  grid-area: play;
+}
+
+.lead .play:not(:empty) {
+  margin-bottom: var(--rh);
+}
+
+.lead .play > * + * {
+  margin-top: var(--rh);
+}
+
+.lead .start {
+  display: block;
+  height: var(--rh);
+  margin: 0;
+  padding: 0 var(--cw);
+  border: 0;
+  outline: 1px solid var(--muted);
+  outline-offset: -1px;
+  background: transparent;
+  color: var(--strong);
+  font: 400 var(--mono) / var(--rh) "Departure Mono", ui-monospace, Menlo, Consolas, monospace;
+  cursor: pointer;
+}
+
+.lead .start:hover {
+  color: var(--link);
+}
+
+.lead .start:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.lead .start:disabled {
+  color: var(--muted);
+  cursor: progress;
+}
+
+.lead .note,
+.lead .keys {
+  margin: 0;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.lead .keys {
+  grid-area: cap;
+}
+
+.lead .game {
+  grid-area: pic;
+  width: 840px;
+  height: 560px;
+  overflow: hidden;
+  background: #000000;
+}
+
+.lead .game:focus-within {
+  outline: 2px solid var(--fg);
+  outline-offset: 2px;
+}
+
+.lead.playing picture,
+.lead.playing .held,
+.lead.playing .hold,
+.lead.playing label,
+.lead.playing figcaption {
   display: none;
 }
 
@@ -577,12 +652,17 @@ strong {
 
   .lead {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "hold" "pic" "cap";
+    grid-template-areas: "play" "hold" "pic" "cap";
     grid-template-rows: auto;
   }
 
+  .lead .keys {
+    margin-top: var(--rh);
+  }
+
   .lead picture,
-  .lead .held {
+  .lead .held,
+  .lead .game {
     margin-top: var(--rh);
     margin-left: calc(-1 * var(--side) * var(--cw));
     margin-right: calc(-1 * var(--side) * var(--cw));
