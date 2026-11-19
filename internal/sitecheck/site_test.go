@@ -156,8 +156,10 @@ func TestPagesAreSelfContainedAndPlain(t *testing.T) {
 		if m := regexp.MustCompile(`<title>([^<]+)</title>`).FindStringSubmatch(page); m == nil || strings.TrimSpace(m[1]) == "" {
 			t.Errorf("%s: wanted a title", name)
 		}
-		if strings.Contains(strings.ToLower(page), "<script") {
-			t.Errorf("%s: wanted no script", name)
+		// One page has one script, for the game of the cover; see TestTheOneScriptIsTheGame.
+		scripts := strings.Count(strings.ToLower(page), "<script")
+		if want := map[bool]int{true: 1, false: 0}[name == "index.html"]; scripts != want {
+			t.Errorf("%s: wanted %d script, found %d", name, want, scripts)
 		}
 		// Cloudflare rewrites email addresses it finds in a page.
 		if m := email.FindString(page); m != "" {
@@ -199,6 +201,42 @@ func TestTheLinkPreviewNamesAFileOfTheSite(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join("..", "..", "site", m[1])); err != nil {
 		t.Errorf("index.html: wanted the picture of the link preview, %q, to be a file of the site, got %v", m[1], err)
+	}
+}
+
+// The site was without a script until the game of the cover (#104). The rule since: only the
+// landing page loads one, it is /play.js, a file of the site, and nothing is written inside the
+// page, so that what runs is one file anyone can read. The files the script loads are files of
+// the site too, or the ones make play writes before each deploy, which are not committed.
+func TestTheOneScriptIsTheGame(t *testing.T) {
+	const tag = `<script src="/play.js" defer></script>`
+	if index := read(t, "site", "index.html"); strings.Count(index, tag) != 1 {
+		t.Errorf("index.html: wanted its one script to be %s", tag)
+	}
+
+	built := map[string]bool{"/media/play/cube3d.wasm.gz": true, "/media/play/wasm_exec.js": true}
+	makefile := read(t, "Makefile")
+	for _, want := range []string{"-o $(PLAY)/cube3d.wasm ", "gzip -9nf $(PLAY)/cube3d.wasm\n", "lib/wasm/wasm_exec.js\" $(PLAY)/"} {
+		if !strings.Contains(makefile, want) {
+			t.Errorf("Makefile: wanted make play to write what the script loads, with %q", want)
+		}
+	}
+
+	script := read(t, "site", "play.js")
+	named := regexp.MustCompile(`"(/[^"]*|[a-z]+://[^"]*)"`).FindAllStringSubmatch(script, -1)
+	if len(named) < 5 {
+		t.Fatalf("play.js: wanted the files it loads, found %v", named)
+	}
+	for _, m := range named {
+		switch path := m[1]; {
+		case !strings.HasPrefix(path, "/media/"):
+			t.Errorf("play.js: wanted %q to be a file of the site in /media/", path)
+		case built[path], noMedia():
+		default:
+			if _, err := os.Stat(filepath.Join("..", "..", "site", path)); err != nil {
+				t.Errorf("play.js: wanted %q to be a file of the site, got %v", path, err)
+			}
+		}
 	}
 }
 

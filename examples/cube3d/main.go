@@ -16,7 +16,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"math"
 	"os"
@@ -282,10 +281,7 @@ func newCubeGame() *cubeGame {
 }
 
 func main() {
-	err := engine.Run(context.Background(), newCubeGame(), engine.Config{
-		FPS: 30,
-	})
-	if err != nil {
+	if err := run(newCubeGame()); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

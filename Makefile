@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help fmt fmtcheck test vet lint vuln fuzz bench benchcmp brand record site run build check
+.PHONY: help fmt fmtcheck test vet lint vuln fuzz bench benchcmp brand record site play run build check
 
 help:
 	@echo "Available targets:"
@@ -15,6 +15,7 @@ help:
 	@echo "  brand    - Write the logo files and the site's icons again from internal/brand"
 	@echo "  record   - Play the examples' scripts and write the recordings, as asciicasts, into CASTS (default casts)"
 	@echo "  site     - Write the manual and the changelog of glonk.dev again from README.md and CHANGELOG.md"
+	@echo "  play     - Build the game on glonk.dev's cover for the browser, into site/media/play (Cloudflare runs it)"
 	@echo "  run      - Run an example (default bounce2d; EXAMPLE=./examples/cube3d; ARGS= passes arguments)"
 	@echo "  build    - Compile every package"
 	@echo "  check    - Check formatting, run tests and vet"
@@ -104,6 +105,18 @@ record:
 site:
 	@echo "Writing the manual and the changelog of glonk.dev..."
 	go test ./internal/sitepages -run TestThePagesAreWhatTheRepositorySays -update
+
+# The game on glonk.dev's cover is cube3d built for the browser (see internal/webplay), gzipped,
+# since Cloudflare does not compress application/wasm and site/play.js unpacks it, beside the
+# wasm_exec.js of the Go that built it, which must match. Cloudflare runs this before every
+# deploy, as the build command of the Worker; the files are not committed.
+PLAY := site/media/play
+play:
+	@echo "Building the game of glonk.dev..."
+	mkdir -p $(PLAY)
+	GOOS=js GOARCH=wasm go build -trimpath -ldflags=-s -o $(PLAY)/cube3d.wasm ./examples/cube3d
+	gzip -9nf $(PLAY)/cube3d.wasm
+	cp "$$(go env GOROOT)/lib/wasm/wasm_exec.js" $(PLAY)/
 
 EXAMPLE ?= ./examples/bounce2d
 ARGS ?=
