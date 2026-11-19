@@ -86,7 +86,7 @@ jobs:
         run: go mod tidy -diff
       - name: vet for other systems
         run: |
-          for target in windows/amd64 freebsd/amd64 darwin/amd64 linux/arm linux/386; do
+          for target in windows/amd64 freebsd/amd64 darwin/amd64 linux/arm linux/386 js/wasm; do
             echo "go vet ($target)"
             GOOS=${target%/*} GOARCH=${target#*/} go vet ./...
           done

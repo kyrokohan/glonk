@@ -5,12 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"sync"
-	"syscall"
 )
-
-// quitSignals are the signals that end Run cleanly: Ctrl-C sent from outside the
-// terminal, a plain kill, and the terminal window closing.
-var quitSignals = []os.Signal{os.Interrupt, syscall.SIGTERM, syscall.SIGHUP}
 
 // notifyQuit calls cancel on the first quit signal. It then lets go of the signals,
 // so a second one takes the default action and ends a program that is stuck. A
