@@ -566,6 +566,47 @@ func TestRayIsOneDeepAlongLook(t *testing.T) {
 	}
 }
 
+// The ray through the middle of every cell and pixel is First + i*Across + j*Down, as Ray and
+// RayPixels give it, and the steps have nothing along Look, so every ray stays one deep.
+func TestRaysAreTheRayOfEveryCellAndPixel(t *testing.T) {
+	for _, cam := range rayCameras() {
+		for _, size := range [][2]int{{80, 24}, {30, 11}, {1, 1}} {
+			w, h := size[0], size[1]
+			cv := pixelCanvas(t, w, h)
+			grids := []struct {
+				name string
+				rays func() (Rays, bool)
+				ray  func(x, y float64) (geometry.Vector3, geometry.Vector3, bool)
+				w, h int
+			}{
+				{"cells", func() (Rays, bool) { return cam.Rays(w, h) },
+					func(x, y float64) (geometry.Vector3, geometry.Vector3, bool) { return cam.Ray(x, y, w, h) }, w, h},
+				{"pixels", func() (Rays, bool) { return cam.RaysPixels(cv) },
+					func(x, y float64) (geometry.Vector3, geometry.Vector3, bool) { return cam.RayPixels(x, y, cv) }, cv.Width(), cv.Height()},
+			}
+			for _, g := range grids {
+				rays, ok := g.rays()
+				if !ok {
+					t.Fatalf("cam %+v, %dx%d %s: wanted rays, got none", cam, w, h, g.name)
+				}
+				look := cam.Look()
+				if a, d := rays.Across.Dot(look), rays.Down.Dot(look); math.Abs(a) > 1e-12*rays.Across.Length() || math.Abs(d) > 1e-12*rays.Down.Length() {
+					t.Errorf("cam %+v, %s: wanted steps with nothing along Look, got %v and %v", cam, g.name, a, d)
+				}
+				for j := range g.h {
+					for i := range g.w {
+						origin, want, _ := g.ray(float64(i)+0.5, float64(j)+0.5)
+						got := rays.First.Add(rays.Across.Scale(float64(i))).Add(rays.Down.Scale(float64(j)))
+						if rays.Origin != origin || !vecNear(got, want, 1e-9*(1+want.Length())) {
+							t.Fatalf("cam %+v, %dx%d %s, (%d, %d): wanted %v from %v, got %v from %v", cam, w, h, g.name, i, j, want, origin, got, rays.Origin)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
 func TestCameraUp(t *testing.T) {
 	if got := (Camera{}).Up(); !vecNear(got, geometry.Vector3{Y: 1}, 1e-9) {
 		t.Errorf("wanted straight up for a camera at rest, got %v", got)
@@ -617,6 +658,15 @@ func TestRayIsNotOkWhereItCannotBeGiven(t *testing.T) {
 				o, d, ok := tt.cam.RayPixels(tt.x, tt.y, tt.cv)
 				if ok || o != (geometry.Vector3{}) || d != (geometry.Vector3{}) {
 					t.Errorf("RayPixels: wanted (zero, zero, false), got (%v, %v, %v)", o, d, ok)
+				}
+				if rays, ok := tt.cam.RaysPixels(tt.cv); ok || rays != (Rays{}) {
+					t.Errorf("RaysPixels: wanted (zero, false), got (%v, %v)", rays, ok)
+				}
+			}
+			// Rays takes no place, so a place that is not a number says nothing about it.
+			if !math.IsNaN(tt.x) && !math.IsInf(tt.y, 0) && tt.name != "no canvas" {
+				if rays, ok := tt.cam.Rays(tt.w, tt.h); ok || rays != (Rays{}) {
+					t.Errorf("Rays: wanted (zero, false), got (%v, %v)", rays, ok)
 				}
 			}
 		})
