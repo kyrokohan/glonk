@@ -49,6 +49,29 @@ var name = []string{
 	".###.............................",
 }
 
+// madeWith is the words "made with", drawn as name is.
+var madeWith = []string{
+	"..................#.........................#.....#.....#....",
+	"..................#...............................#.....#....",
+	"##.#....###....##.#...###..........#.#.#..###....#####..#.##.",
+	"#.#.#......#..#..##..#...#.........#.#.#....#.....#.....##..#",
+	"#.#.#...####..#...#..#####.........#.#.#....#.....#.....#...#",
+	"#.#.#..#...#..#...#..#.............#.#.#....#.....#.....#...#",
+	"#.#.#..#..##..#..##..#...#.........#.#.#....#.....#..#..#...#",
+	"#.#.#...##.#...##.#...###...........#.##..#####....##...#...#",
+	".............................................................",
+	".............................................................",
+}
+
+// The badge, in pixels: the lockup's mark, then "made with glonk" on one line. It is as tall as
+// the badges of a README are, with the letters in the middle.
+const (
+	badgeHeight = 20
+	badgePad    = 6 // left of the mark and right of the name
+	badgeGap    = 6 // between the mark and the words: the width of the mark
+	wordGap     = 9 // between "with" and "glonk": what the typeface leaves between two words
+)
+
 // The lockup, in pixels: the mark, a gap, then the name. The mark stands on the line the
 // letters stand on and is exactly as tall as they are.
 const (
@@ -234,11 +257,11 @@ func picture(t *testing.T, fb *engine.FrameBuffer, scale int) []byte {
 // rect is one rectangle of an SVG path, closed.
 func rect(x, y, w, h int) string { return fmt.Sprintf("M%d %dh%dv%dh%dz", x, y, w, h, -w) }
 
-// namePath is the name as one SVG path, moved right by dx: each run of pixels in a row is a
-// rectangle. One path and not many shapes, so that no renderer leaves a hairline between them.
-func namePath(dx int) string {
+// rowsPath is rows of pixels as one SVG path, moved by dx and dy: each run of pixels in a row is
+// a rectangle. One path and not many shapes, so that no renderer leaves a hairline between them.
+func rowsPath(rows []string, dx, dy int) string {
 	var d strings.Builder
-	for y, row := range name {
+	for y, row := range rows {
 		for x := 0; x < len(row); x++ {
 			if row[x] != '#' {
 				continue
@@ -247,10 +270,33 @@ func namePath(dx int) string {
 			for x < len(row) && row[x] == '#' {
 				x++
 			}
-			d.WriteString(rect(dx+start, y, x-start, 1))
+			d.WriteString(rect(dx+start, dy+y, x-start, 1))
 		}
 	}
 	return d.String()
+}
+
+// namePath is the name as one SVG path, moved right by dx.
+func namePath(dx int) string { return rowsPath(name, dx, 0) }
+
+// badgeSVG is what a project made with glonk puts in its README: the mark and "made with glonk"
+// on the night ground. It carries its ground with it, so it reads on a light page too, and it is
+// drawn one unit a pixel, so that at its own size the letters are the typeface's own.
+func badgeSVG() []byte {
+	top := (badgeHeight - len(name)) / 2
+	words := badgePad + markSize + badgeGap
+	glonk := words + len(madeWith[0]) + wordGap
+	w := glonk + len(name[0]) + badgePad
+	var b strings.Builder
+	fmt.Fprintf(&b, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %d %d" width="%d" height="%d" role="img" aria-label="made with glonk" shape-rendering="crispEdges">`+"\n", w, badgeHeight, w, badgeHeight)
+	b.WriteString("<title>made with glonk</title>\n")
+	fmt.Fprintf(&b, `<path fill="%s" d="%s"/>`+"\n", hex(night.page), rect(0, 0, w, badgeHeight))
+	fmt.Fprintf(&b, `<path fill="%s" d="%s"/>`+"\n", hex(night.top), rect(badgePad, top+markTop, markSize, markSize/2))
+	fmt.Fprintf(&b, `<path fill="%s" d="%s"/>`+"\n", hex(night.front), rect(badgePad, top+markTop+markSize/2, markSize, markSize/2))
+	fmt.Fprintf(&b, `<path fill="%s" d="%s"/>`+"\n", hex(night.quiet), rowsPath(madeWith, words, top))
+	fmt.Fprintf(&b, `<path fill="%s" d="%s"/>`+"\n", hex(night.word), rowsPath(name, glonk, top))
+	b.WriteString("</svg>\n")
+	return []byte(b.String())
 }
 
 // lockupSVG is the mark and the name with nothing behind them, for a page of that ground.
@@ -355,6 +401,7 @@ var files = []file{
 	{"brand/glonk-paper.png", func(t *testing.T) []byte { return picture(t, lockupFrame(t, paper, clear), 16) }},
 	{"brand/mark.png", func(t *testing.T) []byte { return picture(t, markFrame(t, night), 256) }},
 	{"site/favicon.svg", func(*testing.T) []byte { return iconSVG() }},
+	{"site/badge.svg", func(*testing.T) []byte { return badgeSVG() }},
 	// 140 by 56 pixels at 6 times: shown at half that on the site, where a pixel is then 3 across
 	// and the picture 30 cells by 6 rows.
 	{"site/block.png", func(t *testing.T) []byte { return picture(t, blockScene(t, 140, 56, 0.72), 6) }},
@@ -442,6 +489,24 @@ func TestTheFilesAreWhatTheSourceDraws(t *testing.T) {
 				t.Errorf("%s is not what the source draws (run with -update to write it):\ngot  %q\nwant %q", f.path, got, want)
 			}
 		}
+	}
+}
+
+// The badge stands among the other badges of a README, so it is as tall as they are, and it is
+// drawn one unit a pixel, so that at that size its letters are the typeface's own pixels.
+func TestTheBadgeIsAReadmeBadge(t *testing.T) {
+	if len(madeWith) != len(name) {
+		t.Fatalf("wanted \"made with\" in %d rows, as the name is, got %d", len(name), len(madeWith))
+	}
+	for y, row := range madeWith {
+		if len(row) != len(madeWith[0]) || strings.Trim(row, ".#") != "" {
+			t.Errorf("row %d of \"made with\": wanted %d of . and #, got %q", y, len(madeWith[0]), row)
+		}
+	}
+	w := badgePad + markSize + badgeGap + len(madeWith[0]) + wordGap + len(name[0]) + badgePad
+	want := fmt.Sprintf(`viewBox="0 0 %d 20" width="%d" height="20"`, w, w)
+	if svg := string(badgeSVG()); !strings.Contains(svg, want) {
+		t.Errorf("wanted the badge to say %s, got:\n%s", want, svg)
 	}
 }
 

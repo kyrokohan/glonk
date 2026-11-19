@@ -84,17 +84,11 @@ func (r *renderer) render(lines []line) (string, error) {
 			if end == len(lines) {
 				return "", fmt.Errorf("line %d: the code block is not closed", l.n)
 			}
-			// Code stands on rows half as tall as the page's, so a block of an odd number of lines
-			// ends half a row short. The stylesheet makes that up for a block marked odd.
-			odd := ""
-			if (end-i-1)%2 == 1 {
-				odd = ` class="odd"`
-			}
-			out.WriteString(`<pre tabindex="0"` + odd + `><code>`)
+			var code []string
 			for _, c := range lines[i+1 : end] {
-				out.WriteString(html.EscapeString(c.text) + "\n")
+				code = append(code, c.text)
 			}
-			out.WriteString("</code></pre>\n")
+			out.WriteString(codeBlock(code))
 			i = end + 1
 
 		case headingLine.MatchString(l.text):
@@ -159,6 +153,23 @@ func (r *renderer) render(lines []line) (string, error) {
 		}
 	}
 	return out.String(), nil
+}
+
+// codeBlock is the HTML of lines of code. Code stands on rows half as tall as the page's, so a
+// block of an odd number of lines ends half a row short. The stylesheet makes that up for a
+// block marked odd.
+func codeBlock(code []string) string {
+	odd := ""
+	if len(code)%2 == 1 {
+		odd = ` class="odd"`
+	}
+	var out strings.Builder
+	out.WriteString(`<pre tabindex="0"` + odd + `><code>`)
+	for _, c := range code {
+		out.WriteString(html.EscapeString(c) + "\n")
+	}
+	out.WriteString("</code></pre>\n")
+	return out.String()
 }
 
 // startsBlock reports whether a line ends the paragraph above it.
