@@ -177,6 +177,80 @@ func TestImageDrawsEachKindOfCell(t *testing.T) {
 	}
 }
 
+// letterArt is the picture of one cell of the given scale holding r with Text, drawn out from the
+// font's own source in glyphArt: the letter at scale/6 times its size, its top left at half the room
+// that is left across and down, rounded down, on the background.
+func letterArt(r rune, scale int) string {
+	size := scale / 6
+	glyph := strings.Split(strings.TrimPrefix(glyphArt[r-' '], "\n"), "\n")
+	left, top := (scale-5*size)/2, (2*scale-7*size)/2
+	rows := make([]string, 2*scale)
+	for y := range rows {
+		row := []byte(strings.Repeat(".", scale))
+		if gy := y - top; gy >= 0 && gy < 7*size {
+			for x := range row {
+				if gx := x - left; gx >= 0 && gx < 5*size && glyph[gy/size][gx/size] == '#' {
+					row[x] = 'F'
+				}
+			}
+		}
+		rows[y] = string(row)
+	}
+	return strings.Join(rows, "\n")
+}
+
+// markArt is the mark of one cell of the given scale: the middle half across and down.
+func markArt(scale int) string {
+	rows := make([]string, 2*scale)
+	for y := range rows {
+		row := []byte(strings.Repeat(".", scale))
+		if y >= scale/2 && y < 2*scale-scale/2 {
+			for x := scale / 4; x < scale-scale/4; x++ {
+				row[x] = 'F'
+			}
+		}
+		rows[y] = string(row)
+	}
+	return strings.Join(rows, "\n")
+}
+
+// With Text, a printable ASCII character is its letter from Scale 6 up, a wide or control character
+// is a question mark, and anything else outside ASCII, or any character below Scale 6, is a mark.
+func TestImageTextDrawsTheLetters(t *testing.T) {
+	fgc, bgc := RGB(200, 30, 60), RGB(10, 20, 90)
+	f, b := rgba(200, 30, 60), rgba(10, 20, 90)
+	draw := func(r rune, scale int, attrs Attr) *image.RGBA {
+		return oneCell(t, Cell{Character: r, Foreground: fgc, Background: bgc, Attrs: attrs}).Image(ImageOptions{Scale: scale, Text: true})
+	}
+
+	for _, scale := range []int{6, 7, 12, 13, 18} {
+		for _, r := range "Hg7!~" {
+			if got, want := art(draw(r, scale, 0), f, b), letterArt(r, scale); got != want {
+				t.Errorf("%q at scale %d: wanted\n%s\ngot\n%s", r, scale, want, got)
+			}
+		}
+		for _, r := range "\n世" { // a control and a wide character, which the terminal is sent as ?
+			if got, want := art(draw(r, scale, 0), f, b), letterArt('?', scale); got != want {
+				t.Errorf("%q at scale %d: wanted a question mark\n%s\ngot\n%s", r, scale, want, got)
+			}
+		}
+		for _, r := range "é─▒" {
+			if got, want := art(draw(r, scale, 0), f, b), markArt(scale); got != want {
+				t.Errorf("%q at scale %d: wanted a mark\n%s\ngot\n%s", r, scale, want, got)
+			}
+		}
+		// Reverse swaps the colors of the letter too.
+		if got, want := art(draw('H', scale, Reverse), b, f), letterArt('H', scale); got != want {
+			t.Errorf("reversed at scale %d: wanted the letter in the background color\n%s\ngot\n%s", scale, want, got)
+		}
+	}
+	for _, scale := range []int{1, 4, 5} {
+		if got, want := art(draw('H', scale, 0), f, b), markArt(scale); got != want {
+			t.Errorf("scale %d: wanted a mark, with no room for a letter\n%s\ngot\n%s", scale, want, got)
+		}
+	}
+}
+
 func TestImageReverseSwapsTheColorsAndOtherAttributesDoNothing(t *testing.T) {
 	cell := Cell{Character: '▀', Foreground: RGB(200, 30, 60), Background: RGB(10, 20, 90)}
 	plain := oneCell(t, cell).Image(ImageOptions{Scale: 2})
@@ -359,8 +433,18 @@ func goldenFrame(t *testing.T) *FrameBuffer {
 // opens it. Run with -update to write it again. The pictures are compared pixel by pixel, not as bytes,
 // since the PNG encoder is the standard library's to change.
 func TestImageMatchesTheStoredPicture(t *testing.T) {
-	img := goldenFrame(t).Image(ImageOptions{Scale: 4})
-	const path = "testdata/frame.png"
+	for path, opts := range map[string]ImageOptions{
+		"testdata/frame.png":      {Scale: 4},
+		"testdata/frame-text.png": {Scale: 12, Text: true},
+	} {
+		matchStoredPicture(t, path, goldenFrame(t).Image(opts))
+	}
+}
+
+// matchStoredPicture checks img against the picture stored at path, after writing it there when the
+// test is run with -update.
+func matchStoredPicture(t *testing.T, path string, img *image.RGBA) {
+	t.Helper()
 	if *updateImage {
 		var buf bytes.Buffer
 		if err := png.Encode(&buf, img); err != nil {
@@ -380,14 +464,14 @@ func TestImageMatchesTheStoredPicture(t *testing.T) {
 		t.Fatal(err)
 	}
 	if stored.Bounds() != img.Bounds() {
-		t.Fatalf("wanted a picture of %v, got %v", stored.Bounds(), img.Bounds())
+		t.Fatalf("%s: wanted a picture of %v, got %v", path, stored.Bounds(), img.Bounds())
 	}
 	for y := range img.Bounds().Dy() {
 		for x := range img.Bounds().Dx() {
 			r, g, b, a := stored.At(x, y).RGBA()
 			want := color.RGBA{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8), A: uint8(a >> 8)}
 			if got := px(img, x, y); got != want {
-				t.Fatalf("wanted pixel (%d,%d) to be %v, got %v", x, y, want, got)
+				t.Fatalf("%s: wanted pixel (%d,%d) to be %v, got %v", path, x, y, want, got)
 			}
 		}
 	}
