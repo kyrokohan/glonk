@@ -463,11 +463,17 @@ strong {
   font-weight: 600;
 }
 
-/* Code in the text is the size of a word of code, so that 64 characters fit a line. The block
-   is given the size too: its own taller letters would push the lines off the rows. */
+/* Code in the text is at the face's drawn size, half a cell, as the text in the recordings is:
+   96 characters fit a line. Its rows are half rows, so a block of an odd number of lines, which
+   internal/sitepages marks, gets the half row it is short of. */
 .text pre,
 .text pre code {
-  font-size: calc(var(--mono) * 0.75);
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.text pre.odd {
+  padding-bottom: calc(1.5 * var(--rh));
 }
 
 /* A table fits its column: a long word breaks before the table is wider than the page. The lines
@@ -502,7 +508,13 @@ strong {
   table-layout: fixed;
 }
 
+.text table:has(img) td {
+  padding-right: var(--cw);
+}
+
+/* 24 cells wide, a picture of 3 by 2 is 8 rows tall. */
 .text td img {
+  width: calc(24 * var(--cw));
   margin-top: var(--rh);
 }
 
@@ -585,10 +597,21 @@ strong {
 
   /* Code at the face's own size, where a line shows 47 characters and not 31. */
   pre,
-  pre code,
+  pre code {
+    font-size: 11px;
+  }
+
   .text pre,
   .text pre code {
-    font-size: 11px;
+    line-height: var(--rh);
+  }
+
+  .text pre.odd {
+    padding-bottom: var(--rh);
+  }
+
+  .text td img {
+    width: calc(15 * var(--cw));
   }
 
   .contents ul {
