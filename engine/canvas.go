@@ -81,6 +81,18 @@ func (c *Canvas) Height() int {
 // Clear empties every pixel and resets every depth to infinitely far.
 func (c *Canvas) Clear() {
 	clear(c.pixels)
+	// Its own loop and not a call to ClearDepth, which measured 3 to 5% slower pixel frames (#117).
+	for i := range c.depth {
+		c.depth[i] = math.Inf(1)
+	}
+}
+
+// ClearDepth resets every depth to infinitely far and keeps the pixels, to draw over what is
+// there: a tool in the player's hand, a model in a menu, drawn with a camera of their own. What is
+// drawn with a depth afterwards hides the pixels already drawn, and is hidden only by what is
+// drawn after it. The pixels drawn before keep no depth, so Compose gives their cells an infinite
+// one, and depth-tested drawing into cells after Compose lands on top of them.
+func (c *Canvas) ClearDepth() {
 	for i := range c.depth {
 		c.depth[i] = math.Inf(1)
 	}

@@ -254,6 +254,15 @@ canvas.Compose()
 ```
 
 - **Half-block pixels count.** `Canvas.Compose` gives each cell it fills the depth of its nearer pixel, so anything drawn with a depth afterwards (`DrawDepth`, `FillTriangle`, `FrameBuffer.DrawLineDepth`, `SetDepth`) is hidden behind pixel solids that are nearer.
+- **Drawing over a scene.** A tool in the player's hand, a model turning in a menu, arrows in a corner of an editor: things drawn after the scene that it must not hide. `Canvas.ClearDepth()` sets every depth back to far and keeps the pixels, so a mesh drawn next, with a camera of its own, lands on top of the scene while its own faces still hide each other. `FrameBuffer.ClearDepth()` does the same for the cells, and for the canvas too, as `Clear` empties both. The scene's pixels then compose with a far depth, so cells drawn with a depth after `Compose` land on top of them.
+
+```go
+world.DrawShadedPixels(canvas, cam, lights...)
+canvas.ClearDepth()
+tool.DrawShadedPixels(canvas, handCam, lights...) // over the world, however near it comes
+canvas.Compose()
+```
+
 - **Wireframes can be pixels too.** `Mesh.DrawPixels` and `Mesh.DrawDepthPixels` are `Draw` and `DrawDepth` for a `Canvas`: the same edges, drawn as lines of pixels, twice as fine from top to bottom, and `DrawDepthPixels` is hidden by the solids drawn into the same canvas to the pixel. `Canvas.DrawLine` and `Canvas.DrawLineDepth` draw your own lines. A line is one pixel thick, so half a cell tall where it runs sideways; on a `Seamless` canvas (Apple's Terminal) it is a row of whole cells.
 - **Your own drawing joins in.** `Camera.ProjectPixels(p, canvas)` says which pixel a world point is in, as fractional coordinates to floor with `math.Floor`, and how deep it is: its distance along `Camera.Look`, not the straight-line distance. Give both to `Canvas.SetDepth`, or the depth to `Canvas.DrawLineDepth`, and a marker, a billboard or a particle is hidden by the solids in front of it and hides those behind it, as the mesh's own pixels do.
 - **And the way back.** `Camera.Ray(x, y, w, h)` and `Camera.RayPixels(x, y, canvas)` give the ray through a place on the screen, the reverse of `Project` and `ProjectPixels`: an origin, which is the camera's `Position`, and a direction. The direction is one deep along `Look`, not a unit vector, so the point `origin + t*direction` is exactly `t` deep, the depth `SetDepth` takes, and the ray through the middle of the screen is `Look` itself; call `Normalize` for a unit vector. Use it to find what is under the crosshair or the pointer, to drop something where the player points, or to fill a canvas ray by ray. The ray through the middle of pixel `(i, j)` is `RayPixels(i+0.5, j+0.5, canvas)`, and a place off the screen has a ray too. `Camera.Up()` is the unit vector up, beside `Forward`, `Right` and `Look`.
