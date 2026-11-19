@@ -84,7 +84,13 @@ func (r *renderer) render(lines []line) (string, error) {
 			if end == len(lines) {
 				return "", fmt.Errorf("line %d: the code block is not closed", l.n)
 			}
-			out.WriteString(`<pre tabindex="0"><code>`)
+			// Code stands on rows half as tall as the page's, so a block of an odd number of lines
+			// ends half a row short. The stylesheet makes that up for a block marked odd.
+			odd := ""
+			if (end-i-1)%2 == 1 {
+				odd = ` class="odd"`
+			}
+			out.WriteString(`<pre tabindex="0"` + odd + `><code>`)
 			for _, c := range lines[i+1 : end] {
 				out.WriteString(html.EscapeString(c.text) + "\n")
 			}

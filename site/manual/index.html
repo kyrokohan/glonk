@@ -84,7 +84,7 @@
 <li><strong>Testing:</strong> <code>engine.Keyboard</code> presses keys for a game&#39;s <code>Update</code>, a <code>FrameBuffer</code> prints as text or draws as a picture, and <code>Config.Input</code> and <code>Config.Output</code> let a whole <code>Run</code> be driven without a terminal. See <a href="#testing-a-game">Testing a game</a>.</li>
 </ul>
 <h2 id="install">Install</h2>
-<pre tabindex="0"><code>go get glonk.dev
+<pre tabindex="0" class="odd"><code>go get glonk.dev
 </code></pre>
 <p>Requires Go 1.26 or newer. glonk has no package at its root, so import the packages you use (<code>glonk.dev/engine</code>, and <code>glonk.dev/mesh</code> for 3D) and run <code>go mod tidy</code> once, which records the dependencies they need; without it <code>go run</code> stops with a missing <code>go.sum</code> entry.</p>
 <h3 id="moved-to-glonkdev">Moved to glonk.dev</h3>
@@ -103,10 +103,10 @@ go mod tidy
 </table>
 <p>The pictures are what the engine drew: each example plays a script of key presses with no terminal, and its frames are shown as a terminal shows them.</p>
 <p>An example runs without a clone:</p>
-<pre tabindex="0"><code>go run glonk.dev/examples/viewer@latest
+<pre tabindex="0" class="odd"><code>go run glonk.dev/examples/viewer@latest
 </code></pre>
 <p>and so do <code>cube3d</code>, <code>sprites</code>, <code>world</code>, <code>bounce2d</code> and <code>input</code>. In a clone:</p>
-<pre tabindex="0"><code>make run                                      # bounce2d: a ball in a box that fills the window (Esc quits)
+<pre tabindex="0" class="odd"><code>make run                                      # bounce2d: a ball in a box that fills the window (Esc quits)
 make run EXAMPLE=./examples/sprites          # sprites: a ship you steer around a rock, a walking figure and a blinking ghost on a colored floor
 make run EXAMPLE=./examples/world            # world: a level bigger than the screen to walk around, with walls to slide along, coins to collect, a coin panel with a coin picture in it, and a pause menu (Esc)
 make run EXAMPLE=./examples/cube3d            # cube3d: walk around a floor with six shaded cubes and a wireframe one
@@ -219,7 +219,7 @@ tri.DrawShaded(fb, cam, mesh.Ambient{Level: 1}) // or DrawShadedPixels into a Ca
 </ul>
 <h2 id="textures">Textures</h2>
 <p><code>Material.Texture</code> is a <code>*bitmap.Bitmap</code>, and <code>Mesh.FaceTexCoords</code> pins the three corners of each face to places in it, so that a wall of two triangles shows a picture of any size.</p>
-<pre tabindex="0"><code>wall := mesh.Mesh{
+<pre tabindex="0" class="odd"><code>wall := mesh.Mesh{
 	Vertices: []geometry.Vector3{{X: -2, Y: -1}, {X: -2, Y: 1}, {X: 2, Y: 1}, {X: 2, Y: -1}},
 	Faces:    [][3]int{{0, 1, 2}, {0, 2, 3}},
 	FaceTexCoords: [][3]geometry.Vector2{
@@ -291,7 +291,7 @@ cube.DrawOnSurface(fb, cam, engine.Cell{Character: &#39;#&#39;}) // its edges, o
 </ul>
 <h2 id="pixel-shapes-and-pictures">Pixel shapes and pictures</h2>
 <p>The pixel <code>Canvas</code> draws rectangles and circles next to lines and triangles, blends a color over what is there, and the <code>bitmap</code> package draws a JPEG or PNG on it, or a picture made in code:</p>
-<pre tabindex="0"><code>canvas := fb.Canvas()
+<pre tabindex="0" class="odd"><code>canvas := fb.Canvas()
 canvas.FillRect(2, 1, 20, 6, engine.RGB(40, 60, 220))
 canvas.DrawRect(0, 0, canvas.Width(), canvas.Height(), engine.RGB(255, 255, 255)) // a border
 canvas.FillCircle(40, 10, 8, engine.RGB(230, 210, 40))
@@ -332,7 +332,7 @@ canvas.ComposeRect(2, 2, coin.Width(), coin.Height())
 </ul>
 <h2 id="sprites">Sprites</h2>
 <p>A sprite is a picture at a position: one <code>Cell</code>, a <code>Frame</code> of several made from text art, or an <code>Animation</code> of frames. A <code>Layer</code> draws its sprites in the order they were added.</p>
-<pre tabindex="0"><code>ship := sprite.FromLines(engine.Cell{Foreground: engine.Palette(208)},
+<pre tabindex="0" class="odd"><code>ship := sprite.FromLines(engine.Cell{Foreground: engine.Palette(208)},
 	` /\ `,
 	`/__\`,
 )
@@ -358,7 +358,7 @@ layer.Draw(fb)
 <p><code>examples/sprites</code> has a ship, a walking figure and a ghost, on a sea and a beach, and a rock the ship cannot sail through. Against a grid of tiles, <code>tilemap.Map.Move</code> does the pushing for you; see Tile maps and a camera.</p>
 <h2 id="collision">Collision</h2>
 <p>A sprite&#39;s box is where it is, as wide and tall as what it draws, and <code>geometry.Rect</code> says what two boxes share.</p>
-<pre tabindex="0"><code>wall := geometry.NewRect(30, 0, 2, 20)
+<pre tabindex="0" class="odd"><code>wall := geometry.NewRect(30, 0, 2, 20)
 
 // in Update, after moving the player:
 if push := player.Bounds().PushOutOf(wall); push != (geometry.Vector2{}) {
@@ -378,7 +378,7 @@ for enemy := range enemies.Hits(player.Bounds()) {
 </ul>
 <h2 id="tile-maps-and-a-camera">Tile maps and a camera</h2>
 <p>A <code>tilemap.Map</code> is a level bigger than the screen: a grid of tiles, written as text art, drawn through a camera that is just a <code>Rect</code>, with walls that stop a moving box.</p>
-<pre tabindex="0"><code>level := tilemap.FromLines(map[rune]tilemap.Tile{
+<pre tabindex="0" class="odd"><code>level := tilemap.FromLines(map[rune]tilemap.Tile{
 	&#39;#&#39;: {Cell: engine.Cell{Character: &#39;#&#39;}, Solid: true},
 	&#39;.&#39;: {Cell: engine.Cell{Character: &#39;.&#39;}},
 },
@@ -423,7 +423,7 @@ sprites.DrawView(fb, view)
 <p><code>examples/world</code> is a level a screen and a half either way: walk it, slide along the walls, and collect the coins.</p>
 <h2 id="widgets">Widgets</h2>
 <p>The <code>widget</code> package draws the pieces of a HUD and a menu in screen space: a <code>Label</code>, a <code>Panel</code>, a <code>Bar</code> and a <code>Menu</code>. Each is a value with exported fields and a <code>Draw</code> method that takes a position in cells, like <code>DrawBox</code>.</p>
-<pre tabindex="0"><code>// in Draw, after the world:
+<pre tabindex="0" class="odd"><code>// in Draw, after the world:
 widget.Panel{Title: &#34;Status&#34;}.Draw(fb, 0, 0, 20, 4)
 widget.Label{Text: &#34;coins 3/12&#34;}.Draw(fb, 2, 1, 16)
 widget.Bar{Value: float64(coins) / float64(total)}.Draw(fb, 2, 2, 16)
@@ -493,7 +493,7 @@ fb.DrawText(1, 1, fmt.Sprintf(&#34;%.0f fps  %d bytes&#34;, g.stats.FPS, g.stats
 <p><code>Stats</code> has <code>FPS</code> (frames a second, averaged over about the last ten), <code>Update</code>, <code>Draw</code> and <code>Write</code> (the time of each part of the frame; <code>Write</code> is working out which cells changed and writing them, which is where a slow terminal shows) and <code>Bytes</code> (what was sent for the frame, 0 when nothing on the screen changed). The bytes decide whether a program works over ssh: a moving 3D scene in half-block pixels is about 7 KB a frame, and a frame where every pixel changes is 66 KB in 256 colors and 110 KB in true color for 100 by 30 cells, so a program that can see the number can draw less on a slow link. A game without the method is not timed, so asking is the only way to pay for it. A headless <code>Run</code> gives the same numbers, with every frame sent whole, so a test can check the bytes of a frame; see <code>ExampleStatsReceiver</code>. <code>cube3d</code> and the viewer show them.</p>
 <h2 id="testing-a-game">Testing a game</h2>
 <p><code>Update</code> and <code>Draw</code> are plain methods, so a game is tested by calling them. <code>engine.Keyboard</code> stands in for the terminal&#39;s keyboard, and a <code>FrameBuffer</code> prints as text, one line per row:</p>
-<pre tabindex="0"><code>func TestEscapeQuits(t *testing.T) {
+<pre tabindex="0" class="odd"><code>func TestEscapeQuits(t *testing.T) {
 	kb := engine.NewKeyboard()
 	kb.Press(engine.KeyEscape)
 
@@ -522,7 +522,7 @@ func TestTheDotMovesAcrossTheScreen(t *testing.T) {
 <p>A <code>Keyboard</code> from <code>NewKeyboard</code> acts like a terminal that reports key releases: a key is down from <code>Press</code> until <code>Release</code>, <code>Input.Pressed</code> and <code>Input.Started</code> are true for one frame, and <code>EndFrame</code> ends that frame the way <code>Run</code> does. A <code>Press</code> of a key that is already down is a key repeat: <code>Pressed</code> is true again, <code>Started</code> is not, so a test can hold a key. <code>PressWith(mods, keys...)</code> presses a chord such as Ctrl+S, and <code>Type(text)</code> types characters, for a game that reads <code>KeyEvents</code> and <code>Text</code>, and <code>Paste(text)</code> pastes. Tests are exact and need no clock. <code>NewLegacyKeyboard</code> acts like a terminal that reports none, for a game that asks <code>Input.Exact</code> and changes what it does: a key stays held for about 150 ms after its last <code>Press</code>, <code>Release</code> does nothing, and <code>Advance</code> moves the clock so that a test can let a key go. <code>String</code> leaves off the trailing spaces of each line and shows characters only, not colors.</p>
 <p>To test a whole run (start-up, key bytes in, frames out), give <code>Config.Input</code> and <code>Config.Output</code> a reader and a writer that are not a terminal: <code>Run</code> then runs headless at the <code>Width</code> and <code>Height</code> you set. See <code>ExampleRun_headless</code>.</p>
 <p>A frame can also be a picture, which <code>String()</code> cannot show: colors, and the two pixels of every half-block cell. <code>fb.Image</code> returns an <code>*image.RGBA</code> that is <code>Width*Scale</code> by <code>2*Height*Scale</code> pixels, so a frame drawn with a <code>Canvas</code> comes out pixel for pixel at <code>Scale: 1</code>. A test can write it for a person to look at when it is asked to, and compare it with a picture it stored earlier:</p>
-<pre tabindex="0"><code>func TestSceneLooksRight(t *testing.T) {
+<pre tabindex="0" class="odd"><code>func TestSceneLooksRight(t *testing.T) {
 	g := newScene()
 	fb, _ := engine.NewFrameBuffer(40, 12)
 	g.Draw(fb)
