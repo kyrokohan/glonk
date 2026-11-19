@@ -7,6 +7,7 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 ### Added
 
 - glonk compiles for the browser, `GOOS=js GOARCH=wasm`, and CI checks that it still does. A build for js could not compile before, because the list of signals that end `Run` named `SIGHUP`, which Go's js port does not define; there the list leaves it out, and native systems keep the same three signals. A browser has no terminal, so `Run` there runs headless only: with `Config.Input`, `Output`, `Width` and `Height` set, and a page of its own that passes the keys in and draws the frames.
+- `FrameBuffer.FillRect(x, y, w, h, cell)` fills a rectangle of cells, as `Canvas.FillRect` fills pixels: the background under a popup, a cleared part of the screen, a band behind a status line, the filled part of a gauge, each of which was a loop of `Set`. It is cut to the frame, a width or height that is not positive draws nothing, no position or size can overflow, and like `Set` it never reads or writes depth. It allocates nothing.
 
 ## [0.12.0] - 2026-11-17
 

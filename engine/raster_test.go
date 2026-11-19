@@ -4,6 +4,7 @@ import (
 	"math"
 	"math/big"
 	"math/rand/v2"
+	"slices"
 	"testing"
 	"time"
 )
@@ -257,6 +258,81 @@ func TestDrawBox(t *testing.T) {
 
 			assertRows(t, nfb, tt.want, pix(tt.color))
 		})
+	}
+}
+
+// FillRect covers the cells of the reference, for every position and size in and around a small
+// buffer, empty and negative sizes too, and for positions and sizes as large as an int goes, which
+// must not wrap around onto it.
+func TestFillRectIsTheRectangle(t *testing.T) {
+	const w, h = 5, 3
+	fb := newFB(t, w, h)
+	mark := Cell{Character: '#', Foreground: pix(3)}
+	check := func(x, y, rw, rh int) {
+		t.Helper()
+		fb.Clear()
+		fb.FillRect(x, y, rw, rh, mark)
+		if got, want := drawnCells(fb, mark), referenceRect(w, h, x, y, rw, rh, false); !slices.Equal(got, want) {
+			t.Fatalf("at (%d, %d) of %d by %d: wanted %v, got %v", x, y, rw, rh, want, got)
+		}
+	}
+
+	for x := -3; x < w+3; x++ {
+		for y := -3; y < h+3; y++ {
+			for rw := -1; rw < w+4; rw++ {
+				for rh := -1; rh < h+4; rh++ {
+					check(x, y, rw, rh)
+				}
+			}
+		}
+	}
+
+	big := []int{math.MinInt, math.MinInt + 1, -1, 0, 1, 3, math.MaxInt - 1, math.MaxInt}
+	for _, x := range big {
+		for _, y := range big {
+			for _, rw := range big {
+				for _, rh := range big {
+					check(x, y, rw, rh)
+				}
+			}
+		}
+	}
+
+	// Starting a little in and going on as far as an int does: adding the size to the position
+	// plainly would wrap around to a negative number.
+	check(2, 1, math.MaxInt, math.MaxInt)
+}
+
+func TestFillRectNeverReadsOrWritesDepth(t *testing.T) {
+	fb := newFB(t, 4, 3)
+	near := Cell{Character: 'n'}
+	fb.SetDepth(1, 1, 0.5, near)
+	before := slices.Clone(fb.depth)
+
+	fill := Cell{Character: '#'}
+	fb.FillRect(0, 0, 4, 3, fill)
+
+	if !slices.Equal(fb.depth, before) {
+		t.Errorf("wanted the depths untouched")
+	}
+	if got := fb.At(1, 1); got != fill {
+		t.Errorf("wanted the near cell replaced whatever its depth, got %v", got)
+	}
+	// What is drawn afterwards with depth meets the depth from before the fill.
+	if fb.SetDepth(1, 1, 0.75, near) {
+		t.Errorf("wanted a farther cell hidden by the depth that was there before")
+	}
+	if !fb.SetDepth(2, 1, 0.75, near) {
+		t.Errorf("wanted a cell drawn where no depth was stored")
+	}
+}
+
+func TestFillRectAllocatesNothing(t *testing.T) {
+	fb := newFB(t, 80, 24)
+	if n := testing.AllocsPerRun(50, func() {
+		fb.FillRect(-5, 3, 60, 200, Cell{Character: '#'})
+	}); n != 0 {
+		t.Errorf("wanted FillRect to allocate nothing, got %v allocations", n)
 	}
 }
 

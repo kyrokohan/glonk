@@ -243,6 +243,24 @@ func (fb *FrameBuffer) DrawBox(x, y, w, h int, color Color) {
 	fb.Set(x1, y1, Cell{Character: '┘', Foreground: color})
 }
 
+// FillRect fills the rectangle w cells wide and h tall whose top left cell is (x, y) with cell:
+// the cells from x up to but not including x+w, and the same down. A width or height that is not
+// positive draws nothing. Only the part inside the buffer is visited, so a rectangle with a
+// far-away edge costs no more than one that stays on screen, and no position or size can overflow.
+//
+// Like Set it never reads or writes depth: the cells are replaced whatever is there, and a cell
+// drawn afterwards with SetDepth is hidden only by the depth that was there before.
+func (fb *FrameBuffer) FillRect(x, y, w, h int, cell Cell) {
+	x0, x1 := span(x, w, fb.width)
+	y0, y1 := span(y, h, fb.height)
+	for row := y0; row < y1; row++ {
+		r := fb.frame[row*fb.width+x0 : row*fb.width+x1]
+		for i := range r {
+			r[i] = cell
+		}
+	}
+}
+
 // triangleEps lets a cell centre that sits exactly on an edge count as inside
 // despite rounding, so triangles that share an edge leave no gaps between them.
 const triangleEps = 1e-9
