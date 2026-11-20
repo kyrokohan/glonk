@@ -47,6 +47,7 @@
 <p>Contents</p>
 <ul role="list">
 <li><a href="#unreleased">Unreleased</a></li>
+<li><a href="#0130---2026-11-20">0.13.0 - 2026-11-20</a></li>
 <li><a href="#0120---2026-11-17">0.12.0 - 2026-11-17</a></li>
 <li><a href="#0110---2026-11-17">0.11.0 - 2026-11-17</a></li>
 <li><a href="#0100---2026-11-16">0.10.0 - 2026-11-16</a></li>
@@ -63,7 +64,9 @@
 </nav>
 
 <article class="text" id="text">
-<h2 id="unreleased"><a href="https://github.com/kyrokohan/glonk/compare/v0.12.0...HEAD">Unreleased</a></h2>
+<h2 id="unreleased"><a href="https://github.com/kyrokohan/glonk/compare/v0.13.0...HEAD">Unreleased</a></h2>
+<h2 id="0130---2026-11-20"><a href="https://github.com/kyrokohan/glonk/compare/v0.12.0...v0.13.0">0.13.0</a> - 2026-11-20</h2>
+<p>On top of 0.12.0 this release compiles for the browser and adds small drawing tools: filled rectangles of cells, drawing over a scene, every ray of the screen at once, letters in a frame&#39;s picture, borders that join, and discs with a soft edge. Nothing was removed or renamed and no signature changed, but <code>ImageOptions</code> gained a field; what draws differently is under Changed and Fixed. The module needs the same versions of <code>golang.org/x/sys</code> and <code>golang.org/x/term</code> as 0.12.0.</p>
 <h3 id="added">Added</h3>
 <ul>
 <li>glonk compiles for the browser, <code>GOOS=js GOARCH=wasm</code>, and CI checks that it still does. A build for js could not compile before, because the list of signals that end <code>Run</code> named <code>SIGHUP</code>, which Go&#39;s js port does not define; there the list leaves it out, and native systems keep the same three signals. A browser has no terminal, so <code>Run</code> there runs headless only: with <code>Config.Input</code>, <code>Output</code>, <code>Width</code> and <code>Height</code> set, and a page of its own that passes the keys in and draws the frames.</li>
@@ -77,6 +80,7 @@
 <h3 id="changed">Changed</h3>
 <ul>
 <li><strong><code>DrawBox</code> and <code>widget.Panel</code> join their borders with the light box lines already in the frame.</strong> Each drew its corners as if it were alone, so panels that share an edge, a list of rows, a table, a view split in two, showed <code>┌</code> where <code>├</code> belonged, and a program fixed each join by hand. Now a border drawn over a light line meets it as <code>├ ┤ ┬ ┴ ┼</code>. A box or a panel alone looks as it did, and so does one drawn over anything else; a picture changes only where a border is drawn over a light line. <code>DrawBox</code> now writes each cell once and visits only the part inside the frame, and a size near the largest <code>int</code> no longer wraps around.</li>
+<li><code>Canvas.BlendRect</code> is 5 to 6% slower on arm64 than in 0.12.0, about 2 microseconds for a whole 200 by 120 canvas, because <code>Mix</code> now rounds the same way on every platform (see Fixed): each channel is a multiply and an add where arm64 fused them into one instruction. amd64 never fused them. <code>make benchcmp BASE=v0.12.0</code> over the 216 benchmarks both versions have finds those four rows and <code>DrawRect</code> (+6 to 7%, which does not mix but moves with the same change) slower, <code>Image</code> 4 to 5% faster, and none that allocate more. Two more rows, <code>DrawMany/pixels_200x60</code> and the scrolling log of <code>BenchmarkFrames</code>, were slower in one run, the same in the next, and slower again only once the <code>Mix</code> change was taken out, so they move with how the binary is laid out and not with any code they run.</li>
 </ul>
 <h3 id="fixed">Fixed</h3>
 <ul>
