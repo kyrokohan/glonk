@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"math/rand/v2"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -259,6 +260,146 @@ func TestDrawBox(t *testing.T) {
 			assertRows(t, nfb, tt.want, pix(tt.color))
 		})
 	}
+}
+
+// joinArms are the arms of the eleven light lines and joins, written out here apart from the
+// table SetJoined uses: up, down, left and right.
+var joinArms = map[rune]string{
+	'─': "lr", '│': "ud", '┌': "dr", '┐': "dl", '└': "ur", '┘': "ul",
+	'├': "udr", '┤': "udl", '┬': "dlr", '┴': "ulr", '┼': "udlr",
+}
+
+// joinOf is the line that has every arm of a and of b.
+func joinOf(t *testing.T, a, b rune) rune {
+	t.Helper()
+	has := func(r rune, arm byte) bool { return strings.IndexByte(joinArms[r], arm) >= 0 }
+	for r := range joinArms {
+		same := true
+		for _, arm := range []byte("udlr") {
+			if has(r, arm) != (has(a, arm) || has(b, arm)) {
+				same = false
+			}
+		}
+		if same {
+			return r
+		}
+	}
+	t.Fatalf("no line has the arms of %q and %q", a, b)
+	return 0
+}
+
+// A line over a line is their join, in the colors of the one drawn; anything else is replaced as
+// Set replaces it, and a write off the frame is ignored.
+func TestSetJoined(t *testing.T) {
+	fb := newFB(t, 2, 1)
+	under := Cell{Foreground: pix(1), Background: pix(2), Attrs: Bold}
+	over := Cell{Foreground: pix(3)}
+	for a := range joinArms {
+		for b := range joinArms {
+			under.Character, over.Character = a, b
+			fb.Set(0, 0, under)
+			fb.SetJoined(0, 0, over)
+			want := over
+			want.Character = joinOf(t, a, b)
+			if got := fb.At(0, 0); got != want {
+				t.Errorf("%q over %q: wanted %+v, got %+v", b, a, want, got)
+			}
+		}
+	}
+
+	for _, pair := range [][2]rune{{'a', '─'}, {'═', '│'}, {'╴', '┼'}, {' ', '┌'}, {'─', 'a'}, {'│', '═'}, {'┼', '╴'}} {
+		under.Character, over.Character = pair[0], pair[1]
+		fb.Set(0, 0, under)
+		fb.SetJoined(0, 0, over)
+		if got := fb.At(0, 0); got != over {
+			t.Errorf("%q over %q: wanted it replaced as by Set, got %+v", pair[1], pair[0], got)
+		}
+	}
+
+	before := fb.String()
+	for _, p := range [][2]int{{-1, 0}, {2, 0}, {0, 1}, {0, -1}} {
+		fb.SetJoined(p[0], p[1], Cell{Character: '┼'})
+	}
+	if fb.String() != before {
+		t.Errorf("wanted writes off the frame ignored")
+	}
+}
+
+// Boxes that share a row, a column, or cross each other meet as joins, and a box alone keeps
+// its corners.
+func TestDrawBoxJoinsWhereItMeetsALine(t *testing.T) {
+	tests := []struct {
+		name  string
+		boxes [][4]int
+		want  []string
+	}{
+		{"stacked on a shared row", [][4]int{{0, 0, 4, 3}, {0, 2, 4, 3}},
+			[]string{"┌──┐", "│  │", "├──┤", "│  │", "└──┘"}},
+		{"side by side on a shared column", [][4]int{{0, 0, 3, 3}, {2, 0, 3, 3}},
+			[]string{"┌─┬─┐", "│ │ │", "└─┴─┘"}},
+		{"crossing", [][4]int{{0, 1, 5, 3}, {1, 0, 3, 5}},
+			[]string{" ┌─┐", "┌┼─┼┐", "││ ││", "└┼─┼┘", " └─┘"}},
+		{"the same box twice", [][4]int{{0, 0, 3, 3}, {0, 0, 3, 3}},
+			[]string{"┌─┐", "│ │", "└─┘"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			width := 0
+			for _, row := range tt.want {
+				width = max(width, len([]rune(row)))
+			}
+			fb := newFB(t, width, len(tt.want))
+			for _, b := range tt.boxes {
+				fb.DrawBox(b[0], b[1], b[2], b[3], Color{})
+			}
+			if got := fb.String(); got != strings.Join(tt.want, "\n") {
+				t.Errorf("wanted\n%s\ngot\n%s", strings.Join(tt.want, "\n"), got)
+			}
+		})
+	}
+}
+
+// A box covers the cells of the border of the reference rectangle, for positions and sizes in
+// and around a small buffer and as large as an int goes, and draws nothing under 2 by 2.
+func TestDrawBoxCoversTheBorderOfTheRectangle(t *testing.T) {
+	const w, h = 5, 4
+	fb := newFB(t, w, h)
+	check := func(x, y, bw, bh int) {
+		t.Helper()
+		fb.Clear()
+		fb.DrawBox(x, y, bw, bh, Color{})
+		want := referenceRect(w, h, x, y, bw, bh, true)
+		if bw < 2 || bh < 2 {
+			want = make([]bool, w*h)
+		}
+		got := make([]bool, w*h)
+		for i, c := range fb.frame {
+			got[i] = c != BlankCell
+		}
+		if !slices.Equal(got, want) {
+			t.Fatalf("box at (%d, %d) of %d by %d: wanted %v, got %v", x, y, bw, bh, want, got)
+		}
+	}
+	for x := -3; x < w+3; x++ {
+		for y := -3; y < h+3; y++ {
+			for bw := -1; bw < w+5; bw++ {
+				for bh := -1; bh < h+5; bh++ {
+					check(x, y, bw, bh)
+				}
+			}
+		}
+	}
+	big := []int{math.MinInt, math.MinInt + 1, -1, 0, 1, 2, 3, math.MaxInt - 1, math.MaxInt}
+	for _, x := range big {
+		for _, y := range big {
+			for _, bw := range big {
+				for _, bh := range big {
+					check(x, y, bw, bh)
+				}
+			}
+		}
+	}
+	check(2, 1, math.MaxInt, math.MaxInt)
 }
 
 // FillRect covers the cells of the reference, for every position and size in and around a small

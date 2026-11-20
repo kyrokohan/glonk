@@ -17,7 +17,10 @@ type Panel struct {
 }
 
 // Draw draws the panel w cells wide and h tall with its top left corner at (x, y), cutting
-// off what is off the frame. A panel smaller than 2 by 2 draws nothing, as DrawBox does.
+// off what is off the frame. A panel smaller than 2 by 2 draws nothing, as DrawBox does. Where
+// its border is drawn over a light box line that is already there, another panel's or a
+// DrawBox's, the two are joined, as engine.FrameBuffer.SetJoined joins them, so panels that
+// share an edge meet as ├ ┬ ┼ there.
 func (p Panel) Draw(fb *engine.FrameBuffer, x, y, w, h int) {
 	if w < 2 || h < 2 {
 		return
@@ -42,12 +45,12 @@ func (p Panel) Draw(fb *engine.FrameBuffer, x, y, w, h int) {
 	}
 
 	for cx := x0; cx <= x1; cx++ {
-		fb.Set(cx, y, styled(p.Style, edge(cx, x, right, '┌', '─', '┐')))
-		fb.Set(cx, bottom, styled(p.Style, edge(cx, x, right, '└', '─', '┘')))
+		fb.SetJoined(cx, y, styled(p.Style, edge(cx, x, right, '┌', '─', '┐')))
+		fb.SetJoined(cx, bottom, styled(p.Style, edge(cx, x, right, '└', '─', '┘')))
 	}
 	for cy := iy0; cy <= iy1; cy++ {
-		fb.Set(x, cy, styled(p.Style, '│'))
-		fb.Set(right, cy, styled(p.Style, '│'))
+		fb.SetJoined(x, cy, styled(p.Style, '│'))
+		fb.SetJoined(right, cy, styled(p.Style, '│'))
 	}
 
 	// Corner, a dash, a blank, the title, a blank, a dash and the corner: the title has

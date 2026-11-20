@@ -44,6 +44,28 @@ func ExamplePanel() {
 	// └──────────────┘
 }
 
+// Panels that share an edge meet as joins there: a list of rows, a table, a view split in two.
+func ExamplePanel_sharedEdges() {
+	fb, err := engine.NewFrameBuffer(14, 7)
+	if err != nil {
+		panic(err)
+	}
+
+	widget.Panel{Title: "top"}.Draw(fb, 0, 0, 14, 4)
+	widget.Panel{}.Draw(fb, 0, 3, 14, 4) // its top edge is the first panel's bottom edge
+	widget.Panel{}.Draw(fb, 6, 3, 8, 4)  // and beside it, sharing a column with it
+
+	fmt.Println(fb)
+	// Output:
+	// ┌─ top ──────┐
+	// │            │
+	// │            │
+	// ├─────┬──────┤
+	// │     │      │
+	// │     │      │
+	// └─────┴──────┘
+}
+
 // A menu is moved and chosen from Update, with the keyboard, and drawn from Draw. A Keyboard
 // stands in for the terminal here.
 func ExampleMenu() {

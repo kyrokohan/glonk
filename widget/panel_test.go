@@ -63,6 +63,29 @@ func TestPanelBorderAndTitle(t *testing.T) {
 	}
 }
 
+// Every side of a panel joins a line it is drawn over: here its sides cross a box's top and
+// bottom edges, and its top and bottom edges cross the box's sides.
+func TestPanelJoinsTheLinesItCrosses(t *testing.T) {
+	fb, err := engine.NewFrameBuffer(5, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fb.DrawBox(0, 1, 5, 3, engine.Color{})
+	Panel{}.Draw(fb, 1, 0, 3, 5)
+	want := " ┌─┐\n┌┼─┼┐\n││ ││\n└┼─┼┘\n └─┘"
+	if got := fb.String(); got != want {
+		t.Errorf("wanted\n%s\ngot\n%s", want, got)
+	}
+
+	fb.Clear()
+	fb.DrawBox(1, 0, 3, 5, engine.Color{})
+	Panel{}.Draw(fb, 0, 1, 5, 3)
+	want = " ┌─┐\n┌┼─┼┐\n││ ││\n└┼─┼┘\n └─┘"
+	if got := fb.String(); got != want {
+		t.Errorf("the other way round: wanted\n%s\ngot\n%s", want, got)
+	}
+}
+
 func TestPanelSmallerThanTwoByTwoDrawsNothing(t *testing.T) {
 	for _, size := range [][2]int{{1, 5}, {5, 1}, {0, 0}, {-3, 4}, {4, -3}, {1, 1}} {
 		fb := frame(t, 6, 6)
