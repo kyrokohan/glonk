@@ -4,6 +4,10 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-20
+
+On top of 0.12.0 this release compiles for the browser and adds small drawing tools: filled rectangles of cells, drawing over a scene, every ray of the screen at once, letters in a frame's picture, borders that join, and discs with a soft edge. Nothing was removed or renamed and no signature changed, but `ImageOptions` gained a field; what draws differently is under Changed and Fixed. The module needs the same versions of `golang.org/x/sys` and `golang.org/x/term` as 0.12.0.
+
 ### Added
 
 - glonk compiles for the browser, `GOOS=js GOARCH=wasm`, and CI checks that it still does. A build for js could not compile before, because the list of signals that end `Run` named `SIGHUP`, which Go's js port does not define; there the list leaves it out, and native systems keep the same three signals. A browser has no terminal, so `Run` there runs headless only: with `Config.Input`, `Output`, `Width` and `Height` set, and a page of its own that passes the keys in and draws the frames.
@@ -17,6 +21,7 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 ### Changed
 
 - **`DrawBox` and `widget.Panel` join their borders with the light box lines already in the frame.** Each drew its corners as if it were alone, so panels that share an edge, a list of rows, a table, a view split in two, showed `┌` where `├` belonged, and a program fixed each join by hand. Now a border drawn over a light line meets it as `├ ┤ ┬ ┴ ┼`. A box or a panel alone looks as it did, and so does one drawn over anything else; a picture changes only where a border is drawn over a light line. `DrawBox` now writes each cell once and visits only the part inside the frame, and a size near the largest `int` no longer wraps around.
+- `Canvas.BlendRect` is 5 to 6% slower on arm64 than in 0.12.0, about 2 microseconds for a whole 200 by 120 canvas, because `Mix` now rounds the same way on every platform (see Fixed): each channel is a multiply and an add where arm64 fused them into one instruction. amd64 never fused them. `make benchcmp BASE=v0.12.0` over the 216 benchmarks both versions have finds those four rows and `DrawRect` (+6 to 7%, which does not mix but moves with the same change) slower, `Image` 4 to 5% faster, and none that allocate more. Two more rows, `DrawMany/pixels_200x60` and the scrolling log of `BenchmarkFrames`, were slower in one run, the same in the next, and slower again only once the `Mix` change was taken out, so they move with how the binary is laid out and not with any code they run.
 
 ### Fixed
 
@@ -294,7 +299,8 @@ The first release. The API is pre-1.0 and may still change. The README lists the
 - Three example programs (`bounce2d`, `cube3d` and a model `viewer`), runnable examples in the package documentation, fuzz tests for the parsers, rasterizers and clipping, and a test that keeps the documentation complete.
 - Continuous integration (format, vet and race tests on Linux and macOS for Go 1.26 and 1.27, cross-compilation, 32-bit tests), Dependabot, a security policy and contributing notes.
 
-[Unreleased]: https://github.com/kyrokohan/glonk/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/kyrokohan/glonk/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/kyrokohan/glonk/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/kyrokohan/glonk/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/kyrokohan/glonk/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/kyrokohan/glonk/compare/v0.9.0...v0.10.0
