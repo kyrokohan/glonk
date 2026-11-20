@@ -17,6 +17,10 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 - **`DrawBox` and `widget.Panel` join their borders with the light box lines already in the frame.** Each drew its corners as if it were alone, so panels that share an edge, a list of rows, a table, a view split in two, showed `┌` where `├` belonged, and a program fixed each join by hand. Now a border drawn over a light line meets it as `├ ┤ ┬ ┴ ┼`. A box or a panel alone looks as it did, and so does one drawn over anything else; a picture changes only where a border is drawn over a light line. `DrawBox` now writes each cell once and visits only the part inside the frame, and a size near the largest `int` no longer wraps around.
 
+### Fixed
+
+- `Run` shows the frame on a terminal that reports 0 columns by 0 rows. It told the game 80 by 24 there, as the docs say, and drew the frame, but cut what it sent to the terminal's own 0 by 0, so the screen was erased and stayed empty: a recording or a smoke test made under `script` started from something that is not a terminal, in a CI job or in some container consoles, held nothing (#131). Now an axis the terminal reports as 0 shows the whole frame on it, 80 columns or 24 rows, or what `Width` or `Height` chose, until the terminal reports a size.
+
 ## [0.12.0] - 2026-11-17
 
 On top of 0.11.0 this release reads the rest of what a terminal sends: the function and navigation keys, the modifiers held with a key and the characters typed, a paste as one string, and the mouse. Nothing was removed or renamed and no signature changed; what behaves differently is under Changed, and reading keys costs a little more. The module needs the same versions of `golang.org/x/sys` and `golang.org/x/term` as 0.11.0.

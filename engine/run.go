@@ -369,8 +369,15 @@ func Run(ctx context.Context, game Game, cfg Config) (err error) {
 	receiver, _ := game.(StatsReceiver)
 	m := meter{on: receiver != nil}
 
-	// The window size the screen was last cleared for.
+	// The window size the screen was last cleared for. An axis the terminal reports as 0 has no
+	// window to cut to, so the whole frame is shown on it: 80 or 24, or what Width or Height chose.
 	shownW, shownH := termW, termH
+	if shownW == 0 {
+		shownW = nfb.Width()
+	}
+	if shownH == 0 {
+		shownH = nfb.Height()
+	}
 
 	dynamic := cfg.Width == 0 || cfg.Height == 0
 	for {
