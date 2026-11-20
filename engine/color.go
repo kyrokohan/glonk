@@ -187,8 +187,10 @@ func clamp01(t float64) float64 {
 }
 
 // mixChannel is the part t of the way from one red, green or blue to another, rounded to a
-// whole number, for a t that is already held to 0 to 1. Mix and Canvas.BlendRect both mix with
-// it, so that they cannot disagree.
+// whole number, for a t that is already held to 0 to 1. Mix, Canvas.BlendRect and the discs all
+// mix with it, so that they cannot disagree.
 func mixChannel(from, to uint8, t float64) uint8 {
-	return uint8(math.Round(float64(from) + (float64(to)-float64(from))*t))
+	// The product is rounded on its own, by the explicit conversion, so that arm64 cannot fuse it
+	// with the sum and round some colors one way where amd64 rounds them the other (#132).
+	return uint8(math.Round(float64(from) + float64((float64(to)-float64(from))*t)))
 }
