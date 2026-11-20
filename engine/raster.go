@@ -225,22 +225,103 @@ func (fb *FrameBuffer) DrawText(x, y int, text string, color Color) {
 	}
 }
 
-// DrawBox draws a w x h border at (x, y). A box smaller than 2x2 draws nothing.
+// DrawBox draws a w x h border at (x, y). A box smaller than 2x2 draws nothing. Where the
+// border is drawn over a light box line that is already there, another box's or a panel's, the
+// two are joined, as SetJoined joins them, so boxes that share an edge meet as ├ ┬ ┼ there.
+// Only the part inside the buffer is visited, and no position or size can overflow.
 func (fb *FrameBuffer) DrawBox(x, y, w, h int, color Color) {
 	if w < 2 || h < 2 {
 		return
 	}
-	x1 := x + w - 1
-	y1 := y + h - 1
+	right, bottom := reach(x, w-1), reach(y, h-1)
+	line := func(r rune) Cell { return Cell{Character: r, Foreground: color} }
 
-	fb.DrawLine(x, y, x1, y, Cell{Character: '─', Foreground: color})
-	fb.DrawLine(x, y1, x1, y1, Cell{Character: '─', Foreground: color})
-	fb.DrawLine(x, y, x, y1, Cell{Character: '│', Foreground: color})
-	fb.DrawLine(x1, y, x1, y1, Cell{Character: '│', Foreground: color})
-	fb.Set(x, y, Cell{Character: '┌', Foreground: color})
-	fb.Set(x1, y, Cell{Character: '┐', Foreground: color})
-	fb.Set(x, y1, Cell{Character: '└', Foreground: color})
-	fb.Set(x1, y1, Cell{Character: '┘', Foreground: color})
+	// Each cell is drawn once, so the corners are not joined with the box's own sides.
+	x0, x1 := span(x, w, fb.width)
+	for cx := x0; cx < x1; cx++ {
+		top, under := '─', '─'
+		switch cx {
+		case x:
+			top, under = '┌', '└'
+		case right:
+			top, under = '┐', '┘'
+		}
+		fb.SetJoined(cx, y, line(top))
+		fb.SetJoined(cx, bottom, line(under))
+	}
+	y0, y1 := span(reach(y, 1), h-2, fb.height)
+	for cy := y0; cy < y1; cy++ {
+		fb.SetJoined(x, cy, line('│'))
+		fb.SetJoined(right, cy, line('│'))
+	}
+}
+
+// The arms of a light box line or join: the sides of its cell that a line leaves by.
+const (
+	armUp uint8 = 1 << iota
+	armDown
+	armLeft
+	armRight
+)
+
+// boxByArms is the light line or join that has a set of arms, for every set of two or more.
+var boxByArms = [16]rune{
+	armLeft | armRight:                   '─',
+	armUp | armDown:                      '│',
+	armDown | armRight:                   '┌',
+	armDown | armLeft:                    '┐',
+	armUp | armRight:                     '└',
+	armUp | armLeft:                      '┘',
+	armUp | armDown | armRight:           '├',
+	armUp | armDown | armLeft:            '┤',
+	armDown | armLeft | armRight:         '┬',
+	armUp | armLeft | armRight:           '┴',
+	armUp | armDown | armLeft | armRight: '┼',
+}
+
+// boxArms is the set of arms of r, or 0 if r is not one of the light lines and joins.
+func boxArms(r rune) uint8 {
+	switch r {
+	case '─':
+		return armLeft | armRight
+	case '│':
+		return armUp | armDown
+	case '┌':
+		return armDown | armRight
+	case '┐':
+		return armDown | armLeft
+	case '└':
+		return armUp | armRight
+	case '┘':
+		return armUp | armLeft
+	case '├':
+		return armUp | armDown | armRight
+	case '┤':
+		return armUp | armDown | armLeft
+	case '┬':
+		return armDown | armLeft | armRight
+	case '┴':
+		return armUp | armLeft | armRight
+	case '┼':
+		return armUp | armDown | armLeft | armRight
+	}
+	return 0
+}
+
+// SetJoined stores cell at (x, y) as Set does, except where cell is a light box line or join
+// (─ │ ┌ ┐ └ ┘ ├ ┤ ┬ ┴ ┼) and so is what is there: then the character stored is the join with
+// every arm that either has, so a border drawn over another's edge meets it as ├ ┬ or ┼. The
+// colors and attributes are cell's. Any other character, under or over, is replaced as by Set.
+// DrawBox and widget.Panel draw their borders with it; a table of lines can be drawn with it too.
+func (fb *FrameBuffer) SetJoined(x, y int, cell Cell) {
+	if !fb.inBounds(x, y) {
+		return
+	}
+	i := y*fb.width + x
+	if under, over := boxArms(fb.frame[i].Character), boxArms(cell.Character); under != 0 && over != 0 {
+		cell.Character = boxByArms[under|over]
+	}
+	fb.frame[i] = cell
 }
 
 // FillRect fills the rectangle w cells wide and h tall whose top left cell is (x, y) with cell:
