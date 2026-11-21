@@ -3,7 +3,9 @@
 // do, whether the terminal reports key releases, and which keys are held. Run it in every terminal
 // you care about, and press what a game would use: the function keys, Home and End, Page Up and
 // Page Down, the arrows, letters, Ctrl, Alt and Shift with them, paste some text with line breaks,
-// and move the mouse over the window, click, drag and turn the wheel.
+// and move the mouse over the window, click, drag and turn the wheel. The field line is a
+// widget.TextField to type into and edit, with Left, Right, Home, End, Backspace and Delete; Enter
+// logs its text and empties it.
 //
 //	go run ./examples/input
 //
@@ -18,6 +20,7 @@ import (
 	"strings"
 
 	"glonk.dev/engine"
+	"glonk.dev/widget"
 )
 
 // maxLog is how many lines of what was pressed are kept, newest first.
@@ -77,6 +80,8 @@ type monitor struct {
 	pos            string   // where the pointer was last reported, or "" before a report
 	buttons        []string // the mouse buttons that are down now
 	wheelX, wheelY int      // what the wheel has added up to since the monitor began
+
+	field widget.TextField // a line to type into and edit, which Enter logs and empties
 }
 
 // mouseButtons are the buttons Input reports, by name.
@@ -121,7 +126,9 @@ func actionName(a engine.KeyAction) string {
 	return "press"
 }
 
-func newMonitor() *monitor { return &monitor{} }
+func newMonitor() *monitor {
+	return &monitor{field: widget.TextField{Style: engine.Cell{Foreground: engine.Palette(117), Background: engine.Palette(236)}}}
+}
 
 // Update notes every key event of the frame, the text typed, and which keys are held.
 func (m *monitor) Update(_ float64, in *engine.Input) error {
@@ -134,6 +141,10 @@ func (m *monitor) Update(_ float64, in *engine.Input) error {
 		m.pasted = preview(paste)
 	}
 	m.mouse(in)
+	if m.field.Update(in) {
+		m.add(fmt.Sprintf("%-8s%q", "entered", m.field.Text))
+		m.field.Text, m.field.Cursor = "", 0
+	}
 	m.typed = append(m.typed, []rune(in.Text())...)
 	if len(m.typed) > maxTyped {
 		m.typed = m.typed[len(m.typed)-maxTyped:]
@@ -191,9 +202,11 @@ func (m *monitor) Draw(fb *engine.FrameBuffer) {
 	fb.DrawText(1, 4, "typed: "+string(m.typed), engine.Palette(117))
 	fb.DrawText(1, 5, "pasted: "+m.pasted, engine.Palette(183))
 	fb.DrawText(1, 6, m.mouseLine(), engine.Palette(121))
+	fb.DrawText(1, 7, "field:", engine.Palette(117))
+	m.field.Draw(fb, 8, 7, 40)
 
 	for i, line := range m.log {
-		y := 8 + i
+		y := 9 + i
 		if y >= fb.Height() {
 			break
 		}

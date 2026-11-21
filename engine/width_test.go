@@ -67,8 +67,8 @@ func TestRuneWidth(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := runeWidth(tt.r); got != tt.want {
-				t.Errorf("wanted runeWidth(%U) = %d, got %d", tt.r, tt.want, got)
+			if got := RuneWidth(tt.r); got != tt.want {
+				t.Errorf("wanted RuneWidth(%U) = %d, got %d", tt.r, tt.want, got)
 			}
 		})
 	}

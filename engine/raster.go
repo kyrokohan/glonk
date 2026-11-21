@@ -217,7 +217,7 @@ func (fb *FrameBuffer) DrawText(x, y int, text string, color Color) {
 		if col >= fb.width {
 			break
 		}
-		if runeWidth(r) == 0 {
+		if RuneWidth(r) == 0 {
 			continue
 		}
 		fb.Set(col, y, Cell{Character: safeRune(r), Foreground: color})

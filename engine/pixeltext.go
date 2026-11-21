@@ -52,7 +52,7 @@ func (c *Canvas) DrawTextScaled(x, y int, text string, color Color, scale int) {
 		return // wholly below or above
 	}
 	for _, r := range text {
-		if runeWidth(r) == 0 {
+		if RuneWidth(r) == 0 {
 			continue
 		}
 		if x >= c.width {
@@ -94,7 +94,7 @@ func (c *Canvas) drawGlyph(x, y int, glyph *[fontHeight]uint8, color Color, scal
 func PixelTextWidth(text string, scale int) int {
 	n := 0
 	for _, r := range text {
-		if runeWidth(r) != 0 {
+		if RuneWidth(r) != 0 {
 			n++
 		}
 	}

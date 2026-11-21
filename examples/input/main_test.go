@@ -244,3 +244,32 @@ func TestTheWheelIsLoggedAndAddedUp(t *testing.T) {
 		}
 	}
 }
+
+// The field line takes typing and the editing keys, joins a paste into one line, and Enter logs its
+// text and empties it.
+func TestTheFieldEditsAndEnterLogsIt(t *testing.T) {
+	m := newMonitor()
+	kb := engine.NewKeyboard()
+	kb.Type("hello")
+	frame(t, m, kb)
+	kb.Press(engine.KeyLeft)
+	frame(t, m, kb)
+	kb.Release(engine.KeyLeft)
+	kb.Press(engine.KeyLeft)
+	frame(t, m, kb)
+	kb.Release(engine.KeyLeft)
+	kb.Type("x")
+	if got := frame(t, m, kb); !strings.Contains(got, "field: helxlo") {
+		t.Fatalf("wanted x typed two characters from the end, got\n%s", got)
+	}
+	kb.Paste(" a\nb")
+	frame(t, m, kb)
+	if m.field.Text != "helx a blo" {
+		t.Fatalf("wanted the paste in one line at the cursor, got %q", m.field.Text)
+	}
+	kb.Press(engine.KeyEnter)
+	got := frame(t, m, kb)
+	if !strings.Contains(got, `entered "helx a blo"`) || m.field.Text != "" || m.field.Cursor != 0 {
+		t.Errorf("wanted Enter to log the text and empty the field, got %q at %d and\n%s", m.field.Text, m.field.Cursor, got)
+	}
+}
