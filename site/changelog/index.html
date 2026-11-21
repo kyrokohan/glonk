@@ -47,6 +47,7 @@
 <p>Contents</p>
 <ul role="list">
 <li><a href="#unreleased">Unreleased</a></li>
+<li><a href="#0140---2026-11-20">0.14.0 - 2026-11-20</a></li>
 <li><a href="#0130---2026-11-20">0.13.0 - 2026-11-20</a></li>
 <li><a href="#0120---2026-11-17">0.12.0 - 2026-11-17</a></li>
 <li><a href="#0110---2026-11-17">0.11.0 - 2026-11-17</a></li>
@@ -64,7 +65,9 @@
 </nav>
 
 <article class="text" id="text">
-<h2 id="unreleased"><a href="https://github.com/kyrokohan/glonk/compare/v0.13.0...HEAD">Unreleased</a></h2>
+<h2 id="unreleased"><a href="https://github.com/kyrokohan/glonk/compare/v0.14.0...HEAD">Unreleased</a></h2>
+<h2 id="0140---2026-11-20"><a href="https://github.com/kyrokohan/glonk/compare/v0.13.0...v0.14.0">0.14.0</a> - 2026-11-20</h2>
+<p>On top of 0.13.0 this release is textured and colored 3D: boxes and shapes that carry a picture, a camera that looks at a place, pictures drawn on a mesh as their view looks, lights with a color, and far pictures read from smaller copies. Nothing was removed or renamed and no signature changed, but <code>Ambient</code>, <code>Directional</code>, <code>Point</code> and <code>Material</code> gained fields; what draws differently is under Changed. The module needs the same versions of <code>golang.org/x/sys</code> and <code>golang.org/x/term</code> as 0.13.0.</p>
 <h3 id="added">Added</h3>
 <ul>
 <li><code>Camera.LookAt(target)</code> turns a camera to look at a place from where it is: it sets <code>Yaw</code> and <code>Pitch</code> so that <code>Look</code> points from <code>Position</code> to the target and <code>Project</code> puts the target in the middle of the frame, for a camera that follows a thing, watches a door or circles a model. A program worked the two angles out itself, which rests on what only <code>mesh</code> knows: that a yaw of 0 looks down +z, which way a positive yaw and pitch turn, and that <code>Look</code> turns by the pitch before the yaw, so a wrong sign looked at the back of the scene (#136). The pitch is at most a quarter turn, a target straight above or below keeps the yaw the camera had, and a target at the camera&#39;s own position, or one that is not a finite number, leaves the camera as it was. It is the first method of <code>Camera</code> that changes it, and so the first that takes a pointer.</li>
@@ -80,6 +83,7 @@
 <li><strong><code>Ambient</code>, <code>Directional</code> and <code>Point</code> have a field more, <code>Color</code>,</strong> so a literal of one without field names no longer compiles; name the fields. A light left without a color is white, so every scene is lit as before.</li>
 <li><strong>A mesh whose <code>Material.Texture</code> is a <code>Shaded</code> or <code>Tinted</code> view draws it as it looks,</strong> where it drew the colors of the picture under the view, so a flash when hit, a selected thing or a team&#39;s color needed a recolored copy of the whole picture (#115). The view&#39;s color is the color of the surface: a vertex color then tints it, light shades it and fog fades it, so a view tinted white is as dark as any white surface in a dark room, where in 2D a tint is not darkened unless the view is shaded too. A see-through pixel is still a hole.</li>
 <li><strong>A <code>Sphere</code>, <code>Cylinder</code>, <code>Cone</code> or <code>Plane</code> with <code>Material.Texture</code> set now shows the picture,</strong> where it was drawn in its color, since it had no coordinates. Each of them now carries 48 bytes more for each face, picture or not: 25 KB for a <code>Sphere(r, 24, 12)</code> and about 25 MB for the largest, <code>Sphere(r, 512, 512)</code>, and one more list for <code>Clone</code> to copy. Drawing one without a picture is the same as before.</li>
+<li>Making a <code>Mirrored</code>, <code>Shaded</code>, <code>Tinted</code> or <code>Sub</code> view of a picture takes 2 to 4 nanoseconds more than in 0.13.0 (<code>Mirrored</code> 2.3 to 4.4), since a <code>Bitmap</code> now holds the count of its changes and the smaller copies of #118; it still does not allocate. A textured or see-through face draws 3 to 4% slower, for the one test each cell makes for a face whose copy changes across it. <code>make benchcmp BASE=v0.13.0</code> over the 123 benchmarks both versions have finds those rows slower, the rest the same, and none that allocate more. <code>BenchmarkDrawColoredLight</code> and <code>BenchmarkDrawTexturedFar</code> are new, with nothing in 0.13.0 to compare with.</li>
 </ul>
 <h2 id="0130---2026-11-20"><a href="https://github.com/kyrokohan/glonk/compare/v0.12.0...v0.13.0">0.13.0</a> - 2026-11-20</h2>
 <p>On top of 0.12.0 this release compiles for the browser and adds small drawing tools: filled rectangles of cells, drawing over a scene, every ray of the screen at once, letters in a frame&#39;s picture, borders that join, and discs with a soft edge. Nothing was removed or renamed and no signature changed, but <code>ImageOptions</code> gained a field; what draws differently is under Changed and Fixed. The module needs the same versions of <code>golang.org/x/sys</code> and <code>golang.org/x/term</code> as 0.12.0.</p>
