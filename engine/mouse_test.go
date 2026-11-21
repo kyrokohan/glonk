@@ -449,3 +449,61 @@ func TestKeyboardMatchesTheMouseOfARealRun(t *testing.T) {
 		})
 	}
 }
+
+// MouseMoved is a move to another cell since the previous frame: the first report counts, and a report in
+// the same cell, a frame with none, a turn of the wheel or a click in place, and a trip away and back within
+// the frame do not.
+func TestInputMouseMovedIsAnotherCellSinceThePreviousFrame(t *testing.T) {
+	in := newInput(true)
+	feed := newInputFeed(in)
+	now := time.Unix(0, 0)
+	frame := func(reports ...string) bool {
+		t.Helper()
+		in.endFrame()
+		for _, r := range reports {
+			feed.feed([]byte(r), now)
+		}
+		in.beginFrame(now)
+		return in.MouseMoved()
+	}
+	if in.MouseMoved() {
+		t.Fatalf("wanted no move before a report")
+	}
+	for _, tt := range []struct {
+		name    string
+		reports []string
+		want    bool
+	}{
+		{"the first report", []string{sgr(35, 5, 5, 'M')}, true},
+		{"a frame with none", nil, false},
+		{"the same cell", []string{sgr(35, 5, 5, 'M')}, false},
+		{"another cell", []string{sgr(35, 6, 5, 'M')}, true},
+		{"another row", []string{sgr(35, 6, 9, 'M')}, true},
+		{"the wheel in place", []string{sgr(65, 6, 9, 'M')}, false},
+		{"a click in place", []string{sgr(0, 6, 9, 'M'), sgr(0, 6, 9, 'm')}, false},
+		{"away and back", []string{sgr(35, 20, 2, 'M'), sgr(35, 6, 9, 'M')}, false},
+		{"a drag", []string{sgr(0, 6, 9, 'M'), sgr(32, 7, 9, 'M')}, true},
+	} {
+		if got := frame(tt.reports...); got != tt.want {
+			t.Errorf("%s: wanted MouseMoved %v, got %v", tt.name, tt.want, got)
+		}
+	}
+
+	// A Keyboard moves it as a terminal does, and its wheel reports the cell it turns in.
+	kb := NewKeyboard()
+	kb.MouseMove(3, 4)
+	if !kb.Input().MouseMoved() {
+		t.Errorf("wanted a Keyboard's first move to count")
+	}
+	kb.EndFrame()
+	kb.Wheel(0, 1)
+	kb.MouseDown(MouseLeft)
+	if kb.Input().MouseMoved() {
+		t.Errorf("wanted a Keyboard's wheel and click in place not to be a move")
+	}
+	kb.EndFrame()
+	kb.MouseMove(3, 5)
+	if !kb.Input().MouseMoved() {
+		t.Errorf("wanted a Keyboard's move to another cell to count")
+	}
+}

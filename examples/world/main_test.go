@@ -623,3 +623,53 @@ func TestSlidingAlongAWallFindsTheWayDownTheCorridor(t *testing.T) {
 		}
 	}
 }
+
+// With the mouse, the pause menu follows the pointer and takes a click where it is drawn.
+func TestThePauseMenuTakesTheMouse(t *testing.T) {
+	open := func() (*worldGame, *engine.Keyboard, *engine.FrameBuffer) {
+		g := newSizedGame(80, 24)
+		kb := engine.NewKeyboard()
+		kb.Press(engine.KeyEscape)
+		g.Update(0, kb.Input())
+		kb.EndFrame()
+		kb.Release(engine.KeyEscape)
+		fb := newFrame(t, 80, 24)
+		g.Draw(fb)
+		return g, kb, fb
+	}
+	at := func(fb *engine.FrameBuffer, text string) (int, int) {
+		for y, l := range strings.Split(fb.String(), "\n") {
+			if i := strings.Index(l, text); i >= 0 {
+				return len([]rune(l[:i])), y
+			}
+		}
+		t.Fatalf("wanted %q on the screen, got\n%s", text, fb)
+		return 0, 0
+	}
+
+	g, kb, fb := open()
+	x, y := at(fb, "Quit")
+	kb.MouseMove(x, y)
+	kb.MouseDown(engine.MouseLeft)
+	if err := g.Update(0, kb.Input()); !errors.Is(err, engine.ErrQuit) {
+		t.Errorf("wanted a click on Quit to end the game, got %v", err)
+	}
+
+	g, kb, fb = open()
+	kb.MouseMove(x, y)
+	g.Update(0, kb.Input())
+	kb.EndFrame()
+	g.Draw(fb)
+	kb.Press(engine.KeyEnter)
+	if err := g.Update(0, kb.Input()); !errors.Is(err, engine.ErrQuit) {
+		t.Errorf("wanted the pointer on Quit and Enter to end the game, got %v", err)
+	}
+
+	g, kb, fb = open()
+	x, y = at(fb, "Resume")
+	kb.MouseMove(x, y)
+	kb.MouseDown(engine.MouseLeft)
+	if err := g.Update(0, kb.Input()); err != nil || g.paused {
+		t.Errorf("wanted a click on Resume to go back to the game, got %v and paused %v", err, g.paused)
+	}
+}

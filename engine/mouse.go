@@ -107,6 +107,10 @@ type mouseState struct {
 	released [mouseButtons]bool // went up since the previous frame
 	wheelX   int                // what the wheel added up to this frame
 	wheelY   int
+
+	// fromX, fromY and fromOK are where the pointer was at the end of the previous frame, for MouseMoved.
+	fromX, fromY int
+	fromOK       bool
 }
 
 // mouseEvent records a mouse report. Every one says where the pointer is.
@@ -156,11 +160,12 @@ func (in *Input) releaseMouse() {
 }
 
 // endMouseFrame forgets what only this frame saw: the buttons that went down or up, and the wheel. Where the
-// pointer is and which buttons are down stay.
+// pointer is and which buttons are down stay, and where it is becomes where the next frame's MouseMoved starts.
 func (in *Input) endMouseFrame() {
 	m := &in.mouse
 	m.started, m.released = [mouseButtons]bool{}, [mouseButtons]bool{}
 	m.wheelX, m.wheelY = 0, 0
+	m.fromX, m.fromY, m.fromOK = m.x, m.y, m.ok
 }
 
 // MousePos is the cell the pointer was last reported in, counted from 0 at the top left of the terminal, which
@@ -172,6 +177,16 @@ func (in *Input) endMouseFrame() {
 // The pointer is where it last was when it leaves the window: a terminal says nothing outside it.
 func (in *Input) MousePos() (x, y int, ok bool) {
 	return in.mouse.x, in.mouse.y, in.mouse.ok
+}
+
+// MouseMoved reports whether the pointer is in another cell than at the end of the previous frame, so that a
+// pointer that rests is told from one that moves: a menu follows a move, and leaves a selection the keys made
+// under a pointer that sits still. The first report counts, since before it the pointer was nowhere. A click
+// or a turn of the wheel where the pointer is does not move it, and nor does leaving a cell and coming back
+// within one frame.
+func (in *Input) MouseMoved() bool {
+	m := &in.mouse
+	return m.ok && (!m.fromOK || m.x != m.fromX || m.y != m.fromY)
 }
 
 // MouseDown reports whether b is down: pressed, and not yet let go. A drag is MouseDown with a MousePos that

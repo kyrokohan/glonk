@@ -4,8 +4,9 @@
 //
 //	go run ./examples/world
 //
-// The arrow keys walk, and Esc pauses with a menu to resume or quit. The coin count is a panel
-// of the widget package, drawn over the world, with a coin in it drawn as pixels.
+// The arrow keys walk, and Esc pauses with a menu to resume or quit, which the mouse can point
+// at and click as well as the keys. The coin count is a panel of the widget package, drawn over
+// the world, with a coin in it drawn as pixels.
 package main
 
 import (
@@ -278,7 +279,8 @@ func (g *worldGame) drawPause(fb *engine.FrameBuffer) {
 
 func main() {
 	// Width and Height of 0 fill the terminal and follow resizes.
-	err := engine.Run(context.Background(), newWorldGame(), engine.Config{FPS: 30})
+	// Mouse for the pause menu: it follows the pointer and takes a click.
+	err := engine.Run(context.Background(), newWorldGame(), engine.Config{FPS: 30, Mouse: true})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

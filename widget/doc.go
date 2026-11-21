@@ -21,12 +21,14 @@
 //
 // # Menu
 //
-// A [Menu] is the one widget that reacts to the keyboard. Call [Menu.Update] from the game's
-// Update with its [engine.Input], and [Menu.Draw] from the game's Draw. Up and Down move the
+// A [Menu] is the one widget that reacts to input. Call [Menu.Update] from the game's Update
+// with its [engine.Input], and [Menu.Draw] from the game's Draw. Up and Down move the
 // selection, wrapping around at the ends, and Enter chooses; Update returns the index of the
 // item chosen. Escape and every other key are left to the game, so a game can open the menu
 // with Escape and close it again. A list longer than its rows scrolls to keep the selected
-// item in view. To test a game that has a menu, drive it with an [engine.Keyboard].
+// item in view. With [engine.Config.Mouse] set, the pointer selects the item it moves onto, a
+// click chooses one, and the wheel steps through them, against where Draw last drew the menu.
+// To test a game that has a menu, drive it with an [engine.Keyboard].
 //
 //	choice, chosen := g.menu.Update(in)
 //	if chosen && choice == quitItem {

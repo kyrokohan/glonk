@@ -16,6 +16,11 @@ func TestDrawingAllocatesNothing(t *testing.T) {
 	kb := engine.NewKeyboard()
 	kb.Press(engine.KeyDown, engine.KeyEnter) // pressed for every Update, which moves and chooses
 	in := kb.Input()
+	pointer := engine.NewKeyboard()
+	pointer.MouseMove(4, 4) // on the second item: moved, clicked and the wheel turned, every Update
+	pointer.MouseDown(engine.MouseLeft)
+	pointer.Wheel(0, 1)
+	mouse := pointer.Input()
 
 	draws := map[string]func(){
 		"label":       func() { label.Draw(fb, 2, 1, 30) },
@@ -23,6 +28,7 @@ func TestDrawingAllocatesNothing(t *testing.T) {
 		"bar":         func() { bar.Draw(fb, 2, 2, 30) },
 		"menu draw":   func() { menu.Draw(fb, 2, 3, 30, 5) },
 		"menu update": func() { menu.Update(in) },
+		"menu mouse":  func() { menu.Draw(fb, 2, 3, 30, 5); menu.Update(mouse) },
 	}
 	for name, draw := range draws {
 		if n := testing.AllocsPerRun(50, draw); n != 0 {
