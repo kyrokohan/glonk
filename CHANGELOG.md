@@ -4,6 +4,10 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-20
+
+On top of 0.13.0 this release is textured and colored 3D: boxes and shapes that carry a picture, a camera that looks at a place, pictures drawn on a mesh as their view looks, lights with a color, and far pictures read from smaller copies. Nothing was removed or renamed and no signature changed, but `Ambient`, `Directional`, `Point` and `Material` gained fields; what draws differently is under Changed. The module needs the same versions of `golang.org/x/sys` and `golang.org/x/term` as 0.13.0.
+
 ### Added
 
 - `Camera.LookAt(target)` turns a camera to look at a place from where it is: it sets `Yaw` and `Pitch` so that `Look` points from `Position` to the target and `Project` puts the target in the middle of the frame, for a camera that follows a thing, watches a door or circles a model. A program worked the two angles out itself, which rests on what only `mesh` knows: that a yaw of 0 looks down +z, which way a positive yaw and pitch turn, and that `Look` turns by the pitch before the yaw, so a wrong sign looked at the back of the scene (#136). The pitch is at most a quarter turn, a target straight above or below keeps the yaw the camera had, and a target at the camera's own position, or one that is not a finite number, leaves the camera as it was. It is the first method of `Camera` that changes it, and so the first that takes a pointer.
@@ -19,6 +23,7 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 - **`Ambient`, `Directional` and `Point` have a field more, `Color`,** so a literal of one without field names no longer compiles; name the fields. A light left without a color is white, so every scene is lit as before.
 - **A mesh whose `Material.Texture` is a `Shaded` or `Tinted` view draws it as it looks,** where it drew the colors of the picture under the view, so a flash when hit, a selected thing or a team's color needed a recolored copy of the whole picture (#115). The view's color is the color of the surface: a vertex color then tints it, light shades it and fog fades it, so a view tinted white is as dark as any white surface in a dark room, where in 2D a tint is not darkened unless the view is shaded too. A see-through pixel is still a hole.
 - **A `Sphere`, `Cylinder`, `Cone` or `Plane` with `Material.Texture` set now shows the picture,** where it was drawn in its color, since it had no coordinates. Each of them now carries 48 bytes more for each face, picture or not: 25 KB for a `Sphere(r, 24, 12)` and about 25 MB for the largest, `Sphere(r, 512, 512)`, and one more list for `Clone` to copy. Drawing one without a picture is the same as before.
+- Making a `Mirrored`, `Shaded`, `Tinted` or `Sub` view of a picture takes 2 to 4 nanoseconds more than in 0.13.0 (`Mirrored` 2.3 to 4.4), since a `Bitmap` now holds the count of its changes and the smaller copies of #118; it still does not allocate. A textured or see-through face draws 3 to 4% slower, for the one test each cell makes for a face whose copy changes across it. `make benchcmp BASE=v0.13.0` over the 123 benchmarks both versions have finds those rows slower, the rest the same, and none that allocate more. `BenchmarkDrawColoredLight` and `BenchmarkDrawTexturedFar` are new, with nothing in 0.13.0 to compare with.
 
 ## [0.13.0] - 2026-11-20
 
@@ -315,7 +320,8 @@ The first release. The API is pre-1.0 and may still change. The README lists the
 - Three example programs (`bounce2d`, `cube3d` and a model `viewer`), runnable examples in the package documentation, fuzz tests for the parsers, rasterizers and clipping, and a test that keeps the documentation complete.
 - Continuous integration (format, vet and race tests on Linux and macOS for Go 1.26 and 1.27, cross-compilation, 32-bit tests), Dependabot, a security policy and contributing notes.
 
-[Unreleased]: https://github.com/kyrokohan/glonk/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/kyrokohan/glonk/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/kyrokohan/glonk/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/kyrokohan/glonk/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/kyrokohan/glonk/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/kyrokohan/glonk/compare/v0.10.0...v0.11.0
