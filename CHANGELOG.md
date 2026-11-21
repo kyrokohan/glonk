@@ -4,6 +4,15 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+### Added
+
+- `widget.Menu` takes the mouse when `Config.Mouse` is set: a pointer that moves onto an item selects it, a press of the left button on an item chooses it at once, as Enter does, and a turn of the wheel over an item moves the selection an item a step, wrapping as the keys do (#109). With the mouse on, the terminal no longer selects text with it, so pointing at a line and clicking did nothing, and a program could only add it by working out where the menu had drawn which item. The menu reads the mouse against where `Draw` last drew it, once: a menu not drawn since its last `Update`, before its first `Draw` or on the frame it opens again, ignores the mouse, so a pointer left where an old menu was picks nothing. A pointer that sits still leaves the selection to the keys, so Down is not undone the next frame, and one beside the items or below the last does nothing. A list longer than its rows holds still while the pointer picks among the items it shows, so that it does not run away under the pointer; the keys and the wheel center it as before. With `Config.Mouse` off nothing changes. `examples/world` turns the mouse on for its pause menu.
+- `Input.MouseMoved()` reports whether the pointer is in another cell than at the end of the previous frame, to tell a pointer that moves from one that rests. The first report counts; a click or a turn of the wheel in place, and leaving a cell and coming back within a frame, do not.
+
+### Changed
+
+- **A program with `Config.Mouse` set has menus that follow the pointer and take a click,** where they read only the keys. `Menu` has fields of its own for where it was drawn, so a literal of it without field names no longer compiles, and `Draw` now keeps that place, though it still changes neither `Items` nor `Selected`.
+
 ## [0.14.0] - 2026-11-20
 
 On top of 0.13.0 this release is textured and colored 3D: boxes and shapes that carry a picture, a camera that looks at a place, pictures drawn on a mesh as their view looks, lights with a color, and far pictures read from smaller copies. Nothing was removed or renamed and no signature changed, but `Ambient`, `Directional`, `Point` and `Material` gained fields; what draws differently is under Changed. The module needs the same versions of `golang.org/x/sys` and `golang.org/x/term` as 0.13.0.

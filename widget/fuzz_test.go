@@ -86,19 +86,22 @@ func FuzzDraw(f *testing.F) {
 	})
 }
 
-// FuzzMenu runs a menu on any items, selection, keys, position and size. The selection must
-// stay an item, a choice must come only from Enter, Draw must leave the menu and every cell
-// outside its area as they were, and nothing may panic or run long.
+// FuzzMenu runs a menu on any items, selection, keys, position and size, and then a second
+// frame with the pointer anywhere, moved, clicked and the wheel turned. The selection must stay
+// an item, a choice must come only from Enter or a click on an item Draw drew, Draw must leave
+// the items, the selection and every cell outside its area as they were, and nothing may panic
+// or run long.
 func FuzzMenu(f *testing.F) {
-	f.Add("Resume\nOptions\nQuit", 1, 1, 0, 8, 3, uint8(2))
-	f.Add("a\nb\nc\nd\ne\nf\ng", 3, -2, -1, 6, 4, uint8(4))
-	f.Add("", 0, 0, 0, 6, 3, uint8(7))
-	f.Add("only", -9, 0, 0, 6, 1, uint8(1))
-	f.Add("one\ntwo", math.MaxInt, math.MaxInt, math.MaxInt, math.MaxInt, math.MaxInt, uint8(3))
-	f.Add("one\ntwo", math.MinInt, math.MinInt, math.MinInt, math.MaxInt, math.MaxInt, uint8(6))
-	f.Add("x\u0301\n中\n\xff", 2, 3, 2, 4, 5, uint8(2))
+	f.Add("Resume\nOptions\nQuit", 1, 1, 0, 8, 3, uint8(2), 3, 1, uint8(3), int8(0))
+	f.Add("a\nb\nc\nd\ne\nf\ng", 3, -2, -1, 6, 4, uint8(4), 0, 2, uint8(1), int8(-2))
+	f.Add("", 0, 0, 0, 6, 3, uint8(7), 1, 1, uint8(3), int8(1))
+	f.Add("only", -9, 0, 0, 6, 1, uint8(1), 2, 0, uint8(2), int8(5))
+	f.Add("one\ntwo", math.MaxInt, math.MaxInt, math.MaxInt, math.MaxInt, math.MaxInt, uint8(3), math.MaxInt, 0, uint8(3), int8(1))
+	f.Add("one\ntwo", math.MinInt, math.MinInt, math.MinInt, math.MaxInt, math.MaxInt, uint8(6), 0, 0, uint8(3), int8(-1))
+	f.Add("x\u0301\n中\n\xff", 2, 3, 2, 4, 5, uint8(2), 4, 3, uint8(1), int8(0))
+	f.Add("\n", 0, 0, 0, 6, 3, uint8(7), 1, 1, uint8(3), int8(1)) // empty items draw no cells, and are still items
 
-	f.Fuzz(func(t *testing.T, text string, selected, x, y, w, h int, keys uint8) {
+	f.Fuzz(func(t *testing.T, text string, selected, x, y, w, h int, keys uint8, px, py int, mouse uint8, wheel int8) {
 		var items []string
 		if text != "" {
 			items = strings.Split(text, "\n")
@@ -133,6 +136,37 @@ func FuzzMenu(f *testing.F) {
 		untouchedOutside(t, "a menu at "+where, fb, func(cx, cy int) bool { return within(cx, x, w) && within(cy, y, h) })
 		if m.Selected != before || len(m.Items) != len(items) {
 			t.Fatalf("wanted Draw not to change the menu, Selected went from %d to %d", before, m.Selected)
+		}
+
+		// The second frame: the pointer, a click and the wheel, read against that Draw.
+		kb.EndFrame()
+		kb.Release(engine.KeyUp, engine.KeyDown, engine.KeyEnter)
+		if mouse&1 != 0 {
+			kb.MouseMove(px, py)
+		}
+		if mouse&2 != 0 {
+			kb.MouseDown(engine.MouseLeft)
+		}
+		kb.Wheel(0, int(wheel))
+		in := kb.Input()
+		mx, my, _ := in.MousePos()
+		// Whether the pointer's cell is in a row that holds an item, inside the frame: the first
+		// min(h, items) rows of the menu, across its width.
+		onItem := within(mx, x, w) && within(my, y, min(h, len(items))) && mx < fuzzW && my < fuzzH
+		choice, chosen = m.Update(in)
+		switch {
+		case len(items) == 0:
+			if chosen || choice != -1 {
+				t.Fatalf("pointer: wanted nothing chosen from no items, got (%d, %v)", choice, chosen)
+			}
+		case m.Selected < 0 || m.Selected >= len(items):
+			t.Fatalf("pointer: wanted Selected to be one of %d items, got %d", len(items), m.Selected)
+		case chosen && mouse&2 == 0:
+			t.Fatalf("pointer: wanted a choice only from a click, Enter having been let go, got %d", choice)
+		case chosen && !onItem:
+			t.Fatalf("pointer: wanted a click at %d, %d off the items of a menu at %s to choose nothing, got %d", mx, my, where, choice)
+		case chosen && choice != m.Selected, !chosen && choice != -1:
+			t.Fatalf("pointer: wanted the choice to be the selected item, or -1, got (%d, %v) with Selected %d", choice, chosen, m.Selected)
 		}
 	})
 }

@@ -56,8 +56,8 @@ type Config struct {
 	Colors ColorMode
 
 	// Mouse asks the terminal to report the pointer: where it is, as it moves with or without a button,
-	// the buttons and the wheel, which Input.MousePos, MouseDown, MouseStarted, MouseReleased and Wheel
-	// say. It is off unless set, because a terminal that reports the pointer to a program no longer lets
+	// the buttons and the wheel, which Input.MousePos, MouseMoved, MouseDown, MouseStarted, MouseReleased
+	// and Wheel say. It is off unless set, because a terminal that reports the pointer to a program no longer lets
 	// the user select text with it (Shift with the mouse usually still does, in terminals that allow it),
 	// so a program that does not read the mouse is left as it was. It has no effect without a terminal.
 	// Where a terminal does not support it, MousePos says ok is false. Run asks for the decimal form of a
