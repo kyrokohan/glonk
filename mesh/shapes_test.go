@@ -30,6 +30,7 @@ func testShapes() []shape {
 			shape{"cone " + dims(s, 0), Cone(1.5, 3, s), 3*s + 1, 2 * s, 2 * s, true, 1.5})
 	}
 	out = append(out, shape{"plane", Plane(4, 6), 4, 2, 4, false, 3})
+	out = append(out, shape{"box", Box(2, 3, 4), 24, 12, 12, true, 2})
 	return out
 }
 
@@ -249,6 +250,7 @@ func TestShapeBoundsAreWhatTheyShouldBe(t *testing.T) {
 		{"cylinder", Cylinder(1.5, 4, 24), v3(-1.5, -2, -1.5), v3(1.5, 2, 1.5), 1.5},
 		{"cone", Cone(1.5, 4, 24), v3(-1.5, -2, -1.5), v3(1.5, 2, 1.5), 1.5},
 		{"plane", Plane(6, 4), v3(-3, 0, -2), v3(3, 0, 2), 3},
+		{"box", Box(2, 4, 6), v3(-1, -2, -3), v3(1, 2, 3), 1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -296,6 +298,10 @@ func TestShapeEdgesFollowTheForm(t *testing.T) {
 				switch {
 				case sh.name == "plane":
 					if a.X != b.X && a.Z != b.Z {
+						t.Fatalf("edge %d %v is a diagonal", i, e)
+					}
+				case sh.name == "box":
+					if d := b.Sub(a); (d.X != 0) && (d.Y != 0) || (d.X != 0) && (d.Z != 0) || (d.Y != 0) && (d.Z != 0) {
 						t.Fatalf("edge %d %v is a diagonal", i, e)
 					}
 				case sh.name[:4] == "cone":
@@ -357,6 +363,9 @@ func TestShapeSizesThatMakeNoSense(t *testing.T) {
 			"cone, h":      {Cone(2, bad, 8), Cone(2, 0, 8)},
 			"plane, width": {Plane(bad, 3), Plane(0, 3)},
 			"plane, depth": {Plane(3, bad), Plane(3, 0)},
+			"box, width":   {Box(bad, 2, 3), Box(0, 2, 3)},
+			"box, height":  {Box(2, bad, 3), Box(2, 0, 3)},
+			"box, depth":   {Box(2, 3, bad), Box(2, 3, 0)},
 		} {
 			if !reflect.DeepEqual(pair[0], pair[1]) {
 				t.Errorf("%s with size %v: wanted the same shape as with size 0", name, bad)
