@@ -16,7 +16,8 @@ import (
 // pi (exclusive), a Near that is negative, NaN or infinite, a Far that is negative, NaN or
 // not beyond Near, or a CellAspect that is negative, NaN or infinite, makes the camera
 // see nothing: Draw, DrawShaded and DrawShadedPixels draw nothing and Project reports
-// ok=false. So does a Position, Yaw or Pitch that is not a finite number.
+// ok=false. So does a Position, Yaw or Pitch that is not a finite number. LookAt points it at
+// a place.
 type Camera struct {
 	// Position is where the camera is, in world coordinates.
 	Position geometry.Vector3
@@ -272,6 +273,25 @@ func (c Camera) Look() geometry.Vector3 {
 // Forward and Right, which stay flat on the xz plane, it tilts with Pitch, as Look does.
 func (c Camera) Up() geometry.Vector3 {
 	return c.Look().Cross(c.Right())
+}
+
+// LookAt turns the camera to look at target from where it is: it sets Yaw and Pitch so that
+// Look points from Position to target, and Project puts target in the middle of the frame. The
+// pitch is at most a quarter turn up or down, as Pitch asks. A target straight above or below
+// has no direction across to turn to, so the camera keeps its Yaw. A target at the camera's own
+// Position, or a target or Position that is not a finite number, leaves the camera as it was.
+// It is the one method of Camera that changes it, and so the one that takes a pointer.
+func (c *Camera) LookAt(target geometry.Vector3) {
+	to := target.Sub(c.Position)
+	if !finite(to.X, to.Y, to.Z) || to == (geometry.Vector3{}) {
+		return
+	}
+	// The inverse of Look, which is (cos Pitch sin Yaw, sin Pitch, cos Pitch cos Yaw).
+	across := math.Hypot(to.X, to.Z)
+	if across > 0 {
+		c.Yaw = math.Atan2(to.X, to.Z)
+	}
+	c.Pitch = math.Atan2(to.Y, across)
 }
 
 // toView moves a world point into view space: camera at the origin, looking down +z.

@@ -4,6 +4,10 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+### Added
+
+- `Camera.LookAt(target)` turns a camera to look at a place from where it is: it sets `Yaw` and `Pitch` so that `Look` points from `Position` to the target and `Project` puts the target in the middle of the frame, for a camera that follows a thing, watches a door or circles a model. A program worked the two angles out itself, which rests on what only `mesh` knows: that a yaw of 0 looks down +z, which way a positive yaw and pitch turn, and that `Look` turns by the pitch before the yaw, so a wrong sign looked at the back of the scene (#136). The pitch is at most a quarter turn, a target straight above or below keeps the yaw the camera had, and a target at the camera's own position, or one that is not a finite number, leaves the camera as it was. It is the first method of `Camera` that changes it, and so the first that takes a pointer.
+
 ## [0.13.0] - 2026-11-20
 
 On top of 0.12.0 this release compiles for the browser and adds small drawing tools: filled rectangles of cells, drawing over a scene, every ray of the screen at once, letters in a frame's picture, borders that join, and discs with a soft edge. Nothing was removed or renamed and no signature changed, but `ImageOptions` gained a field; what draws differently is under Changed and Fixed. The module needs the same versions of `golang.org/x/sys` and `golang.org/x/term` as 0.12.0.
