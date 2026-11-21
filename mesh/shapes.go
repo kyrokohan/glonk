@@ -243,3 +243,91 @@ func Plane(width, depth float64) Mesh {
 	m.UpdateBounds()
 	return m
 }
+
+// BoxParts says which part of a mesh's picture each face of a box shows, as a rectangle in
+// fractions of the picture: (0, 0) is its top left and (1, 1) its bottom right, as for
+// FaceTexCoords. A field left zero shows the whole picture. A part whose Max is left of or above
+// its Min shows the picture mirrored that way, and one that reaches past 1 repeats it.
+//
+// Front faces +z, the way a model faces (see Transform), so a camera looking down +z at a box
+// sees its Back. On the four sides, the top of a part is up (+y) and it is not mirrored, seen from
+// outside. The Top and the Bottom read as if unfolded from the Front: the Top's part has its bottom
+// edge along the front of the box, and the Bottom's part has its top edge there.
+type BoxParts struct {
+	// Front, Back, Left, Right, Top and Bottom are the parts of the faces toward +z, -z, -x, +x,
+	// +y and -y.
+	Front, Back, Left, Right, Top, Bottom geometry.Rect
+}
+
+// Box returns a box width along x, height along y and depth along z, centered on the origin, with
+// the whole of the mesh's picture on each face. It is BoxFaces with every part left zero; see it
+// for how the box is made.
+func Box(width, height, depth float64) Mesh {
+	return BoxFaces(width, height, depth, BoxParts{})
+}
+
+// BoxFaces returns a box width along x, height along y and depth along z, centered on the origin,
+// whose faces show the parts of the mesh's picture that parts says (see BoxParts): a crate, a die,
+// a block of a world. The picture is Material.Texture; without one the box is a plain solid.
+//
+// The faces come in the order Front, Back, Left, Right, Top, Bottom. Face i is the vertices
+// Vertices[4i] to Vertices[4i+3], its bottom left, top left, top right and bottom right corners
+// as seen from outside, and the triangles Faces[2i] and Faces[2i+1]. That is 24 vertices, with
+// Normals facing straight out, so its edges stay hard and a lamp lights each face on its own, and
+// 12 faces and 12 edges. Cube makes a box of 8 vertices with no picture.
+func BoxFaces(width, height, depth float64, parts BoxParts) Mesh {
+	hx, hy, hz := extent(width)/2, extent(height)/2, extent(depth)/2
+	x, y, z := geometry.Vector3{X: 1}, geometry.Vector3{Y: 1}, geometry.Vector3{Z: 1}
+	half := func(axis geometry.Vector3) float64 { // half the box's size along a unit axis
+		return math.Abs(axis.X)*hx + math.Abs(axis.Y)*hy + math.Abs(axis.Z)*hz
+	}
+
+	m := Mesh{
+		Vertices:      make([]geometry.Vector3, 0, 24),
+		Normals:       make([]geometry.Vector3, 0, 24),
+		Faces:         make([][3]int, 0, 12),
+		FaceTexCoords: make([][3]geometry.Vector2, 0, 12),
+		Edges:         make([][2]int, 0, 12),
+	}
+	// Each face is its outward normal n and the way up its part is drawn, u; its right, seen from
+	// outside, is n × u.
+	for _, f := range []struct {
+		n, u geometry.Vector3
+		part geometry.Rect
+	}{
+		{z, y, parts.Front},
+		{z.Scale(-1), y, parts.Back},
+		{x.Scale(-1), y, parts.Left},
+		{x, y, parts.Right},
+		{y, z.Scale(-1), parts.Top},
+		{y.Scale(-1), z, parts.Bottom},
+	} {
+		r := f.n.Cross(f.u)
+		c, rr, uu := f.n.Scale(half(f.n)), r.Scale(half(r)), f.u.Scale(half(f.u))
+		i := len(m.Vertices)
+		for _, corner := range []geometry.Vector3{
+			c.Sub(rr).Sub(uu), c.Sub(rr).Add(uu), c.Add(rr).Add(uu), c.Add(rr).Sub(uu), // bottom left, top left, top right, bottom right
+		} {
+			m.Vertices = append(m.Vertices, corner)
+			m.Normals = append(m.Normals, f.n)
+		}
+		p := f.part
+		if p == (geometry.Rect{}) {
+			p = geometry.Rect{Max: geometry.Vector2{X: 1, Y: 1}}
+		}
+		bl, tl, tr, br := geometry.Vector2{X: p.Min.X, Y: p.Max.Y}, p.Min, geometry.Vector2{X: p.Max.X, Y: p.Min.Y}, p.Max
+		m.Faces = append(m.Faces, [3]int{i, i + 1, i + 2}, [3]int{i, i + 2, i + 3})
+		m.FaceTexCoords = append(m.FaceTexCoords, [3]geometry.Vector2{bl, tl, tr}, [3]geometry.Vector2{bl, tr, br})
+	}
+
+	// The 4 sides of the Front (vertices 0 to 3) and of the Back (4 to 7), and the 4 edges that
+	// join them. The Front's right is -x and the Back's +x, so the Front's bottom left is where the
+	// Back's bottom right is, and so on round.
+	m.Edges = append(m.Edges,
+		[2]int{0, 1}, [2]int{1, 2}, [2]int{2, 3}, [2]int{3, 0},
+		[2]int{4, 5}, [2]int{5, 6}, [2]int{6, 7}, [2]int{7, 4},
+		[2]int{0, 7}, [2]int{1, 6}, [2]int{2, 5}, [2]int{3, 4},
+	)
+	m.UpdateBounds()
+	return m
+}

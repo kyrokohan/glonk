@@ -516,6 +516,35 @@ func ExamplePoint() {
 	// └──────────────────────────────────────┘
 }
 
+// A box shows a part of one picture on each face: here an atlas of six colors, a face each. A
+// camera looking down +z sees the box's Back, which faces it.
+func ExampleBoxFaces() {
+	atlas := bitmap.New(3, 2)
+	for i, c := range []engine.Color{
+		engine.RGB(255, 0, 0), engine.RGB(0, 255, 0), engine.RGB(0, 0, 255),
+		engine.RGB(255, 255, 0), engine.RGB(255, 0, 255), engine.RGB(0, 255, 255),
+	} {
+		atlas.Set(i%3, i/3, c)
+	}
+	part := func(i int) geometry.Rect { return geometry.NewRect(float64(i%3)/3, float64(i/3)/2, 1.0/3, 0.5) }
+
+	box := mesh.BoxFaces(2, 2, 2, mesh.BoxParts{
+		Front: part(0), Back: part(1), Left: part(2), Right: part(3), Top: part(4), Bottom: part(5),
+	})
+	box.Material.Texture = atlas
+	box.Transform.Position = geometry.Vector3{Z: 5}
+
+	fb, err := engine.NewFrameBuffer(40, 20)
+	if err != nil {
+		panic(err)
+	}
+	canvas := fb.Canvas()
+	box.DrawShadedPixels(canvas, mesh.Camera{}, mesh.Ambient{Level: 1})
+	fmt.Println(canvas.At(20, 20)) // the middle of the screen: the Back's part, green
+	// Output:
+	// #00ff00
+}
+
 func ExampleSphere() {
 	fb, err := engine.NewFrameBuffer(30, 13)
 	if err != nil {

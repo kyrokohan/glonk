@@ -809,6 +809,7 @@ func TestBrowsingShowsTheSamplesThenTheShapes(t *testing.T) {
 		{"sphere", 266, 528, true},
 		{"cylinder", 98, 96, true},
 		{"cone", 73, 48, true},
+		{"die", 24, 12, true},
 	}
 	if len(models) != len(want) {
 		t.Fatalf("wanted %d models, got %d", len(want), len(models))
@@ -1000,11 +1001,15 @@ func shadesIn(fb *engine.FrameBuffer) int {
 	return len(seen)
 }
 
-// Smooth and faceted are different pictures, for every model, and smoothing the
-// house, whose faces are each one flat shade, adds shades.
+// Smooth and faceted are different pictures, for every model but the die, and smoothing the
+// house, whose faces are each one flat shade, adds shades. The die is a box, flat on every face,
+// so its normals are its faces' and the two are the same picture.
 func TestSmoothAndFacetedLookDifferent(t *testing.T) {
 	v := browseAll(t)
 	for i := range v.models {
+		if v.models[i].name == "die" {
+			continue
+		}
 		v.current = i
 		v.models[i].smooth = true
 		smooth := drawAll(t, v)
@@ -1240,7 +1245,7 @@ func foregrounds(fb *engine.FrameBuffer) map[engine.Color]bool {
 	return seen
 }
 
-func TestOnlyTheHouseAndTheOctahedronHaveColorsOfTheirOwn(t *testing.T) {
+func TestOnlyTheHouseTheOctahedronAndTheDieHaveColorsOfTheirOwn(t *testing.T) {
 	for _, m := range loadSamples(t) {
 		if want := m.name == "house.obj" || m.name == "octahedron.obj"; m.colored != want {
 			t.Errorf("%s: wanted colored=%v, got %v", m.name, want, m.colored)
@@ -1254,9 +1259,10 @@ func TestOnlyTheHouseAndTheOctahedronHaveColorsOfTheirOwn(t *testing.T) {
 			t.Errorf("%s: wanted a color for each of %d vertices and none for faces, got %d and %d", m.name, m.verts, len(m.mesh.VertexColors), len(m.mesh.FaceColors))
 		}
 	}
+	// Of the shapes, only the die has colors of its own: its picture.
 	for _, m := range shapeModels() {
-		if m.colored {
-			t.Errorf("%s: wanted a shape to have no colors of its own", m.name)
+		if want := m.name == "die"; m.colored != want || (m.mesh.Material.Texture != nil) != want {
+			t.Errorf("%s: wanted colored=%v and a picture %v, got %v and %v", m.name, want, want, m.colored, m.mesh.Material.Texture != nil)
 		}
 	}
 }

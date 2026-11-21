@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"glonk.dev/bitmap"
 	"glonk.dev/engine"
 	"glonk.dev/geometry"
 	"glonk.dev/mesh"
@@ -96,21 +97,57 @@ func loadModel(fsys fs.FS, name string) (model, error) {
 }
 
 // shapeModels are the shapes the mesh package makes, to browse beside the OBJ samples.
-// They come with normals, so they start smooth.
+// They come with normals, so they start smooth. The die has a picture, which C puts aside.
 func shapeModels() []model {
 	var models []model
 	for _, s := range []struct {
-		name string
-		mesh mesh.Mesh
+		name    string
+		mesh    mesh.Mesh
+		colored bool
 	}{
-		{"sphere", mesh.Sphere(modelSize/2, 24, 12)},
-		{"cylinder", mesh.Cylinder(0.8, modelSize, 24)},
-		{"cone", mesh.Cone(0.9, modelSize, 24)},
+		{"sphere", mesh.Sphere(modelSize/2, 24, 12), false},
+		{"cylinder", mesh.Cylinder(0.8, modelSize, 24), false},
+		{"cone", mesh.Cone(0.9, modelSize, 24), false},
+		{"die", die(), true},
 	} {
 		// Built at modelSize and centered, so there is nothing to fit.
-		models = append(models, model{name: s.name, mesh: s.mesh, verts: len(s.mesh.Vertices), faces: len(s.mesh.Faces), smooth: true})
+		models = append(models, model{name: s.name, mesh: s.mesh, verts: len(s.mesh.Vertices), faces: len(s.mesh.Faces), smooth: true, colored: s.colored})
 	}
 	return models
+}
+
+// die is a box with a face of a die on each side, from one picture of all six: opposite faces
+// add up to 7.
+func die() mesh.Mesh {
+	part := func(spots int) geometry.Rect { // where the face with that many spots is in the picture
+		return geometry.NewRect(float64((spots-1)%3)/3, float64((spots-1)/3)/2, 1.0/3, 0.5)
+	}
+	m := mesh.BoxFaces(modelSize, modelSize, modelSize, mesh.BoxParts{
+		Front: part(1), Back: part(6), Left: part(2), Right: part(5), Top: part(3), Bottom: part(4),
+	})
+	m.Material.Texture = diePicture()
+	return m
+}
+
+// diePicture draws the six faces of a die side by side, 1 to 3 over 4 to 6, each 7 pixels square:
+// ivory, with dark spots on a 3 by 3 grid.
+func diePicture() *bitmap.Bitmap {
+	ivory, ink := engine.RGB(240, 236, 220), engine.RGB(30, 30, 40)
+	// The spots of each face, as places on the grid: 0 to 2 along the top row, 3 to 5, 6 to 8.
+	spots := [6][]int{{4}, {0, 8}, {0, 4, 8}, {0, 2, 6, 8}, {0, 2, 4, 6, 8}, {0, 3, 6, 2, 5, 8}}
+	pic := bitmap.New(21, 14)
+	for face, places := range spots {
+		x0, y0 := 7*(face%3), 7*(face/3)
+		for y := range 7 {
+			for x := range 7 {
+				pic.Set(x0+x, y0+y, ivory)
+			}
+		}
+		for _, p := range places {
+			pic.Set(x0+1+2*(p%3), y0+1+2*(p/3), ink)
+		}
+	}
+	return pic
 }
 
 // browseModels is what the viewer shows: the models named in args, or with none the
