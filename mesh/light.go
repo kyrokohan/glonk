@@ -27,6 +27,20 @@ import (
 // always asked. [Point] has it. A Reach that promises too little loses light, and a picture
 // that is wrong, so promise only what the light gives: 1e-9 of the size of the numbers is
 // allowed for rounding.
+//
+// A light can have a color, with a method LightColor() engine.Color: its brightness is then
+// scaled by the color's red, green and blue, each from 0 to 255, and the lights add up channel
+// by channel, by the same rule as above, so a red lamp and a blue one light a face in both.
+// The zero Color, and a light without the method, is white, the light the brightness alone
+// gives; it is the one place where the zero Color is not black. [Directional], [Ambient] and
+// [Point] have a Color field for it. [BrightnessRGB] adds colored lights up for a program.
+//
+// A mesh that only white lights reach is drawn as before, at the same cost. Under a colored
+// light, DrawShadedPixels shades each channel of a surface's color by its own brightness. In
+// cells, DrawShaded picks the character by the brightest channel and turns the foreground
+// toward the light's color, keeping its brightness in the character; a material in the
+// terminal's default color stays in it, since that cannot be colored, and only the character
+// shows the light.
 type Light interface {
 	// Brightness returns how bright this light makes a surface, from 0 (dark) to 1
 	// (fully lit). point and normal are in world space, and normal is a unit vector
@@ -51,7 +65,13 @@ type Directional struct {
 	// Intensity is the brightness, from 0 to 1, of a surface facing straight into the
 	// light. 0 means 1; to switch a light off, leave it out.
 	Intensity float64
+
+	// Color is the light's color; the zero Color is white. See Light.
+	Color engine.Color
 }
+
+// LightColor is Color, the color of the light: see Light.
+func (d Directional) LightColor() engine.Color { return d.Color }
 
 // Brightness is Intensity scaled by how squarely the surface faces the light.
 func (d Directional) Brightness(_, normal geometry.Vector3) float64 {
@@ -68,7 +88,13 @@ type Ambient struct {
 	// Level is the brightness, from 0 to 1, of every surface. The zero Ambient gives
 	// no light.
 	Level float64
+
+	// Color is the light's color; the zero Color is white. See Light.
+	Color engine.Color
 }
+
+// LightColor is Color, the color of the light: see Light.
+func (a Ambient) LightColor() engine.Color { return a.Color }
 
 // Brightness is Level.
 func (a Ambient) Brightness(_, _ geometry.Vector3) float64 {
@@ -96,7 +122,13 @@ type Point struct {
 	// light is as bright a long way off as it is nearby. A Range that is negative or
 	// not a number gives no light.
 	Range float64
+
+	// Color is the light's color; the zero Color is white. See Light.
+	Color engine.Color
 }
+
+// LightColor is Color, the color of the light: see Light.
+func (p Point) LightColor() engine.Color { return p.Color }
 
 // Brightness is Intensity, times how squarely the surface faces the lamp, times a
 // fade that is 1 at the lamp and falls to 0 at Range as (1 - distance/Range) squared.
@@ -161,6 +193,60 @@ func Brightness(lights []Light, point, normal geometry.Vector3) float64 {
 	return total
 }
 
+// BrightnessRGB is Brightness channel by channel, for lights that have a color (see Light): how
+// bright the lights make the red, the green and the blue of a surface at point, each from 0 to 1.
+// Each light's brightness is scaled by its color's red, green and blue over 255, and each channel
+// adds up by the rule Brightness adds up by. White lights, and lights with no color, give three
+// numbers equal to what Brightness gives.
+func BrightnessRGB(lights []Light, point, normal geometry.Vector3) (r, g, b float64) {
+	for _, l := range lights {
+		if l == nil {
+			continue
+		}
+		part := clamp01(l.Brightness(point, normal))
+		lr, lg, lb, _ := lightColor(l)
+		// The scaled part is worked out first, so that a white light adds up exactly as in Brightness.
+		r += (1 - r) * (part * lr)
+		g += (1 - g) * (part * lg)
+		b += (1 - b) * (part * lb)
+	}
+	return r, g, b
+}
+
+// colored is a light that has a color.
+type colored interface {
+	LightColor() engine.Color
+}
+
+// lightColor is a light's red, green and blue from 0 to 1, and whether that is white, which the
+// zero Color and a light with no LightColor are.
+func lightColor(l Light) (r, g, b float64, white bool) {
+	c, ok := l.(colored)
+	if !ok {
+		return 1, 1, 1, true
+	}
+	col := c.LightColor()
+	if col.IsDefault() {
+		return 1, 1, 1, true
+	}
+	cr, cg, cb := col.RGB()
+	return float64(cr) / 255, float64(cg) / 255, float64(cb) / 255, cr == 255 && cg == 255 && cb == 255
+}
+
+// anyColored reports whether any of lights has a color that is not white, so that a mesh they
+// light needs its channels lit apart.
+func anyColored(lights []Light) bool {
+	for _, l := range lights {
+		if l == nil {
+			continue
+		}
+		if _, _, _, white := lightColor(l); !white {
+			return true
+		}
+	}
+	return false
+}
+
 // frontFacing reports whether a face is turned toward the camera. normal points
 // out of the face and v0 is one of its corners, both in view space, where the
 // camera sits at the origin: the face is visible when the normal opposes the
@@ -217,6 +303,7 @@ func (m *Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(
 	tri.smooth = smooth
 	lit := s.lightsReaching(m, place, lights) // not assigned to lights: that would make the caller's list escape
 	tri.lights = lit
+	tri.colored = anyColored(lit)                   // asked once for the mesh, so white lights cost what they did
 	faceColors := len(m.FaceColors) == len(m.Faces) // otherwise they are not used
 	vertexColors := len(m.VertexColors) == len(m.Vertices) && len(m.Vertices) > 0
 	pictured := len(m.FaceTexCoords) == len(m.Faces) && m.Material.Texture.Width() > 0
@@ -299,7 +386,13 @@ func (m *Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(
 			c.normal = cornerNormal(normals[f[2]], normal, front)
 		} else {
 			center := w0.Add(w1).Add(w2).Scale(1.0 / 3)
-			tri.intensity = Brightness(lit, center, normal)
+			if tri.colored {
+				r, g, b := BrightnessRGB(lit, center, normal)
+				tri.light = geometry.Vector3{X: r, Y: g, Z: b}
+				tri.intensity = max(r, g, b)
+			} else {
+				tri.intensity = Brightness(lit, center, normal)
+			}
 		}
 
 		n := clipTriangleNear(a, b, c, cam.Near, smooth, &tris)
@@ -364,6 +457,10 @@ func (m Mesh) DrawShaded(fb *engine.FrameBuffer, cam Camera, lights ...Light) {
 	fog := cam.Fog
 	m.eachShadedTriangle(cam, lights, fb.Width(), fb.Height(), func(t *shadedTriangle) {
 		c := &t.corners
+		if t.colored {
+			fillColored(fb, t, ramp, fog)
+			return
+		}
 		if t.varies() {
 			fillTinted(fb, t, ramp, fog)
 			return
@@ -397,6 +494,10 @@ func (m Mesh) DrawShadedPixels(c *engine.Canvas, cam Camera, lights ...Light) {
 	fog := cam.Fog
 	m.eachShadedTriangle(cam, lights, c.Width(), c.Height()/2, func(t *shadedTriangle) {
 		p := &t.corners
+		if t.colored {
+			fillColoredPixels(c, t, fog)
+			return
+		}
 		if t.varies() {
 			fillTintedPixels(c, t, fog)
 			return

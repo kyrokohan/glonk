@@ -39,6 +39,21 @@ var sun = []mesh.Light{
 	mesh.Directional{Direction: geometry.Vector3{X: 0.4, Y: -1, Z: 0.6}},
 }
 
+// sunset is a low orange sun and a dim blue sky: a model is warm on its lit side and blue in its
+// shade, by lights that have a color.
+var sunset = []mesh.Light{
+	mesh.Ambient{Level: 0.3, Color: engine.RGB(70, 100, 200)},
+	mesh.Directional{Direction: geometry.Vector3{X: 0.9, Y: -0.3, Z: 0.5}, Color: engine.RGB(255, 140, 60)},
+}
+
+// The lights the viewer can show, which L goes round.
+const (
+	sunLight = iota
+	lampLight
+	sunsetLight
+	lightCount
+)
+
 // How far up and to the left of the camera the lamp is held, and how far it reaches in
 // units of how far back the camera is. Far enough aside that the lit side of a round
 // shape is clearly its upper left, and a reach long enough that the lamp is not dim.
@@ -212,7 +227,7 @@ type viewer struct {
 	wire        bool
 	halfBlocks  bool
 	doubleSided bool
-	lamp        bool         // lit by a lamp that follows the camera, not the sun
+	light       int          // sunLight, lampLight (a lamp that follows the camera) or sunsetLight
 	color       int          // the palette color, for a model without colors of its own and for the wireframe
 	ownColors   bool         // a model that has colors of its own shows them, not the palette color
 	stats       engine.Stats // how the last frame went, given by Run after every frame
@@ -257,7 +272,7 @@ func (v *viewer) Update(dt float64, in *engine.Input) error {
 		v.models[v.current].smooth = !v.models[v.current].smooth
 	}
 	if pressed('l', 'L') {
-		v.lamp = !v.lamp
+		v.light = (v.light + 1) % lightCount
 	}
 	if v.halfBlocks && pressed('b', 'B') {
 		v.flipEdges = true
@@ -353,10 +368,13 @@ func (v *viewer) shown() mesh.Mesh {
 	return faceted
 }
 
-// lights returns the lights for a camera: the sun, or the lamp that follows it.
+// lights returns the lights for a camera: the sun, the lamp that follows it, or the sunset.
 func (v *viewer) lights(cam mesh.Camera) []mesh.Light {
-	if v.lamp {
+	switch v.light {
+	case lampLight:
 		return lampLights(cam, v.dist)
+	case sunsetLight:
+		return sunset
 	}
 	return sun
 }
@@ -408,8 +426,11 @@ func (v *viewer) Draw(fb *engine.FrameBuffer) {
 		if v.models[v.current].smooth {
 			shading = "smooth"
 		}
-		if v.lamp {
+		switch v.light {
+		case lampLight:
 			light = "lamp"
+		case sunsetLight:
+			light = "sunset"
 		}
 		mode += ", " + shading + ", " + light
 		if v.showsModelColors() {
@@ -423,7 +444,7 @@ func (v *viewer) Draw(fb *engine.FrameBuffer) {
 	fb.DrawText(1, 2, fmt.Sprintf("%.0f fps  %s", v.stats.FPS, mode), engine.Color{})
 	fb.DrawText(1, fb.Height()-4, fmt.Sprintf("update %.1f  draw %.1f  write %.1f ms  %.1f KB sent", ms(v.stats.Update), ms(v.stats.Draw), ms(v.stats.Write), float64(v.stats.Bytes)/1000), engine.Color{})
 	fb.DrawText(1, fb.Height()-3, "arrows orbit  +/- zoom  R spin  N next model  Esc quit", engine.Color{})
-	fb.DrawText(1, fb.Height()-2, "V wire/solid  M blocks  B edges  D two-sided  C color  F smooth  L lamp", engine.Color{})
+	fb.DrawText(1, fb.Height()-2, "V wire/solid  M blocks  B edges  D two-sided  C color  F smooth  L light", engine.Color{})
 }
 
 func main() {

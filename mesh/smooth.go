@@ -133,6 +133,12 @@ type shadedTriangle struct {
 
 	// lights are the ones that can reach the mesh the triangle belongs to.
 	lights []Light
+
+	// colored is set when a light that reaches the mesh has a color: each channel is lit on its
+	// own, light is a flat triangle's red, green and blue brightness, and intensity the brightest.
+	// They are last, so that the fields every mesh uses keep their places.
+	colored bool
+	light   geometry.Vector3
 }
 
 // brightnessAt is the brightness of a smooth triangle at the point with corner
@@ -142,6 +148,44 @@ func (t *shadedTriangle) brightnessAt(b0, b1, b2 float64) float64 {
 	// Blending unit vectors gives a shorter one; lights are promised a unit normal.
 	normal := t.normal[0].Scale(b0).Add(t.normal[1].Scale(b1)).Add(t.normal[2].Scale(b2)).Normalize()
 	return Brightness(t.lights, point, normal)
+}
+
+// lightAt is brightnessAt for a triangle under a colored light: its red,
+// green and blue brightness at the point with corner weights b0, b1 and b2, and the brightest of
+// them. A flat one has the same everywhere.
+func (t *shadedTriangle) lightAt(b0, b1, b2 float64) (light geometry.Vector3, brightest float64) {
+	if !t.smooth {
+		return t.light, t.intensity
+	}
+	point := t.world[0].Scale(b0).Add(t.world[1].Scale(b1)).Add(t.world[2].Scale(b2))
+	normal := t.normal[0].Scale(b0).Add(t.normal[1].Scale(b1)).Add(t.normal[2].Scale(b2)).Normalize()
+	r, g, b := BrightnessRGB(t.lights, point, normal)
+	return geometry.Vector3{X: r, Y: g, Z: b}, max(r, g, b)
+}
+
+// shadeRGB is engine.Shade channel by channel: each of c's red, green and blue times its own
+// brightness, rounded as Shade rounds, so equal brightnesses give what Shade gives. The default
+// color is black, as for Shade.
+func shadeRGB(c engine.Color, light geometry.Vector3) engine.Color {
+	r, g, b := c.RGB()
+	return engine.RGB(scaleChannel(r, light.X), scaleChannel(g, light.Y), scaleChannel(b, light.Z))
+}
+
+// toward turns c toward a light's color in cells, where the brightness is in the character: each
+// channel is scaled by its share of the brightest one. The default color, which cannot be
+// scaled, stays, and so does any color in no light at all.
+func toward(c engine.Color, light geometry.Vector3, brightest float64) engine.Color {
+	if c.IsDefault() || !(brightest > 0) {
+		return c
+	}
+	r, g, b := c.RGB()
+	return engine.RGB(scaleChannel(r, light.X/brightest), scaleChannel(g, light.Y/brightest), scaleChannel(b, light.Z/brightest))
+}
+
+// scaleChannel is v times k, held to 0 to 1 with NaN as 0, rounded to a whole number as
+// engine.Shade rounds.
+func scaleChannel(v uint8, k float64) uint8 {
+	return uint8(math.Round(float64(v) * clamp01(k)))
 }
 
 // depthAt is how deep the triangle is at the point with corner weights b0, b1 and b2. The
@@ -306,6 +350,57 @@ func fillTintedPixels(c *engine.Canvas, t *shadedTriangle, fog *Fog) {
 			intensity = t.brightnessAt(b0, b1, b2)
 		}
 		color = engine.Shade(color, intensity)
+		if fog != nil {
+			color = fog.Apply(color, t.depthAt(b0, b1, b2))
+		}
+		if t.opacity != 0 {
+			return engine.Mix(behind, color, t.opacity), engine.FillOver
+		}
+		return color, engine.FillSolid
+	})
+}
+
+// fillColored is fillTinted for a triangle under a colored light: each channel is lit on its own.
+// The character is picked by the brightest channel, and the foreground turns toward the light's
+// color, keeping its brightness in the character, before fog; a see-through face is shaded per
+// channel and mixed over what is behind. It is a function of its own, so that the cells of a mesh
+// under white light take fillTinted as before, at the same cost.
+func fillColored(fb *engine.FrameBuffer, t *shadedTriangle, ramp []rune, fog *Fog) {
+	c := &t.corners
+	fb.FillTriangleOver(c[0].x, c[0].y, c[0].z, c[1].x, c[1].y, c[1].z, c[2].x, c[2].y, c[2].z, func(b0, b1, b2 float64, behind engine.Cell) (engine.Cell, engine.Fill) {
+		color, ok := t.colorAt(b0, b1, b2)
+		if !ok {
+			return engine.Cell{}, engine.FillSkip
+		}
+		light, brightest := t.lightAt(b0, b1, b2)
+		if t.opacity != 0 {
+			color = shadeRGB(color, light)
+			if fog != nil {
+				color = fog.Apply(color, t.depthAt(b0, b1, b2))
+			}
+			behind.Foreground = engine.Mix(behind.Foreground, color, t.opacity)
+			behind.Background = engine.Mix(behind.Background, color, t.opacity)
+			return behind, engine.FillOver
+		}
+		color = toward(color, light, brightest)
+		if fog != nil {
+			color = fog.Apply(color, t.depthAt(b0, b1, b2))
+		}
+		return engine.Cell{Character: shadeChar(ramp, brightest), Foreground: color}, engine.FillSolid
+	})
+}
+
+// fillColoredPixels is fillTintedPixels for a triangle under a colored light: each channel of the
+// color is shaded by its own brightness, before fog.
+func fillColoredPixels(c *engine.Canvas, t *shadedTriangle, fog *Fog) {
+	p := &t.corners
+	c.FillTriangleOver(p[0].x, 2*p[0].y, p[0].z, p[1].x, 2*p[1].y, p[1].z, p[2].x, 2*p[2].y, p[2].z, func(b0, b1, b2 float64, behind engine.Color) (engine.Color, engine.Fill) {
+		color, ok := t.colorAt(b0, b1, b2)
+		if !ok {
+			return engine.Color{}, engine.FillSkip
+		}
+		light, _ := t.lightAt(b0, b1, b2)
+		color = shadeRGB(color, light)
 		if fog != nil {
 			color = fog.Apply(color, t.depthAt(b0, b1, b2))
 		}

@@ -1025,15 +1025,15 @@ func TestSmoothAndFacetedLookDifferent(t *testing.T) {
 	}
 }
 
-func TestEveryModelDrawsSmoothOrFacetedInSunOrLampLight(t *testing.T) {
+func TestEveryModelDrawsSmoothOrFacetedInEveryLight(t *testing.T) {
 	v := browseAll(t)
 	for i := range v.models {
 		for _, smooth := range []bool{false, true} {
-			for _, lamp := range []bool{false, true} {
+			for light := range lightCount {
 				for _, blocks := range []bool{false, true} {
-					name := fmt.Sprintf("%s smooth %v lamp %v half-blocks %v", v.models[i].name, smooth, lamp, blocks)
+					name := fmt.Sprintf("%s smooth %v light %d half-blocks %v", v.models[i].name, smooth, light, blocks)
 					t.Run(name, func(t *testing.T) {
-						v.current, v.lamp, v.halfBlocks = i, lamp, blocks
+						v.current, v.light, v.halfBlocks = i, light, blocks
 						v.models[i].smooth = smooth
 
 						fb := drawAll(t, v)
@@ -1048,7 +1048,7 @@ func TestEveryModelDrawsSmoothOrFacetedInSunOrLampLight(t *testing.T) {
 	}
 }
 
-func TestLampKeySwitchesTheLightOncePerPressInEitherCase(t *testing.T) {
+func TestLightKeyGoesRoundTheLightsOncePerPressInEitherCase(t *testing.T) {
 	for _, key := range []engine.Key{'l', 'L'} {
 		t.Run(fmt.Sprintf("%c", key), func(t *testing.T) {
 			v := browseAll(t)
@@ -1056,22 +1056,42 @@ func TestLampKeySwitchesTheLightOncePerPressInEitherCase(t *testing.T) {
 
 			kb.Press(key)
 			step(v, kb, 0.1)
-			if !v.lamp {
-				t.Fatalf("wanted the first press to turn the lamp on")
+			if v.light != lampLight {
+				t.Fatalf("wanted the first press to turn the lamp on, got light %d", v.light)
 			}
 			for range 5 {
 				step(v, kb, 0.1)
 			}
-			if !v.lamp {
+			if v.light != lampLight {
 				t.Errorf("wanted holding the key to change nothing")
 			}
-			kb.Release(key)
-			kb.Press(key)
-			step(v, kb, 0.1)
-			if v.lamp {
-				t.Errorf("wanted a second press to bring the sun back")
+			for _, want := range []int{sunsetLight, sunLight} {
+				kb.Release(key)
+				kb.Press(key)
+				step(v, kb, 0.1)
+				if v.light != want {
+					t.Errorf("wanted the next press to give light %d, got %d", want, v.light)
+				}
 			}
 		})
+	}
+}
+
+// The sunset is lights with a color: a warm sun and a blue sky.
+func TestTheSunsetIsColored(t *testing.T) {
+	v := browseAll(t)
+	v.light = sunsetLight
+	lights := v.lights(v.camera())
+	if len(lights) != 2 {
+		t.Fatalf("wanted a sky and a sun, got %v", lights)
+	}
+	r, _, b := mesh.BrightnessRGB(lights, geometry.Vector3{}, geometry.Vector3{X: -0.9, Y: 0.3, Z: -0.5}.Normalize())
+	if !(r > b) {
+		t.Errorf("wanted a face toward the sun warm, got red %v and blue %v", r, b)
+	}
+	r, _, b = mesh.BrightnessRGB(lights, geometry.Vector3{}, geometry.Vector3{X: 0.9, Y: 0.3, Z: 0.5}.Normalize())
+	if !(b > r) {
+		t.Errorf("wanted a face away from the sun blue, got red %v and blue %v", r, b)
 	}
 }
 
@@ -1093,7 +1113,7 @@ func TestTheLampFollowsTheCameraAndTheSunDoesNot(t *testing.T) {
 	if !slices.Equal(v.lights(v.camera()), sun) {
 		t.Fatalf("wanted the sun's lights without the lamp")
 	}
-	v.lamp = true
+	v.light = lampLight
 	cam1 := v.camera()
 	lamp1 := pointOf(v.lights(cam1))
 	ambient := false
@@ -1130,7 +1150,7 @@ func TestTheLampFollowsTheCameraAndTheSunDoesNot(t *testing.T) {
 	if far := pointOf(v.lights(v.camera())); far.Range <= lamp2.Range {
 		t.Errorf("wanted a longer reach when zoomed out, got %v after %v", far.Range, lamp2.Range)
 	}
-	v.lamp = false
+	v.light = sunLight
 	if got := v.lights(v.camera()); !slices.Equal(got, sun) {
 		t.Errorf("wanted the sun back")
 	}
@@ -1141,7 +1161,7 @@ func TestTheLampFollowsTheCameraAndTheSunDoesNot(t *testing.T) {
 func TestTheLampLightsTheUpperLeftOfASphere(t *testing.T) {
 	v := browseAll(t)
 	v.current = modelIndex(t, v.models, "sphere")
-	v.lamp = true
+	v.light = lampLight
 	fb := drawAll(t, v)
 
 	cells := modelCells(fb)
@@ -1165,7 +1185,7 @@ func TestTheLampLightsTheUpperLeftOfASphere(t *testing.T) {
 		t.Errorf("wanted the brightest cells (%.1f, %.1f) above and left of the sphere's middle (%.1f, %.1f)\n%s", bx, by, mx, my, fb.String())
 	}
 
-	v.lamp = false
+	v.light = sunLight
 	if modelArea(drawAll(t, v)) == modelArea(fb) {
 		t.Errorf("wanted the sun and the lamp to light the sphere differently")
 	}
@@ -1177,7 +1197,7 @@ func TestTheLampLightsHalfBlockPixelsToo(t *testing.T) {
 	v.current, v.halfBlocks = 3, true // the sphere
 	sunlit := modelArea(drawAll(t, v))
 
-	v.lamp = true
+	v.light = lampLight
 	lit := modelArea(drawAll(t, v))
 
 	if sunlit == lit {
@@ -1193,7 +1213,7 @@ func TestHUDNamesTheShadingAndTheLight(t *testing.T) {
 	if got := line(); !strings.Contains(got, "characters, faceted, sun") {
 		t.Errorf("wanted faceted and sun on the second line, got %q", got)
 	}
-	v.models[1].smooth, v.lamp = true, true
+	v.models[1].smooth, v.light = true, lampLight
 	if got := line(); !strings.Contains(got, "characters, smooth, lamp") {
 		t.Errorf("wanted smooth and lamp, got %q", got)
 	}
@@ -1202,7 +1222,7 @@ func TestHUDNamesTheShadingAndTheLight(t *testing.T) {
 		t.Errorf("wanted the shading and light after the mode, got %q", got)
 	}
 	v.current = modelIndex(t, v.models, "sphere") // it starts smooth
-	v.lamp = false
+	v.light = sunLight
 	if got := line(); !strings.Contains(got, "smooth, sun") {
 		t.Errorf("wanted the sphere smooth and in the sun, got %q", got)
 	}
@@ -1223,7 +1243,7 @@ func TestHelpMentionsTheShadingAndLightKeys(t *testing.T) {
 	got := hudText(fb, fb.Height()-2)
 
 	// At the end of the line, so the window shows it whole.
-	if !strings.HasSuffix(strings.TrimRight(got, " "), "F smooth  L lamp") {
+	if !strings.HasSuffix(strings.TrimRight(got, " "), "F smooth  L light") {
 		t.Errorf("wanted the help to end with F and L, whole, got %q", got)
 	}
 }
