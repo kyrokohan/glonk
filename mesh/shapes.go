@@ -13,6 +13,20 @@ import (
 // side, so each can face its own way. They stand on the y axis and are centered on the
 // origin. Place and turn them with Mesh.Transform.
 //
+// They come with FaceTexCoords as well, so a picture set as Material.Texture is drawn on them,
+// facing as on a Box: the round sides of Sphere, Cylinder and Cone wrap the picture round them as
+// a map of the world is wrapped round a globe, upright and not mirrored seen from outside, with
+// its middle on the front (+z, the way a model faces) and its left and right edges meeting at the
+// back (-z). Down the picture is from the top of the shape to its bottom: pole to pole, rim to
+// rim, tip to base. A pole, or the tip, takes the middle of each slice it meets, so the picture
+// does not smear into a fan there. The caps of a Cylinder and the base of a Cone show no picture
+// and are drawn in Material.Color, and a Plane shows the picture once, as a Box's Top shows its
+// part. A picture repeated over a shape, a floor tiled ten times, is its coordinates scaled:
+//
+//	for i, t := range floor.FaceTexCoords {
+//		floor.FaceTexCoords[i] = [3]geometry.Vector2{t[0].Scale(10), t[1].Scale(10), t[2].Scale(10)}
+//	}
+//
 // Sizes that are negative or not a finite number count as 0, which gives a shape with
 // no size: nothing to see shaded, and a dot as a wireframe. A count of segments or
 // rings outside the range a shape takes is brought into it. Neither panics, and the
@@ -48,6 +62,14 @@ func circle(s, n int) (cos, sin float64) {
 	return cos, sin
 }
 
+// around is how far across the picture segment s of n is on a round side: the front (+z), a
+// quarter of the way round from +x where segment 0 is, is the middle of the picture, and the back
+// (-z) is its edges. The far corner of the face from s to s+1 is around(s, n) + 1/n, past 1 at
+// the back, where the picture repeats, so the face across the edges is drawn whole.
+func around(s, n int) float64 {
+	return math.Mod(float64(s)/float64(n)+0.25, 1)
+}
+
 // Sphere returns a sphere of the given radius made of rings bands from pole to pole
 // and segments slices around, with one vertex at each pole. segments is brought into
 // 3 to 512 and rings into 2 to 512. Its Normals point straight out of the middle, so
@@ -64,6 +86,8 @@ func Sphere(radius float64, segments, rings int) Mesh {
 		Normals:  make([]geometry.Vector3, 0, vertices),
 		Faces:    make([][3]int, 0, 2*segments*(rings-1)),
 		Edges:    make([][2]int, 0, segments*(2*rings-1)),
+
+		FaceTexCoords: make([][3]geometry.Vector2, 0, 2*segments*(rings-1)),
 	}
 	add := func(direction geometry.Vector3) {
 		m.Vertices = append(m.Vertices, direction.Scale(radius))
@@ -83,15 +107,23 @@ func Sphere(radius float64, segments, rings int) Mesh {
 	add(geometry.Vector3{Y: -1})
 
 	ring := func(r, s int) int { return 1 + (r-1)*segments + s%segments } // r from 1 to rings-1
+	down := func(r int) float64 { return float64(r) / float64(rings) }    // how far down the picture ring r is
 	for s := range segments {
+		u0 := around(s, segments)
+		u1, mid := u0+1/float64(segments), u0+0.5/float64(segments)
 		m.Faces = append(m.Faces, [3]int{0, ring(1, s+1), ring(1, s)})
+		m.FaceTexCoords = append(m.FaceTexCoords, [3]geometry.Vector2{{X: mid}, {X: u1, Y: down(1)}, {X: u0, Y: down(1)}})
 		m.Edges = append(m.Edges, [2]int{0, ring(1, s)})
 		for r := 1; r < rings-1; r++ {
 			a, b, c, d := ring(r, s), ring(r+1, s), ring(r+1, s+1), ring(r, s+1)
 			m.Faces = append(m.Faces, [3]int{a, c, b}, [3]int{a, d, c})
+			m.FaceTexCoords = append(m.FaceTexCoords,
+				[3]geometry.Vector2{{X: u0, Y: down(r)}, {X: u1, Y: down(r + 1)}, {X: u0, Y: down(r + 1)}},
+				[3]geometry.Vector2{{X: u0, Y: down(r)}, {X: u1, Y: down(r)}, {X: u1, Y: down(r + 1)}})
 			m.Edges = append(m.Edges, [2]int{a, b})
 		}
 		m.Faces = append(m.Faces, [3]int{ring(rings-1, s), ring(rings-1, s+1), bottom})
+		m.FaceTexCoords = append(m.FaceTexCoords, [3]geometry.Vector2{{X: u0, Y: down(rings - 1)}, {X: u1, Y: down(rings - 1)}, {X: mid, Y: 1}})
 		m.Edges = append(m.Edges, [2]int{ring(rings-1, s), bottom})
 		for r := 1; r < rings; r++ {
 			m.Edges = append(m.Edges, [2]int{ring(r, s), ring(r, s+1)})
@@ -118,6 +150,8 @@ func Cylinder(radius, height float64, segments int) Mesh {
 		Normals:  make([]geometry.Vector3, 0, 4*segments+2),
 		Faces:    make([][3]int, 0, 4*segments),
 		Edges:    make([][2]int, 0, 3*segments),
+
+		FaceTexCoords: make([][3]geometry.Vector2, 0, 4*segments),
 	}
 	add := func(x, y, z float64, normal geometry.Vector3) int {
 		m.Vertices = append(m.Vertices, geometry.Vector3{X: x, Y: y, Z: z})
@@ -158,6 +192,12 @@ func Cylinder(radius, height float64, segments int) Mesh {
 			[3]int{t0, b1, b0}, [3]int{t0, t1, b1},
 			[3]int{capTop, rimTop + next, rimTop + s},
 			[3]int{capBottom, rimBottom + s, rimBottom + next})
+		u0 := around(s, segments)
+		u1 := u0 + 1/float64(segments)
+		m.FaceTexCoords = append(m.FaceTexCoords,
+			[3]geometry.Vector2{{X: u0}, {X: u1, Y: 1}, {X: u0, Y: 1}},
+			[3]geometry.Vector2{{X: u0}, {X: u1}, {X: u1, Y: 1}},
+			[3]geometry.Vector2{}, [3]geometry.Vector2{}) // the caps show no picture
 		m.Edges = append(m.Edges, [2]int{t0, t1}, [2]int{b0, b1}, [2]int{t0, b0})
 	}
 	m.UpdateBounds()
@@ -189,6 +229,8 @@ func Cone(radius, height float64, segments int) Mesh {
 		Normals:  make([]geometry.Vector3, 0, 3*segments+1),
 		Faces:    make([][3]int, 0, 2*segments),
 		Edges:    make([][2]int, 0, 2*segments),
+
+		FaceTexCoords: make([][3]geometry.Vector2, 0, 2*segments),
 	}
 	add := func(v, normal geometry.Vector3) int {
 		m.Vertices = append(m.Vertices, v)
@@ -220,6 +262,10 @@ func Cone(radius, height float64, segments int) Mesh {
 		m.Faces = append(m.Faces,
 			[3]int{rim + s, tip + s, rim + next},
 			[3]int{middle, capRim + s, capRim + next})
+		u0 := around(s, segments)
+		m.FaceTexCoords = append(m.FaceTexCoords,
+			[3]geometry.Vector2{{X: u0, Y: 1}, {X: u0 + 0.5/float64(segments)}, {X: u0 + 1/float64(segments), Y: 1}},
+			[3]geometry.Vector2{}) // the base shows no picture
 		m.Edges = append(m.Edges, [2]int{rim + s, rim + next}, [2]int{rim + s, tip + s})
 	}
 	m.UpdateBounds()
@@ -239,6 +285,12 @@ func Plane(width, depth float64) Mesh {
 		Normals:  []geometry.Vector3{up, up, up, up},
 		Faces:    [][3]int{{0, 1, 2}, {0, 2, 3}},
 		Edges:    [][2]int{{0, 1}, {1, 2}, {2, 3}, {3, 0}},
+		// As a Box's Top: the picture's top toward -z and its right toward -x, seen from above,
+		// so corner 3 (+x, -z) is its top left.
+		FaceTexCoords: [][3]geometry.Vector2{
+			{{X: 1}, {X: 1, Y: 1}, {Y: 1}},
+			{{X: 1}, {Y: 1}, {}},
+		},
 	}
 	m.UpdateBounds()
 	return m
