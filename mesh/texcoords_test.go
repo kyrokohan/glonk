@@ -654,38 +654,38 @@ func TestTexelPicksTheNearestPixelAndRepeats(t *testing.T) {
 		{"+Inf", math.Inf(1), 0.5, none},
 		{"-Inf", 0.5, math.Inf(-1), none},
 	} {
-		if got := texel(pic, tt.u, tt.v); got != tt.want {
+		if got := texel(pic, tt.u, tt.v, false); got != tt.want {
 			t.Errorf("%s: texel(%v, %v): wanted %v, got %v", tt.name, tt.u, tt.v, tt.want, got)
 		}
 	}
 
-	if got := texel(nil, 0.5, 0.5); !got.IsDefault() {
+	if got := texel(nil, 0.5, 0.5, false); !got.IsDefault() {
 		t.Errorf("wanted none for no picture, got %v", got)
 	}
-	if got := texel(bitmap.New(0, 0), 0.5, 0.5); !got.IsDefault() {
+	if got := texel(bitmap.New(0, 0), 0.5, 0.5, false); !got.IsDefault() {
 		t.Errorf("wanted none for an empty picture, got %v", got)
 	}
 	one := onePictureOf(pureRed, 1, 1)
 	for _, u := range []float64{0, 0.5, 0.999, 1, -7.3} {
-		if got := texel(one, u, u); got != pureRed {
+		if got := texel(one, u, u, false); got != pureRed {
 			t.Errorf("wanted the one pixel for %v, got %v", u, got)
 		}
 	}
 	// A pixel that is not set is none, and a view counts from its own corner and repeats in itself.
 	holes := bitmap.New(2, 2)
 	holes.Set(1, 0, pureGreen)
-	if got := texel(holes, 0.25, 0.25); !got.IsDefault() {
+	if got := texel(holes, 0.25, 0.25, false); !got.IsDefault() {
 		t.Errorf("wanted none for a see-through pixel, got %v", got)
 	}
-	if got := texel(holes, 0.75, 0.25); got != pureGreen {
+	if got := texel(holes, 0.75, 0.25, false); got != pureGreen {
 		t.Errorf("wanted the green pixel, got %v", got)
 	}
 	view := pic.Sub(2, 3, 2, 2)
-	if got := texel(view, 0.75, 1.25); got != px(3, 3) {
+	if got := texel(view, 0.75, 1.25, false); got != px(3, 3) {
 		t.Errorf("wanted the pixel (3, 3) of the picture through a view, got %v", got)
 	}
 	mirrored := pic.Mirrored()
-	if got := texel(mirrored, 0.01, 0.01); got != px(7, 0) {
+	if got := texel(mirrored, 0.01, 0.01, false); got != px(7, 0) {
 		t.Errorf("wanted the top right pixel through a mirrored view, got %v", got)
 	}
 }

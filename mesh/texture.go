@@ -93,12 +93,13 @@ func (t *texture) at(u, v float64) engine.Color {
 	return engine.RGB(c.R, c.G, c.B)
 }
 
-// texel returns the color of the pixel of b at (u, v), as Mesh.FaceTexCoords gives them: (0, 0)
+// texel returns the color of the pixel of b at (u, v), as b shows it (see Bitmap.Shown), with
+// (u, v) as Mesh.FaceTexCoords gives them: (0, 0)
 // is the top left of the picture and (1, 1) the bottom right, and the picture repeats beyond
 // that. It takes the nearest pixel, with no blending. The zero Color, meaning none, comes back
 // for a see-through pixel, for a coordinate that is NaN or infinite, and for a picture with no
 // pixels, which has none to give.
-func texel(b *bitmap.Bitmap, u, v float64) engine.Color {
+func texel(b *bitmap.Bitmap, u, v float64, shown bool) engine.Color {
 	u -= math.Floor(u)
 	v -= math.Floor(v)
 	// Infinity and NaN are NaN now, and fail this; every other number is in [0, 1].
@@ -109,5 +110,8 @@ func texel(b *bitmap.Bitmap, u, v float64) engine.Color {
 	// u is below 1, but a tiny negative u gives exactly 1, and u*w can round up to w.
 	x := min(int(u*float64(w)), w-1)
 	y := min(int(v*float64(h)), h-1)
+	if shown {
+		return b.Shown(x, y) // as a Shaded or Tinted view draws it
+	}
 	return b.At(x, y)
 }

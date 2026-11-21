@@ -119,8 +119,9 @@ type shadedTriangle struct {
 	// tex is the picture the face's color comes from, or nil: each cell takes it from the
 	// picture at the blend of uv, the places in it that the corners are pinned to, and a cell
 	// where the picture is see-through is a hole, which draws nothing.
-	tex *bitmap.Bitmap
-	uv  [3]geometry.Vector2
+	tex   *bitmap.Bitmap
+	shown bool // tex is a Shaded or Tinted view, read with Shown; a plain one is read with At
+	uv    [3]geometry.Vector2
 
 	// A flat triangle is lit once, as a whole.
 	smooth    bool
@@ -165,7 +166,7 @@ func (t *shadedTriangle) colorAt(b0, b1, b2 float64) (engine.Color, bool) {
 		return engine.RGB(channel(c.X), channel(c.Y), channel(c.Z)), true
 	}
 	uv := t.uv[0].Scale(b0).Add(t.uv[1].Scale(b1)).Add(t.uv[2].Scale(b2))
-	surface := texel(t.tex, uv.X, uv.Y)
+	surface := texel(t.tex, uv.X, uv.Y, t.shown)
 	if surface.IsDefault() {
 		return engine.Color{}, false
 	}

@@ -375,7 +375,7 @@ func checkTexturedPicture(t *testing.T, m Mesh, tt texturedTrial, w, h int) {
 		if nearBoundary(math.Mod(u, 1)*float64(w)) || nearBoundary(math.Mod(v, 1)*float64(h)) {
 			continue // the centroid is worked out in another order there, and may fall either side
 		}
-		if got := texel(pic, u, v); got != m.FaceColors[i] {
+		if got := texel(pic, u, v, false); got != m.FaceColors[i] {
 			t.Fatalf("triangle %d: wanted the picture at %v, %v to be its color %v, got %v\n%s", i, u, v, m.FaceColors[i], got, tt.obj)
 		}
 	}

@@ -20,8 +20,10 @@ type Material struct {
 	// picture that was decoded) is a hole: see Mesh.FaceTexCoords. Nil, or a picture with no
 	// pixels, is none. A mesh has one picture; for two, make a mesh for each, or put both in one
 	// picture and give each face the coordinates of its part. A view from Bitmap.Sub is a
-	// picture of its own, and repeats inside itself. The colors are the ones Bitmap.At gives,
-	// so a Shaded or Tinted view is drawn as the picture it is a view of. Drawing reads the
+	// picture of its own, and repeats inside itself. The colors are the ones Bitmap.Shown gives,
+	// so a Shaded or Tinted view is drawn as it looks: its color is the surface's color, which a
+	// vertex color then tints, light shades and fog fades, so a view tinted white for a flash is
+	// as dark as any white surface in a dark room. Drawing reads the
 	// picture and does not copy it, so it is not to be changed by another goroutine while
 	// the mesh is drawn.
 	Texture *bitmap.Bitmap

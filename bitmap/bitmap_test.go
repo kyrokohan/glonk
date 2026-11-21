@@ -1145,6 +1145,64 @@ func lookBases(t testing.TB) map[string]*Bitmap {
 	}
 }
 
+// Shown is every pixel as the view draws it, for every kind of view and look: the reference's
+// color, the zero Color where the pixel is see-through or outside, and At's color where there is
+// no look.
+func TestShownIsThePixelAsTheViewDrawsIt(t *testing.T) {
+	shades, tints, parts := looks()
+	for name, base := range lookBases(t) {
+		for _, shade := range shades {
+			for _, tint := range tints {
+				for _, part := range parts {
+					if tint == nil && part != 0 {
+						continue
+					}
+					view := applyLook(base, shade, tint, part)
+					want := lookedCopy(base, shade, tint, part)
+					for y := -1; y <= view.Height(); y++ {
+						for x := -1; x <= view.Width(); x++ {
+							if got := view.Shown(x, y); got != want.At(x, y) {
+								t.Fatalf("%s, shade %v, tint %v by %v, pixel (%d, %d): wanted %v, got %v", name, shade, tint, part, x, y, want.At(x, y), got)
+							}
+						}
+					}
+				}
+			}
+		}
+		for y := range base.Height() {
+			for x := range base.Width() {
+				if base.Shown(x, y) != base.At(x, y) {
+					t.Fatalf("%s with no look, pixel (%d, %d): wanted At's color", name, x, y)
+				}
+			}
+		}
+	}
+	var none *Bitmap
+	if got := none.Shown(0, 0); !got.IsDefault() {
+		t.Errorf("wanted nothing from a nil picture, got %v", got)
+	}
+}
+
+// Plain is true for a picture drawn in its own colors, whatever view of it, and false for one that
+// is shaded or tinted, through Sub and Mirrored too.
+func TestPlainIsWhetherAPictureHasALook(t *testing.T) {
+	pic := gridPicture(t, 4, 3)
+	var none *Bitmap
+	for name, b := range map[string]*Bitmap{"a picture": pic, "nil": none, "a view": pic.Sub(1, 1, 2, 2), "mirrored": pic.Mirrored(), "empty": New(0, 0)} {
+		if !b.Plain() {
+			t.Errorf("%s: wanted it plain", name)
+		}
+	}
+	for name, b := range map[string]*Bitmap{
+		"shaded": pic.Shaded(0.5), "tinted": pic.Tinted(red, 0.5), "tinted by nothing": pic.Tinted(red, 0),
+		"a view of a shaded one": pic.Shaded(1).Sub(1, 1, 2, 2), "mirrored and tinted": pic.Mirrored().Tinted(blue, 1),
+	} {
+		if b.Plain() {
+			t.Errorf("%s: wanted it not plain", name)
+		}
+	}
+}
+
 func TestAViewIsDrawnAsShadeAndMixSayForEachPixel(t *testing.T) {
 	shades, tints, parts := looks()
 	places := [][4]int{{0, 0, 4, 3}, {1, 1, 8, 6}, {-2, -1, 2, 2}, {3, 2, 3, 5}, {0, 0, 1, 1}, {2, 4, 9, 4}}
