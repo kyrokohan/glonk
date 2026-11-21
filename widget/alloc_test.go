@@ -21,6 +21,10 @@ func TestDrawingAllocatesNothing(t *testing.T) {
 	pointer.MouseDown(engine.MouseLeft)
 	pointer.Wheel(0, 1)
 	mouse := pointer.Input()
+	field := TextField{Text: "a name that runs past the field", Cursor: 7, Style: engine.Cell{Background: engine.Palette(4)}}
+	moving := engine.NewKeyboard()
+	moving.Press(engine.KeyLeft, engine.KeyRight, engine.KeyHome, engine.KeyEnd) // moves the cursor, edits nothing
+	keys := moving.Input()
 
 	draws := map[string]func(){
 		"label":       func() { label.Draw(fb, 2, 1, 30) },
@@ -29,6 +33,8 @@ func TestDrawingAllocatesNothing(t *testing.T) {
 		"menu draw":   func() { menu.Draw(fb, 2, 3, 30, 5) },
 		"menu update": func() { menu.Update(in) },
 		"menu mouse":  func() { menu.Draw(fb, 2, 3, 30, 5); menu.Update(mouse) },
+		"field draw":  func() { field.Draw(fb, 2, 8, 12) },
+		"field keys":  func() { field.Update(keys) },
 	}
 	for name, draw := range draws {
 		if n := testing.AllocsPerRun(50, draw); n != 0 {

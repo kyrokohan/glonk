@@ -9,7 +9,9 @@ import (
 // It is '?' because U+FFFD is of "ambiguous" width and takes two columns on some terminals.
 const replacement = '?'
 
-// runeWidth says how the terminal treats r, which decides whether it is safe to send:
+// RuneWidth says how the terminal treats r, which decides whether it is safe to send, and
+// whether DrawText shows it as itself: only a character of width 1 is drawn as it is, so a
+// text field keeps those and drops the rest.
 //
 //	-1  not printable: a control (which a terminal would act on), a surrogate, a value
 //	    outside Unicode, or an unassigned code point
@@ -20,7 +22,7 @@ const replacement = '?'
 //
 // Private use characters count as one column: fonts patched for Powerline and Nerd
 // Fonts draw their icons there.
-func runeWidth(r rune) int {
+func RuneWidth(r rune) int {
 	switch {
 	case r < 0x20 || (r >= 0x7f && r < 0xa0):
 		return -1
@@ -46,7 +48,7 @@ func runeWidth(r rune) int {
 func TextWidth(text string) int {
 	n := 0
 	for _, r := range text {
-		if runeWidth(r) != 0 {
+		if RuneWidth(r) != 0 {
 			n++
 		}
 	}
@@ -66,7 +68,7 @@ func safeRune(r rune) rune {
 		return r
 	case r == 0:
 		return ' '
-	case runeWidth(r) == 1:
+	case RuneWidth(r) == 1:
 		return r
 	}
 	return replacement

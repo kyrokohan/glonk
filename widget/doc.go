@@ -1,5 +1,5 @@
 // Package widget draws the pieces of a heads-up display and a menu in screen space: a label,
-// a panel, a bar and a menu.
+// a panel, a bar, a menu and a text field.
 //
 // A widget is a value with exported fields, drawn into an [engine.FrameBuffer] by its Draw
 // method at a position in cells, with the origin at the top left, as for
@@ -21,7 +21,7 @@
 //
 // # Menu
 //
-// A [Menu] is the one widget that reacts to input. Call [Menu.Update] from the game's Update
+// A [Menu] reacts to input, as a [TextField] does. Call [Menu.Update] from the game's Update
 // with its [engine.Input], and [Menu.Draw] from the game's Draw. Up and Down move the
 // selection, wrapping around at the ends, and Enter chooses; Update returns the index of the
 // item chosen. Escape and every other key are left to the game, so a game can open the menu
@@ -33,6 +33,17 @@
 //	choice, chosen := g.menu.Update(in)
 //	if chosen && choice == quitItem {
 //		return engine.ErrQuit
+//	}
+//
+// # Text field
+//
+// A [TextField] is one line to type into. Call [TextField.Update] for the field that has the
+// keyboard, which reports Enter, and [TextField.Draw] from the game's Draw. Typing and pasting go in
+// at the cursor, and the editing keys move and delete a character at a time; only characters one
+// column wide go in, as [engine.RuneWidth] says. Focus between fields is the game's.
+//
+//	if g.name.Update(in) {
+//		g.start(g.name.Text)
 //	}
 //
 // # Text

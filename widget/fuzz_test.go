@@ -5,6 +5,7 @@ import (
 	"math"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"glonk.dev/engine"
 )
@@ -167,6 +168,73 @@ func FuzzMenu(f *testing.F) {
 			t.Fatalf("pointer: wanted a click at %d, %d off the items of a menu at %s to choose nothing, got %d", mx, my, where, choice)
 		case chosen && choice != m.Selected, !chosen && choice != -1:
 			t.Fatalf("pointer: wanted the choice to be the selected item, or -1, got (%d, %v) with Selected %d", choice, chosen, m.Selected)
+		}
+	})
+}
+
+// FuzzTextField runs a field on any text, cursor, most length, typing, paste and keys, and draws it
+// anywhere. The cursor must stay within the text, what goes in must be one column wide, a field that
+// starts within its most length must stay within it, Draw must touch nothing outside its row and
+// width, and nothing may panic or run long.
+func FuzzTextField(f *testing.F) {
+	f.Add("hello", 2, 0, "abc", "", uint8(0), 1, 1, 10)
+	f.Add("", 0, 3, "abcdef", "x\ny", uint8(1), 0, 0, 4)
+	f.Add("é中\x00\xff", 9, 2, "中é", "\t\r\n", uint8(63), -2, 1, 3)
+	f.Add("long text in a short field", -5, 0, "", "", uint8(16), 2, 2, 5)
+	f.Add("ab", 1, 1, "z", "", uint8(2), math.MaxInt, math.MaxInt, math.MaxInt)
+	f.Add("ab", 1, 0, "", "", uint8(4), math.MinInt, 1, math.MaxInt)
+	f.Add("0000000\xf20\xa4\xb0\xb2", 9, 2, "0", "0", uint8('{'), -2, 68, 3) // Backspace joins bytes that are not UTF-8
+	f.Add("0\xc50\xad", 2, -8, "0", "", uint8('#'), 1, 1, 87)                // so does Delete, and End must count again
+
+	f.Fuzz(func(t *testing.T, text string, cursor, maxLength int, typed, pasted string, keys uint8, x, y, w int) {
+		field := TextField{Text: text, Cursor: cursor, MaxLength: maxLength}
+		within0 := maxLength <= 0 || utf8.RuneCountInString(text) <= maxLength
+
+		kb := engine.NewKeyboard()
+		if typed != "" {
+			kb.Type(typed)
+		}
+		if pasted != "" {
+			kb.Paste(pasted)
+		}
+		for bit, key := range []engine.Key{engine.KeyBackspace, engine.KeyDelete, engine.KeyLeft, engine.KeyRight, engine.KeyHome, engine.KeyEnd} {
+			if keys&(1<<bit) != 0 {
+				kb.Press(key)
+			}
+		}
+		field.Update(kb.Input())
+
+		n := utf8.RuneCountInString(field.Text)
+		if field.Cursor < 0 || field.Cursor > n {
+			t.Fatalf("wanted the cursor within the %d characters, got %d", n, field.Cursor)
+		}
+		if within0 && maxLength > 0 && n > maxLength {
+			t.Fatalf("wanted at most %d characters, got %d: %q", maxLength, n, field.Text)
+		}
+		// What went in is one column wide: every character the field has that the start did not. Text
+		// that is not UTF-8 is not checked, since deleting a byte of it can join others into a character.
+		before := map[rune]int{}
+		for _, r := range text {
+			before[r]++
+		}
+		for _, r := range field.Text {
+			if !utf8.ValidString(text) {
+				break
+			}
+			if before[r] > 0 {
+				before[r]--
+				continue
+			}
+			if engine.RuneWidth(r) != 1 {
+				t.Fatalf("wanted only one-column characters put in, got %U in %q", r, field.Text)
+			}
+		}
+
+		fb := sentinelFrame(t)
+		field.Draw(fb, x, y, w)
+		untouchedOutside(t, fmt.Sprintf("a field at x=%d y=%d w=%d", x, y, w), fb, func(cx, cy int) bool { return within(cx, x, w) && cy == y })
+		if c := utf8.RuneCountInString(field.Text); c != n {
+			t.Fatalf("wanted Draw to leave the text alone")
 		}
 	})
 }
