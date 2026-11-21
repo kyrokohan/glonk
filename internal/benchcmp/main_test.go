@@ -116,7 +116,9 @@ func TestAnUnchangedTreeIsNotRun(t *testing.T) {
 
 func TestAnUnchangedTreeRunWhenAskedRegressesNothing(t *testing.T) {
 	dir := repo(t)
-	code, out, errs := compareWith(t, config{dir: dir, base: "HEAD", bench: ".", pkgs: "./...", rounds: 3, benchtime: "10ms", threshold: 0.4, identical: true})
+	// The threshold is high, since this checks the logic and not the runner: a busy one once timed
+	// the same work at +50.7% (#145).
+	code, out, errs := compareWith(t, config{dir: dir, base: "HEAD", bench: ".", pkgs: "./...", rounds: 3, benchtime: "10ms", threshold: 2.0, identical: true})
 	if code != 0 || !strings.Contains(out, "1 benchmarks compared: 0 slower, 0 faster, ") || !strings.Contains(out, "; 0 allocate more") || strings.Contains(out, "not run") {
 		t.Errorf("wanted status 0 and one benchmark neither slower nor faster, got %d\n%s\n%s", code, out, errs)
 	}
