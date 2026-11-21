@@ -67,6 +67,13 @@
 // or an [engine.Mix] for every pixel drawn, so a picture that is shaded or tinted takes several
 // times as long to draw as one that is not.
 //
+// # Smaller copies
+//
+// [Bitmap.Halved] gives the picture halved once or more, each pixel the mean of up to four of the
+// one before, kept where at least two of four are drawn. A mesh far away reads the copy that fits,
+// so that its picture does not crawl as it moves. The copies are made from the colors a view
+// shows, the first time they are asked for, and again after Set.
+//
 // # Transparency
 //
 // A pixel of a PNG with an alpha of 128 or more is drawn, as an opaque color, and one with

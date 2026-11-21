@@ -305,6 +305,10 @@ func Plane(width, depth float64) Mesh {
 // sees its Back. On the four sides, the top of a part is up (+y) and it is not mirrored, seen from
 // outside. The Top and the Bottom read as if unfolded from the Front: the Top's part has its bottom
 // edge along the front of the box, and the Bottom's part has its top edge there.
+//
+// A box far away reads smaller copies of the picture (see Material.Texture), in which the parts
+// blur into each other across their edges, so a far die's faces run together; Material.Sharp
+// keeps them apart.
 type BoxParts struct {
 	// Front, Back, Left, Right, Top and Bottom are the parts of the faces toward +z, -z, -x, +x,
 	// +y and -y.
