@@ -179,6 +179,20 @@ func ExampleCamera_Ray() {
 	// 6.00 ahead, 6.18 deep
 }
 
+// A camera that is told what to look at, one that follows a thing, watches a door or circles a
+// model, is pointed at it with LookAt, and Project then puts the thing in the middle.
+func ExampleCamera_LookAt() {
+	cam := mesh.Camera{Position: geometry.Vector3{X: 4, Y: 3, Z: -4}}
+	cam.LookAt(geometry.Vector3{}) // the origin
+
+	fmt.Printf("yaw %.2f, pitch %.2f\n", cam.Yaw, cam.Pitch)
+	x, y, ok := cam.Project(geometry.Vector3{}, 80, 24)
+	fmt.Printf("%.1f %.1f %v\n", x, y, ok)
+	// Output:
+	// yaw -0.79, pitch -0.49
+	// 40.0 12.0 true
+}
+
 // A fog fades what is deeper toward its color: nothing before Start, the fog's color from End,
 // and a straight line between. A camera with a Fog fades every shaded mesh it draws by it, and a
 // program that draws things of its own calls Apply to fade them in step.

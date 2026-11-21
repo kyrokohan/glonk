@@ -607,6 +607,76 @@ func TestRaysAreTheRayOfEveryCellAndPixel(t *testing.T) {
 	}
 }
 
+// LookAt turns the camera to any target round it, behind it, along each axis and near the
+// vertical: Look is then the way to the target, Project puts it in the middle of the frame, and
+// the pitch is within a quarter turn.
+func TestLookAtPutsTheTargetInTheMiddle(t *testing.T) {
+	var dirs []geometry.Vector3
+	for yi := range 16 {
+		for _, pitch := range []float64{-1.55, -1.2, -0.6, -0.1, 0, 0.1, 0.6, 1.2, 1.55, math.Pi/2 - 1e-9} {
+			yaw := float64(yi) * math.Pi / 8
+			dirs = append(dirs, geometry.Vector3{X: math.Cos(pitch) * math.Sin(yaw), Y: math.Sin(pitch), Z: math.Cos(pitch) * math.Cos(yaw)})
+		}
+	}
+	dirs = append(dirs, geometry.Vector3{X: 1}, geometry.Vector3{X: -1}, geometry.Vector3{Z: 1}, geometry.Vector3{Z: -1}, geometry.Vector3{X: 1, Y: 1, Z: -1})
+
+	for _, pos := range []geometry.Vector3{{}, {X: 1, Y: 2, Z: -3}, {X: -40, Y: 0.5, Z: 120}} {
+		for _, d := range dirs {
+			target := pos.Add(d.Normalize().Scale(5))
+			cam := Camera{Position: pos, Yaw: 2.5, Pitch: -0.3}
+			cam.LookAt(target)
+
+			if !(cam.Pitch >= -math.Pi/2 && cam.Pitch <= math.Pi/2) {
+				t.Fatalf("from %v to %v: wanted a pitch within a quarter turn, got %v", pos, target, cam.Pitch)
+			}
+			if want := target.Sub(pos).Normalize(); !vecNear(cam.Look(), want, 1e-12) {
+				t.Fatalf("from %v to %v: wanted Look %v, got %v", pos, target, want, cam.Look())
+			}
+			x, y, ok := cam.Project(target, 80, 24)
+			if !ok || math.Abs(x-40) > 1e-6 || math.Abs(y-12) > 1e-6 {
+				t.Fatalf("from %v to %v: wanted the target in the middle, at (40, 12), got (%v, %v) %v", pos, target, x, y, ok)
+			}
+		}
+	}
+}
+
+// A target straight above or below has no direction across, so the yaw is kept; a target at the
+// camera, or one that is not a number, changes nothing.
+func TestLookAtWithNothingToTurnTo(t *testing.T) {
+	pos := geometry.Vector3{X: 1, Y: 2, Z: 3}
+	for _, tt := range []struct {
+		target geometry.Vector3
+		pitch  float64
+	}{
+		{geometry.Vector3{X: 1, Y: 9, Z: 3}, math.Pi / 2},
+		{geometry.Vector3{X: 1, Y: -9, Z: 3}, -math.Pi / 2},
+	} {
+		cam := Camera{Position: pos, Yaw: 0.7, Pitch: 0.2}
+		cam.LookAt(tt.target)
+		if cam.Yaw != 0.7 || cam.Pitch != tt.pitch {
+			t.Errorf("straight at %v: wanted yaw 0.7 kept and pitch %v, got %v and %v", tt.target, tt.pitch, cam.Yaw, cam.Pitch)
+		}
+	}
+
+	nan, inf := math.NaN(), math.Inf(1)
+	for _, tt := range []struct {
+		pos, target geometry.Vector3
+	}{
+		{pos, pos},
+		{pos, geometry.Vector3{X: nan, Y: 2, Z: 3}},
+		{pos, geometry.Vector3{X: 1, Y: inf, Z: 3}},
+		{pos, geometry.Vector3{X: 1, Y: 2, Z: -inf}},
+		{geometry.Vector3{X: nan}, geometry.Vector3{X: 4}},
+		{geometry.Vector3{Z: inf}, geometry.Vector3{Z: inf}},
+	} {
+		cam := Camera{Position: tt.pos, Yaw: 0.7, Pitch: 0.2}
+		cam.LookAt(tt.target)
+		if cam.Yaw != 0.7 || cam.Pitch != 0.2 {
+			t.Errorf("from %v at %v: wanted the camera left as it was, got yaw %v and pitch %v", tt.pos, tt.target, cam.Yaw, cam.Pitch)
+		}
+	}
+}
+
 func TestCameraUp(t *testing.T) {
 	if got := (Camera{}).Up(); !vecNear(got, geometry.Vector3{Y: 1}, 1e-9) {
 		t.Errorf("wanted straight up for a camera at rest, got %v", got)
