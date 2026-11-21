@@ -178,7 +178,8 @@ func (b *Bitmap) Height() int {
 }
 
 // At returns the color of pixel (x, y), counted from the top left, or the zero Color, which
-// is none, for a pixel that is see-through or outside the picture.
+// is none, for a pixel that is see-through or outside the picture. It is the picture's own color,
+// also in a Shaded or Tinted view; Shown is the color the view draws it in.
 func (b *Bitmap) At(x, y int) engine.Color {
 	if b == nil || x < 0 || x >= b.w || y < 0 || y >= b.h {
 		return engine.Color{}
@@ -187,6 +188,25 @@ func (b *Bitmap) At(x, y int) engine.Color {
 		x = b.w - 1 - x
 	}
 	return b.pixels[y*b.stride+x]
+}
+
+// Shown returns the color pixel (x, y) is drawn in: At's color, made darker and mixed toward a
+// color as a Shaded or Tinted view draws it, the same color Draw puts on a Canvas. A see-through
+// pixel, or one outside the picture, is the zero Color, as for At, and a picture that is not drawn
+// darker or tinted shows the colors At gives. A mesh reads its Material.Texture with it.
+func (b *Bitmap) Shown(x, y int) engine.Color {
+	c := b.At(x, y)
+	if c.IsDefault() || !b.look.active() {
+		return c
+	}
+	return b.look.apply(c)
+}
+
+// Plain reports whether the picture is drawn in its own colors, so that Shown gives what At
+// gives: it is not a Shaded or Tinted view. A program that reads many pixels can ask once and
+// read a plain picture with At, which costs less.
+func (b *Bitmap) Plain() bool {
+	return b == nil || !b.look.active()
 }
 
 // Set gives pixel (x, y), counted from the top left, the color c. The zero Color makes the

@@ -224,6 +224,7 @@ func (m *Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(
 	// tests for the picture and for the cut, each its own and each made for every face, cost it 3 to 6%.
 	special := pictured || vertexColors
 	tri.tinted, tri.tex = false, nil
+	tri.shown = !m.Material.Texture.Plain() // asked once for the mesh, so a plain picture costs what it did
 	tri.opacity = m.Material.seeThrough()
 	var corner [3]geometry.Vector3 // the colors of the corners of the face being drawn, if it has any
 	var faceUV [3]geometry.Vector2 // the places of the picture its corners are pinned to, if it has one

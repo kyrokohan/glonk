@@ -61,7 +61,9 @@
 // A view has one brightness and one tint, and setting again replaces it. The shade comes first
 // and the tint is mixed over the shaded color, so a flash is not darkened by the room unless it
 // is shaded too. [Bitmap.At] and [Bitmap.Set] still deal in the picture's own colors; only
-// drawing changes them, and a pixel drawn this way is an exact RGB color. Each is a [engine.Shade]
+// drawing changes them, and a pixel drawn this way is an exact RGB color. [Bitmap.Shown] gives a
+// pixel as the view draws it, and a mesh that has a view as its picture draws it that way, as the
+// color of its surface, under the mesh's own light. Each is a [engine.Shade]
 // or an [engine.Mix] for every pixel drawn, so a picture that is shaded or tinted takes several
 // times as long to draw as one that is not.
 //
