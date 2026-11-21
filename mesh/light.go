@@ -312,6 +312,10 @@ func (m *Mesh) eachShadedTriangle(cam Camera, lights []Light, w, h int, fn func(
 	special := pictured || vertexColors
 	tri.tinted, tri.tex = false, nil
 	tri.shown = !m.Material.Texture.Plain() // asked once for the mesh, so a plain picture costs what it did
+	// A picture of more than one pixel can be read from smaller copies where it is drawn small.
+	tri.texW, tri.texH = float64(m.Material.Texture.Width()), float64(m.Material.Texture.Height())
+	tri.mip = pictured && !m.Material.Sharp && (tri.texW > 1 || tri.texH > 1)
+	tri.pic, tri.picShown = m.Material.Texture, tri.shown
 	tri.opacity = m.Material.seeThrough()
 	var corner [3]geometry.Vector3 // the colors of the corners of the face being drawn, if it has any
 	var faceUV [3]geometry.Vector2 // the places of the picture its corners are pinned to, if it has one

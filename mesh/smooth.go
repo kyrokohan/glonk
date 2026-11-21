@@ -139,6 +139,96 @@ type shadedTriangle struct {
 	// They are last, so that the fields every mesh uses keep their places.
 	colored bool
 	light   geometry.Vector3
+
+	// mip is set when the face's picture is read from the copy that fits each cell or pixel (see
+	// bitmap.Bitmap.Halved). sx and sy are how 1/z changes across the screen and down it, per cell,
+	// ux, uy, vx and vy how u/z and v/z do, and texW and texH the picture's size in pixels.
+	mip                    bool
+	sx, sy, ux, uy, vx, vy float64
+	texW, texH             float64
+
+	// pic and picShown are the mesh's picture and whether it has a look, which prepareMip puts back
+	// in tex and shown before it chooses a copy for the triangle.
+	pic      *bitmap.Bitmap
+	picShown bool
+
+	// mipEach is set by prepareMip when the copy to read changes across the triangle, which is then
+	// chosen for each cell or pixel.
+	mipEach bool
+	rowStep float64
+
+	// lastLevel and lastTex are the copy the cell before read, for a triangle whose copy is chosen
+	// for each cell or pixel: the next one mostly reads the same.
+	lastLevel int
+	lastTex   *bitmap.Bitmap
+}
+
+// prepareMip readies a triangle with a picture for the fill that draws it, whose rows are rowStep
+// cells tall: it works out the gradients, and the copy each corner would read. Where they agree,
+// the whole triangle reads that copy, put in tex, and no cell is asked about it: a face near the
+// camera reads the picture itself, and a face square to it reads one copy. Only where they differ,
+// on a face that goes away into the distance, is the copy chosen for each cell or pixel.
+func (t *shadedTriangle) prepareMip(rowStep float64) {
+	t.mipEach, t.rowStep, t.lastLevel, t.lastTex = false, rowStep, 0, nil
+	if !t.mip || t.tex == nil {
+		return
+	}
+	t.tex, t.shown = t.pic, t.picShown // a face the near plane cuts in two is filled twice
+	t.mipGradients()
+	lo, hi := math.MaxInt, 0
+	for i := range 3 {
+		var b [3]float64
+		b[i] = 1
+		level := t.mipLevel(b[0], b[1], b[2], t.uv[i], rowStep)
+		lo, hi = min(lo, level), max(hi, level)
+	}
+	switch {
+	case lo != hi:
+		t.mipEach = true
+	case lo > 0:
+		t.tex, t.shown = t.pic.Halved(lo), false // a copy is made in the colors the picture shows
+	}
+}
+
+// mipGradients works out how 1/z, u/z and v/z change across the screen and down it, per cell, from
+// the triangle's corners: they change at an even pace on the screen, so three corners give them.
+// Every product is rounded on its own, so that arm64, which would fuse it with a sum, chooses the
+// same copy as amd64.
+func (t *shadedTriangle) mipGradients() {
+	c := &t.corners
+	e1x, e1y := c[1].x-c[0].x, c[1].y-c[0].y
+	e2x, e2y := c[2].x-c[0].x, c[2].y-c[0].y
+	den := float64(e1x*e2y) - float64(e2x*e1y)
+	grad := func(f0, f1, f2 float64) (fx, fy float64) {
+		d1, d2 := f1-f0, f2-f0
+		return (float64(d1*e2y) - float64(d2*e1y)) / den, (float64(d2*e1x) - float64(d1*e2x)) / den
+	}
+	s0, s1, s2 := 1/c[0].z, 1/c[1].z, 1/c[2].z
+	t.sx, t.sy = grad(s0, s1, s2)
+	t.ux, t.uy = grad(float64(t.uv[0].X*s0), float64(t.uv[1].X*s1), float64(t.uv[2].X*s2))
+	t.vx, t.vy = grad(float64(t.uv[0].Y*s0), float64(t.uv[1].Y*s1), float64(t.uv[2].Y*s2))
+}
+
+// mipLevel is how many times to halve the picture for the cell or pixel at weights b0, b1 and b2,
+// whose place in the picture is uv: the floor of log2 of how many of its pixels one step across or
+// down the screen passes over, the longer of the two, and 0 below 2. A step down is rowStep cells:
+// 1 in cells, and a half in pixels, which are half a cell tall.
+func (t *shadedTriangle) mipLevel(b0, b1, b2 float64, uv geometry.Vector2, rowStep float64) int {
+	z := t.depthAt(b0, b1, b2)
+	// d(u/z) = du/z - u dz/z², so du = (d(u/z) - u d(1/z)) * z.
+	dux := (t.ux - float64(uv.X*t.sx)) * z
+	dvx := (t.vx - float64(uv.Y*t.sx)) * z
+	duy := float64((t.uy-float64(uv.X*t.sy))*z) * rowStep
+	dvy := float64((t.vy-float64(uv.Y*t.sy))*z) * rowStep
+	ax, ay := float64(dux*t.texW), float64(dvx*t.texH)
+	bx, by := float64(duy*t.texW), float64(dvy*t.texH)
+	m := max(float64(ax*ax)+float64(ay*ay), float64(bx*bx)+float64(by*by))
+	if !(m >= 4) { // under 2 pixels a step, and NaN
+		return 0
+	}
+	// The floor of log2 of m is the exponent of the float, so that of its root is half of it,
+	// rounded down. Infinity is a large level, which Halved holds to the smallest copy.
+	return int((math.Float64bits(m)>>52)&0x7ff-1023) >> 1
 }
 
 // brightnessAt is the brightness of a smooth triangle at the point with corner
@@ -210,7 +300,16 @@ func (t *shadedTriangle) colorAt(b0, b1, b2 float64) (engine.Color, bool) {
 		return engine.RGB(channel(c.X), channel(c.Y), channel(c.Z)), true
 	}
 	uv := t.uv[0].Scale(b0).Add(t.uv[1].Scale(b1)).Add(t.uv[2].Scale(b2))
-	surface := texel(t.tex, uv.X, uv.Y, t.shown)
+	tex, shown := t.tex, t.shown
+	if t.mipEach {
+		if level := t.mipLevel(b0, b1, b2, uv, t.rowStep); level > 0 {
+			if level != t.lastLevel {
+				t.lastLevel, t.lastTex = level, tex.Halved(level)
+			}
+			tex, shown = t.lastTex, false
+		}
+	}
+	surface := texel(tex, uv.X, uv.Y, shown)
 	if surface.IsDefault() {
 		return engine.Color{}, false
 	}
@@ -310,6 +409,7 @@ func cornerNormal(vertex, face geometry.Vector3, front bool) geometry.Vector3 {
 // and its colors are mixed with the face's, lit by the brightness and faded in fog first, and the depth
 // is left.
 func fillTinted(fb *engine.FrameBuffer, t *shadedTriangle, ramp []rune, fog *Fog) {
+	t.prepareMip(1)
 	c := &t.corners
 	fb.FillTriangleOver(c[0].x, c[0].y, c[0].z, c[1].x, c[1].y, c[1].z, c[2].x, c[2].y, c[2].z, func(b0, b1, b2 float64, behind engine.Cell) (engine.Cell, engine.Fill) {
 		color, ok := t.colorAt(b0, b1, b2)
@@ -339,6 +439,7 @@ func fillTinted(fb *engine.FrameBuffer, t *shadedTriangle, ramp []rune, fog *Fog
 // fillTintedPixels is fillTinted for a Canvas, where brightness is a shade of the color, and
 // the shaded color fades in fog.
 func fillTintedPixels(c *engine.Canvas, t *shadedTriangle, fog *Fog) {
+	t.prepareMip(0.5)
 	p := &t.corners
 	c.FillTriangleOver(p[0].x, 2*p[0].y, p[0].z, p[1].x, 2*p[1].y, p[1].z, p[2].x, 2*p[2].y, p[2].z, func(b0, b1, b2 float64, behind engine.Color) (engine.Color, engine.Fill) {
 		color, ok := t.colorAt(b0, b1, b2)
@@ -366,6 +467,7 @@ func fillTintedPixels(c *engine.Canvas, t *shadedTriangle, fog *Fog) {
 // channel and mixed over what is behind. It is a function of its own, so that the cells of a mesh
 // under white light take fillTinted as before, at the same cost.
 func fillColored(fb *engine.FrameBuffer, t *shadedTriangle, ramp []rune, fog *Fog) {
+	t.prepareMip(1)
 	c := &t.corners
 	fb.FillTriangleOver(c[0].x, c[0].y, c[0].z, c[1].x, c[1].y, c[1].z, c[2].x, c[2].y, c[2].z, func(b0, b1, b2 float64, behind engine.Cell) (engine.Cell, engine.Fill) {
 		color, ok := t.colorAt(b0, b1, b2)
@@ -393,6 +495,7 @@ func fillColored(fb *engine.FrameBuffer, t *shadedTriangle, ramp []rune, fog *Fo
 // fillColoredPixels is fillTintedPixels for a triangle under a colored light: each channel of the
 // color is shaded by its own brightness, before fog.
 func fillColoredPixels(c *engine.Canvas, t *shadedTriangle, fog *Fog) {
+	t.prepareMip(0.5)
 	p := &t.corners
 	c.FillTriangleOver(p[0].x, 2*p[0].y, p[0].z, p[1].x, 2*p[1].y, p[1].z, p[2].x, 2*p[2].y, p[2].z, func(b0, b1, b2 float64, behind engine.Color) (engine.Color, engine.Fill) {
 		color, ok := t.colorAt(b0, b1, b2)

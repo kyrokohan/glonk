@@ -26,7 +26,21 @@ type Material struct {
 	// as dark as any white surface in a dark room. Drawing reads the
 	// picture and does not copy it, so it is not to be changed by another goroutine while
 	// the mesh is drawn.
+	//
+	// Where a face is drawn smaller than its picture, far away or at a slant, each cell or pixel
+	// reads a smaller copy of the picture (Bitmap.Halved) that fits it: the one whose pixels are
+	// about one to a cell or pixel there. So a far wall does not crawl as it moves, and a line one
+	// pixel wide does not break into dots. The copy is chosen for each cell or pixel where it
+	// changes across a face, as on a floor going into the distance, and once for the face where it
+	// does not. A picture of several parts, an atlas such as BoxFaces takes, blurs across the edges
+	// between them in the smaller copies, so a far die's faces run into each other; a Sub view of
+	// one part, as the picture of its own mesh, does not. Sharp turns the copies off.
 	Texture *bitmap.Bitmap
+
+	// Sharp reads the picture itself at every distance, one pixel of it for each cell or pixel
+	// drawn, as glonk did before it had smaller copies: crisp for pixel art, and exact, but a far
+	// face crawls as it moves. The zero Material, false, reads the copy that fits (see Texture).
+	Sharp bool
 
 	// Opacity is the part of the surface's color that shows, from 0 to 1, for a mesh that can be
 	// seen through: glass, water, smoke, a ghost. Each cell or pixel of one of its faces is mixed

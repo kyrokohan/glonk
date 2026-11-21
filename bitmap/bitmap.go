@@ -8,6 +8,7 @@ import (
 	"io"
 	"math"
 	"math/bits"
+	"sync/atomic"
 
 	"glonk.dev/engine"
 	"glonk.dev/internal/imgdata"
@@ -40,6 +41,20 @@ type Bitmap struct {
 	mirror bool           // the columns run from right to left: column x is column w-1-x of pixels
 	look   look           // how drawing changes the colors, which At and Set do not see
 	pixels []engine.Color // row by row from the top left of the view; the zero Color is a pixel that is not drawn
+
+	// src is shared by a picture and every view of it: Set counts its changes there, so that a
+	// view's halved copies are made again. It is nil for an empty picture and for a halved copy,
+	// which is shared and which Set does not change.
+	src *source
+
+	// halved is this view's copies from Halved, made the first time they are asked for and again
+	// after a change; see Halved. A view has its own, since it shows its own colors.
+	halved atomic.Pointer[halvedCopies]
+}
+
+// source is what a picture and its views share.
+type source struct {
+	changes uint64 // how many times Set has changed a pixel
 }
 
 // look is how a view is drawn: darker, and then mixed toward a color. Its zero value draws the
@@ -130,7 +145,7 @@ func New(w, h int) *Bitmap {
 	if w <= 0 || h <= 0 || h > defaultMaxPixels/w {
 		return &Bitmap{}
 	}
-	return &Bitmap{w: w, h: h, stride: w, pixels: make([]engine.Color, w*h)}
+	return &Bitmap{w: w, h: h, stride: w, pixels: make([]engine.Color, w*h), src: &source{}}
 }
 
 // FromImage returns a copy of img as a Bitmap, with the rule Decode has for alpha: a pixel
@@ -149,7 +164,7 @@ func FromImage(img image.Image) *Bitmap {
 	if b.Empty() {
 		return &Bitmap{}
 	}
-	bm := &Bitmap{w: b.Dx(), h: b.Dy(), stride: b.Dx(), pixels: make([]engine.Color, b.Dx()*b.Dy())}
+	bm := &Bitmap{w: b.Dx(), h: b.Dy(), stride: b.Dx(), pixels: make([]engine.Color, b.Dx()*b.Dy()), src: &source{}}
 	for y := range bm.h {
 		for x := range bm.w {
 			c := color.NRGBAModel.Convert(img.At(b.Min.X+x, b.Min.Y+y)).(color.NRGBA)
@@ -217,10 +232,14 @@ func (b *Bitmap) Set(x, y int, c engine.Color) {
 	if b == nil || x < 0 || x >= b.w || y < 0 || y >= b.h {
 		return
 	}
+	if b.src == nil {
+		return // a halved copy is shared, and made from the picture: see Halved
+	}
 	if b.mirror {
 		x = b.w - 1 - x
 	}
 	b.pixels[y*b.stride+x] = c
+	b.src.changes++
 }
 
 // Sub returns the part of the picture that is w pixels wide and h tall with its top left
@@ -247,7 +266,7 @@ func (b *Bitmap) Sub(x, y, w, h int) *Bitmap {
 	if b.mirror {
 		col = b.w - x1
 	}
-	return &Bitmap{w: x1 - x0, h: y1 - y0, stride: b.stride, mirror: b.mirror, look: b.look, pixels: b.pixels[y0*b.stride+col:]}
+	return &Bitmap{w: x1 - x0, h: y1 - y0, stride: b.stride, mirror: b.mirror, look: b.look, pixels: b.pixels[y0*b.stride+col:], src: b.src}
 }
 
 // Mirrored returns a view of the picture with its columns reversed, left to right, for a thing
@@ -262,9 +281,9 @@ func (b *Bitmap) Mirrored() *Bitmap {
 	if b == nil {
 		return &Bitmap{}
 	}
-	v := *b
+	v := b.view()
 	v.mirror = !b.mirror
-	return &v
+	return v
 }
 
 // Shaded returns a view of the picture that is drawn darker: each pixel of it is
@@ -282,9 +301,9 @@ func (b *Bitmap) Shaded(brightness float64) *Bitmap {
 	if b == nil {
 		return &Bitmap{}
 	}
-	v := *b
+	v := b.view()
 	v.look.shaded, v.look.brightness = true, brightness
-	return &v
+	return v
 }
 
 // Tinted returns a view of the picture that is drawn mixed toward a color: each pixel of it is
@@ -304,9 +323,15 @@ func (b *Bitmap) Tinted(color engine.Color, part float64) *Bitmap {
 	if b == nil {
 		return &Bitmap{}
 	}
-	v := *b
+	v := b.view()
 	v.look.tinted, v.look.tint, v.look.part = true, color, part
-	return &v
+	return v
+}
+
+// view returns a new view of the same pixels, with the same size, look and source, and copies of
+// its own, which it makes the first time they are asked for.
+func (b *Bitmap) view() *Bitmap {
+	return &Bitmap{w: b.w, h: b.h, stride: b.stride, mirror: b.mirror, look: b.look, pixels: b.pixels, src: b.src}
 }
 
 // drawLooked is Draw, DrawScaled and DrawScaledDepth for a view that is shaded or tinted, which

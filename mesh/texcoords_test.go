@@ -37,8 +37,8 @@ func texturedTriangle(corners [3]geometry.Vector2) Mesh {
 		Vertices:      []geometry.Vector3{{X: -2, Y: -1.5, Z: 5}, {X: 2.5, Y: -1, Z: 9}, {X: 0, Y: 2.2, Z: 6}},
 		Faces:         [][3]int{{0, 1, 2}},
 		FaceTexCoords: [][3]geometry.Vector2{corners},
-		Material:      Material{Texture: uniquePicture()},
-		DoubleSided:   true, // so that the winding does not matter
+		Material:      Material{Texture: uniquePicture(), Sharp: true}, // every cell reads the picture itself
+		DoubleSided:   true,                                            // so that the winding does not matter
 	}
 }
 
