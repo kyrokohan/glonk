@@ -4,6 +4,10 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-22
+
+On top of 0.15.0 this release asks the terminal what it can do before a game starts, and runs a game in a web page from any repository. Nothing was removed, renamed or changed. The module needs the same versions of `golang.org/x/sys` and `golang.org/x/term` as 0.15.0.
+
 ### Added
 
 - `engine.Probe(cfg)` says what the terminal Run would take over can do, without starting a game: a `Terminal` with `KeyReleases` (the kitty keyboard protocol, so `Input.Exact` will be true and several keys can be held), `TrueColor` (what `ColorsAuto` would choose), `Width` and `Height`, and `IsTerminal` (#149). `Run` found these out as it started and kept them to itself apart from `Input.Exact`, so a launcher or a game's first screen that wanted to tell the player, before the game began, that this terminal holds one key at a time had to start a game loop or guess from the environment. It reads `Config.Input` and `Config.Output` only. Where either is not a terminal it says so and asks nothing; otherwise it puts the terminal in raw mode for the question, at most a quarter second, writes the question and nothing else, and puts it back as it found it. A key pressed meanwhile is dropped, as a terminal cannot be given input back. `examples/input` prints the answer before it starts.
@@ -343,7 +347,8 @@ The first release. The API is pre-1.0 and may still change. The README lists the
 - Three example programs (`bounce2d`, `cube3d` and a model `viewer`), runnable examples in the package documentation, fuzz tests for the parsers, rasterizers and clipping, and a test that keeps the documentation complete.
 - Continuous integration (format, vet and race tests on Linux and macOS for Go 1.26 and 1.27, cross-compilation, 32-bit tests), Dependabot, a security policy and contributing notes.
 
-[Unreleased]: https://github.com/kyrokohan/glonk/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/kyrokohan/glonk/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/kyrokohan/glonk/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/kyrokohan/glonk/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/kyrokohan/glonk/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/kyrokohan/glonk/compare/v0.12.0...v0.13.0
