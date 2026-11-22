@@ -347,20 +347,20 @@ The first release. The API is pre-1.0 and may still change. The README lists the
 - Three example programs (`bounce2d`, `cube3d` and a model `viewer`), runnable examples in the package documentation, fuzz tests for the parsers, rasterizers and clipping, and a test that keeps the documentation complete.
 - Continuous integration (format, vet and race tests on Linux and macOS for Go 1.26 and 1.27, cross-compilation, 32-bit tests), Dependabot, a security policy and contributing notes.
 
-[Unreleased]: https://github.com/kyrokohan/glonk/compare/v0.16.0...HEAD
-[0.16.0]: https://github.com/kyrokohan/glonk/compare/v0.15.0...v0.16.0
-[0.15.0]: https://github.com/kyrokohan/glonk/compare/v0.14.0...v0.15.0
-[0.14.0]: https://github.com/kyrokohan/glonk/compare/v0.13.0...v0.14.0
-[0.13.0]: https://github.com/kyrokohan/glonk/compare/v0.12.0...v0.13.0
-[0.12.0]: https://github.com/kyrokohan/glonk/compare/v0.11.0...v0.12.0
-[0.11.0]: https://github.com/kyrokohan/glonk/compare/v0.10.0...v0.11.0
-[0.10.0]: https://github.com/kyrokohan/glonk/compare/v0.9.0...v0.10.0
-[0.9.0]: https://github.com/kyrokohan/glonk/compare/v0.8.0...v0.9.0
-[0.8.0]: https://github.com/kyrokohan/glonk/compare/v0.7.0...v0.8.0
-[0.7.0]: https://github.com/kyrokohan/glonk/compare/v0.6.0...v0.7.0
-[0.6.0]: https://github.com/kyrokohan/glonk/compare/v0.5.0...v0.6.0
-[0.5.0]: https://github.com/kyrokohan/glonk/compare/v0.4.0...v0.5.0
-[0.4.0]: https://github.com/kyrokohan/glonk/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/kyrokohan/glonk/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/kyrokohan/glonk/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/kyrokohan/glonk/releases/tag/v0.1.0
+[Unreleased]: https://github.com/usrgames/glonk/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/usrgames/glonk/compare/v0.15.0...v0.16.0
+[0.15.0]: https://github.com/usrgames/glonk/compare/v0.14.0...v0.15.0
+[0.14.0]: https://github.com/usrgames/glonk/compare/v0.13.0...v0.14.0
+[0.13.0]: https://github.com/usrgames/glonk/compare/v0.12.0...v0.13.0
+[0.12.0]: https://github.com/usrgames/glonk/compare/v0.11.0...v0.12.0
+[0.11.0]: https://github.com/usrgames/glonk/compare/v0.10.0...v0.11.0
+[0.10.0]: https://github.com/usrgames/glonk/compare/v0.9.0...v0.10.0
+[0.9.0]: https://github.com/usrgames/glonk/compare/v0.8.0...v0.9.0
+[0.8.0]: https://github.com/usrgames/glonk/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/usrgames/glonk/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/usrgames/glonk/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/usrgames/glonk/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/usrgames/glonk/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/usrgames/glonk/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/usrgames/glonk/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/usrgames/glonk/releases/tag/v0.1.0

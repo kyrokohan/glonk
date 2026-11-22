@@ -676,7 +676,7 @@ Built to work in most terminals. The basics need only the alternate screen, curs
 
 ## Planned
 
-What is planned is in [GitHub issues](https://github.com/kyrokohan/glonk/issues), grouped by [milestone](https://github.com/kyrokohan/glonk/milestones) for the release it is aimed at. Ideas, not promises.
+What is planned is in [GitHub issues](https://github.com/usrgames/glonk/issues), grouped by [milestone](https://github.com/usrgames/glonk/milestones) for the release it is aimed at. Ideas, not promises.
 
 ## Development
 
