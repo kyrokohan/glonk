@@ -207,16 +207,18 @@ func TestTheLinkPreviewNamesAFileOfTheSite(t *testing.T) {
 // The site was without a script until the game of the cover (#104). The rule since: only the
 // landing page loads one, it is /play.js, a file of the site, and nothing is written inside the
 // page, so that what runs is one file anyone can read. The files the script loads are files of
-// the site too, or the ones make play writes before each deploy, which are not committed.
+// the site too, or the ones make play writes before each deploy, which are not committed. Since
+// #148 one of those is glonk.js, the part of the game any site can copy from the web package:
+// play.js loads it as it loads xterm.js, so the page still has one script tag.
 func TestTheOneScriptIsTheGame(t *testing.T) {
 	const tag = `<script src="/play.js" defer></script>`
 	if index := read(t, "site", "index.html"); strings.Count(index, tag) != 1 {
 		t.Errorf("index.html: wanted its one script to be %s", tag)
 	}
 
-	built := map[string]bool{"/media/play/cube3d.wasm.gz": true, "/media/play/wasm_exec.js": true}
+	built := map[string]bool{"/media/play/cube3d.wasm.gz": true, "/media/play/wasm_exec.js": true, "/media/play/glonk.js": true}
 	makefile := read(t, "Makefile")
-	for _, want := range []string{"-o $(PLAY)/cube3d.wasm ", "gzip -9nf $(PLAY)/cube3d.wasm\n", "lib/wasm/wasm_exec.js\" $(PLAY)/"} {
+	for _, want := range []string{"-o $(PLAY)/cube3d.wasm ", "gzip -9nf $(PLAY)/cube3d.wasm\n", "lib/wasm/wasm_exec.js\" $(PLAY)/", "cp web/glonk.js $(PLAY)/\n"} {
 		if !strings.Contains(makefile, want) {
 			t.Errorf("Makefile: wanted make play to write what the script loads, with %q", want)
 		}
