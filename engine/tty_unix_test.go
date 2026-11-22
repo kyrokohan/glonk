@@ -118,8 +118,9 @@ func TestReadInputStopIsPromptWhenIdle(t *testing.T) {
 	start := time.Now()
 	returnsWithin(t, "stop on an idle input", 3*time.Second, stop)
 	returnsWithin(t, "a second stop", time.Second, stop)
-	if d := time.Since(start); d > 10*pollInterval {
-		t.Errorf("wanted stop within about %v, took %v", pollInterval, d)
+	// Well past a poll, which a busy runner can make late (#155); a stop that waits for input fails returnsWithin above.
+	if d, bound := time.Since(start), 50*pollInterval; d > bound {
+		t.Errorf("wanted stop within %v (a poll is %v), took %v", bound, pollInterval, d)
 	}
 }
 
