@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -282,5 +283,23 @@ func TestTheMouseLineInPixels(t *testing.T) {
 	kb.MouseMovePixels(40, 50)
 	if got := frame(t, m, kb); !strings.Contains(got, "mouse: cell 2,1,") || !strings.Contains(got, "canvas pixel: 2.5,3.0, fine") {
 		t.Errorf("wanted the pixel and fine on the mouse line, got\n%s", got)
+	}
+}
+
+// The line printed before the monitor starts says what Probe found, or that there is no terminal.
+func TestProbeLine(t *testing.T) {
+	for _, tt := range []struct {
+		t    engine.Terminal
+		err  error
+		want string
+	}{
+		{engine.Terminal{IsTerminal: true, Width: 107, Height: 57, KeyReleases: true, TrueColor: true}, nil, "this terminal: key releases yes, true color yes, 107 by 57 cells"},
+		{engine.Terminal{IsTerminal: true, Width: 80, Height: 24}, nil, "this terminal: key releases no, true color no, 80 by 24 cells"},
+		{engine.Terminal{}, nil, "not a terminal: input or output is redirected"},
+		{engine.Terminal{}, errors.New("raw mode failed"), "could not ask the terminal: raw mode failed"},
+	} {
+		if got := probeLine(tt.t, tt.err); got != tt.want {
+			t.Errorf("wanted %q, got %q", tt.want, got)
+		}
 	}
 }

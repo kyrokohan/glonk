@@ -10,6 +10,9 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// getTermios is the request that reads a terminal's settings.
+const getTermios = unix.TCGETS
+
 // openPty returns both ends of a new pseudo-terminal, closed with the test. Nobody gives it
 // a window size, so the slave reports 0 by 0.
 func openPty(t *testing.T) (master, slave *os.File) {
