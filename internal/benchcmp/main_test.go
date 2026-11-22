@@ -165,7 +165,9 @@ func TestATreeThatDoesMoreWorkIsSlower(t *testing.T) {
 
 func TestATreeThatDoesLessWorkIsFaster(t *testing.T) {
 	dir := repo(t)
-	write(t, dir, "work.go", workSource(500, false))
+	// 1/32 of the base's work, about -97%: a change can be no faster than -100%, so on a runner noisy enough
+	// that twice the noise passes -75%, a quarter of the work could not be told apart (#158).
+	write(t, dir, "work.go", workSource(62, false))
 	code, out, errs := compare(t, dir)
 	if code != 0 || !strings.Contains(out, "faster   .        BenchmarkWork") {
 		t.Errorf("wanted status 0 and a faster benchmark, got %d\n%s\n%s", code, out, errs)
