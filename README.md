@@ -575,6 +575,66 @@ func TestSceneLooksRight(t *testing.T) {
 
 What it draws: a half-block cell as its two pixels, a space as its background and `█` as its foreground. Any other character is a mark, a rectangle in its foreground color over the middle of the cell, which shows where text is and in what color but not what it says (`String()` says that). With `ImageOptions{Scale: 6, Text: true}` or a larger scale, a printable ASCII character is drawn as a letter of the font of `Canvas.DrawText` instead, `Scale/6` times its 5 by 7 pixels, in the middle of the cell, so a screenshot can be read; a wide or control character is a `?`, and box lines and other characters stay marks. `Reverse` swaps a cell's colors; Bold, Dim and Underline are not drawn. The default colors of a terminal are its own, so a cell that leaves them out is light gray on black unless `ImageOptions.Foreground` and `Background` say otherwise, and `Colors: engine.Colors256` shows RGB as the nearest of the 256 palette colors, as a terminal without true color does. A picture of more than 4,194,304 pixels is not made. Pixels set on a `Canvas` are in the picture once `Compose` has put them in the cells. `ExampleFrameBuffer_Image` is a runnable version.
 
+## A game in a web page
+
+The `web` package runs a game in a web page, the same game as in the terminal, so that its own page can have a Play button, as glonk.dev's cover does with `cube3d`. Keep the terminal's entry in a file built for everything but the browser, and add one for the page:
+
+```go
+// terminal.go
+//go:build !js
+
+package main
+
+func run(g *game) error {
+	return engine.Run(context.Background(), g, engine.Config{FPS: 30})
+}
+```
+
+```go
+// page_js.go: the _js ending builds it for the browser only
+package main
+
+import "glonk.dev/web"
+
+func run(g *game) error {
+	web.Run(g, 30) // does not return
+	return nil
+}
+```
+
+Then build it for the browser, and put beside it on the page what runs it:
+
+```sh
+GOOS=js GOARCH=wasm go build -trimpath -ldflags=-s -o game.wasm . && gzip -9n game.wasm
+cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" .
+cp "$(go list -m -f '{{.Dir}}' glonk.dev)/web/glonk.js" .
+```
+
+- **`wasm_exec.js` must come from the same Go that built the game.** A Go of another version builds a game that one cannot start.
+- **`glonk.js` is the page's half,** from the version of glonk the game was built with: it fetches the game, unpacks it if gzipped, starts it, and wires the keys, a paste, the pointer and the wheel to it. `glonkPlay(box, {game, cols, rows, terminal})` starts it in an element and gives back `done`, a promise of how it ended, and `stop`.
+- **It draws with xterm.js.** Load it and its WebGL addon first: without WebGL, half blocks show faint seams.
+- **A page that plays it** loads the four scripts and calls `glonkPlay` when the player asks, here from a button:
+
+```html
+<link rel="stylesheet" href="xterm.css">
+<script src="xterm.js"></script>
+<script src="addon-webgl.js"></script>
+<script src="wasm_exec.js"></script>
+<script src="glonk.js"></script>
+<div id="game"></div>
+<button id="play">Play</button>
+<script>
+  document.getElementById("play").onclick = async () => {
+    const game = await glonkPlay(document.getElementById("game"), { game: "game.wasm.gz", cols: 80, rows: 24 });
+    console.log("the game ended:", await game.done);
+  };
+</script>
+```
+
+- **The keyboard is the game's while it has the focus,** except Tab and Command. Keys arrive as they would from a terminal with the kitty keyboard protocol, with releases, so several can be held; a paste arrives as a paste, the pointer by cell, and the wheel and the right button while the game has the keyboard, so the page still scrolls past it.
+- **A hidden tab draws nothing.** The browser slows a hidden tab's timers to about once a second, so the game goes on slowly, and the first frame after it shows again repaints all of it.
+- **Not included.** Sound, phones and touch, and a change of size while it runs.
+
 ## Packages
 
 | Package | Purpose |
@@ -584,8 +644,9 @@ What it draws: a half-block cell as its two pixels, a space as its background an
 | `mesh` | 3D meshes (wireframe and shaded), shapes, OBJ loading, lights, and the perspective `Camera` |
 | `sprite` | Sprites (a `Cell`, a text-art `Frame` or an `Animation` at a position, optionally see-through) drawn in layers, through a view, with bounds and collision queries |
 | `tilemap` | Tile maps written as text art, drawn through a camera, with solid tiles that stop a moving box |
-| `widget` | A label, a panel, a bar and a menu for a HUD or a pause screen, drawn in screen space |
+| `widget` | A label, a panel, a bar, a menu and a text field for a HUD or a pause screen, drawn in screen space |
 | `bitmap` | JPEG and PNG pictures, or ones made in code, drawn on the pixel `Canvas` at their own size or stretched, with limits for files that cannot be trusted |
+| `web` | Runs a game in a web page, built for the browser: the keys, a paste and the pointer in, the frames out to xterm.js, with `glonk.js` to copy for the page |
 
 ## Compatibility and limits
 

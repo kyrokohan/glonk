@@ -1,9 +1,9 @@
 package main
 
-import "glonk.dev/internal/webplay"
+import "glonk.dev/web"
 
-// run plays the game in a web page, as glonk.dev does: see internal/webplay. It does not return.
+// run plays the game in a web page, as glonk.dev's cover does: see glonk.dev/web. It does not return.
 func run(g *cubeGame) error {
-	webplay.Run(g, 30)
+	web.Run(g, 30)
 	return nil
 }

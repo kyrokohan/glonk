@@ -63,6 +63,7 @@
 <li><a href="#quickstart">Quickstart</a></li>
 <li><a href="#frame-numbers">Frame numbers</a></li>
 <li><a href="#testing-a-game">Testing a game</a></li>
+<li><a href="#a-game-in-a-web-page">A game in a web page</a></li>
 <li><a href="#packages">Packages</a></li>
 <li><a href="#compatibility-and-limits">Compatibility and limits</a></li>
 <li><a href="#planned">Planned</a></li>
@@ -554,6 +555,57 @@ func TestTheDotMovesAcrossTheScreen(t *testing.T) {
 }
 </code></pre>
 <p>What it draws: a half-block cell as its two pixels, a space as its background and <code>█</code> as its foreground. Any other character is a mark, a rectangle in its foreground color over the middle of the cell, which shows where text is and in what color but not what it says (<code>String()</code> says that). With <code>ImageOptions{Scale: 6, Text: true}</code> or a larger scale, a printable ASCII character is drawn as a letter of the font of <code>Canvas.DrawText</code> instead, <code>Scale/6</code> times its 5 by 7 pixels, in the middle of the cell, so a screenshot can be read; a wide or control character is a <code>?</code>, and box lines and other characters stay marks. <code>Reverse</code> swaps a cell&#39;s colors; Bold, Dim and Underline are not drawn. The default colors of a terminal are its own, so a cell that leaves them out is light gray on black unless <code>ImageOptions.Foreground</code> and <code>Background</code> say otherwise, and <code>Colors: engine.Colors256</code> shows RGB as the nearest of the 256 palette colors, as a terminal without true color does. A picture of more than 4,194,304 pixels is not made. Pixels set on a <code>Canvas</code> are in the picture once <code>Compose</code> has put them in the cells. <code>ExampleFrameBuffer_Image</code> is a runnable version.</p>
+<h2 id="a-game-in-a-web-page">A game in a web page</h2>
+<p>The <code>web</code> package runs a game in a web page, the same game as in the terminal, so that its own page can have a Play button, as glonk.dev&#39;s cover does with <code>cube3d</code>. Keep the terminal&#39;s entry in a file built for everything but the browser, and add one for the page:</p>
+<pre tabindex="0"><code>// terminal.go
+//go:build !js
+
+package main
+
+func run(g *game) error {
+	return engine.Run(context.Background(), g, engine.Config{FPS: 30})
+}
+</code></pre>
+<pre tabindex="0" class="odd"><code>// page_js.go: the _js ending builds it for the browser only
+package main
+
+import &#34;glonk.dev/web&#34;
+
+func run(g *game) error {
+	web.Run(g, 30) // does not return
+	return nil
+}
+</code></pre>
+<p>Then build it for the browser, and put beside it on the page what runs it:</p>
+<pre tabindex="0" class="odd"><code>GOOS=js GOARCH=wasm go build -trimpath -ldflags=-s -o game.wasm . &amp;&amp; gzip -9n game.wasm
+cp &#34;$(go env GOROOT)/lib/wasm/wasm_exec.js&#34; .
+cp &#34;$(go list -m -f &#39;{{.Dir}}&#39; glonk.dev)/web/glonk.js&#34; .
+</code></pre>
+<ul>
+<li><strong><code>wasm_exec.js</code> must come from the same Go that built the game.</strong> A Go of another version builds a game that one cannot start.</li>
+<li><strong><code>glonk.js</code> is the page&#39;s half,</strong> from the version of glonk the game was built with: it fetches the game, unpacks it if gzipped, starts it, and wires the keys, a paste, the pointer and the wheel to it. <code>glonkPlay(box, {game, cols, rows, terminal})</code> starts it in an element and gives back <code>done</code>, a promise of how it ended, and <code>stop</code>.</li>
+<li><strong>It draws with xterm.js.</strong> Load it and its WebGL addon first: without WebGL, half blocks show faint seams.</li>
+<li><strong>A page that plays it</strong> loads the four scripts and calls <code>glonkPlay</code> when the player asks, here from a button:</li>
+</ul>
+<pre tabindex="0" class="odd"><code>&lt;link rel=&#34;stylesheet&#34; href=&#34;xterm.css&#34;&gt;
+&lt;script src=&#34;xterm.js&#34;&gt;&lt;/script&gt;
+&lt;script src=&#34;addon-webgl.js&#34;&gt;&lt;/script&gt;
+&lt;script src=&#34;wasm_exec.js&#34;&gt;&lt;/script&gt;
+&lt;script src=&#34;glonk.js&#34;&gt;&lt;/script&gt;
+&lt;div id=&#34;game&#34;&gt;&lt;/div&gt;
+&lt;button id=&#34;play&#34;&gt;Play&lt;/button&gt;
+&lt;script&gt;
+  document.getElementById(&#34;play&#34;).onclick = async () =&gt; {
+    const game = await glonkPlay(document.getElementById(&#34;game&#34;), { game: &#34;game.wasm.gz&#34;, cols: 80, rows: 24 });
+    console.log(&#34;the game ended:&#34;, await game.done);
+  };
+&lt;/script&gt;
+</code></pre>
+<ul>
+<li><strong>The keyboard is the game&#39;s while it has the focus,</strong> except Tab and Command. Keys arrive as they would from a terminal with the kitty keyboard protocol, with releases, so several can be held; a paste arrives as a paste, the pointer by cell, and the wheel and the right button while the game has the keyboard, so the page still scrolls past it.</li>
+<li><strong>A hidden tab draws nothing.</strong> The browser slows a hidden tab&#39;s timers to about once a second, so the game goes on slowly, and the first frame after it shows again repaints all of it.</li>
+<li><strong>Not included.</strong> Sound, phones and touch, and a change of size while it runs.</li>
+</ul>
 <h2 id="packages">Packages</h2>
 <table>
 <thead>
@@ -565,8 +617,9 @@ func TestTheDotMovesAcrossTheScreen(t *testing.T) {
 <tr><td><code>mesh</code></td><td>3D meshes (wireframe and shaded), shapes, OBJ loading, lights, and the perspective <code>Camera</code></td></tr>
 <tr><td><code>sprite</code></td><td>Sprites (a <code>Cell</code>, a text-art <code>Frame</code> or an <code>Animation</code> at a position, optionally see-through) drawn in layers, through a view, with bounds and collision queries</td></tr>
 <tr><td><code>tilemap</code></td><td>Tile maps written as text art, drawn through a camera, with solid tiles that stop a moving box</td></tr>
-<tr><td><code>widget</code></td><td>A label, a panel, a bar and a menu for a HUD or a pause screen, drawn in screen space</td></tr>
+<tr><td><code>widget</code></td><td>A label, a panel, a bar, a menu and a text field for a HUD or a pause screen, drawn in screen space</td></tr>
 <tr><td><code>bitmap</code></td><td>JPEG and PNG pictures, or ones made in code, drawn on the pixel <code>Canvas</code> at their own size or stretched, with limits for files that cannot be trusted</td></tr>
+<tr><td><code>web</code></td><td>Runs a game in a web page, built for the browser: the keys, a paste and the pointer in, the frames out to xterm.js, with <code>glonk.js</code> to copy for the page</td></tr>
 </tbody>
 </table>
 <h2 id="compatibility-and-limits">Compatibility and limits</h2>

@@ -106,10 +106,11 @@ site:
 	@echo "Writing the manual and the changelog of glonk.dev..."
 	go test ./internal/sitepages -run TestThePagesAreWhatTheRepositorySays -update
 
-# The game on glonk.dev's cover is cube3d built for the browser (see internal/webplay), gzipped,
-# since Cloudflare does not compress application/wasm and site/play.js unpacks it, beside the
-# wasm_exec.js of the Go that built it, which must match. Cloudflare runs this before every
-# deploy, as the build command of the Worker; the files are not committed.
+# The game on glonk.dev's cover is cube3d built for the browser (see glonk.dev/web), gzipped,
+# since Cloudflare does not compress application/wasm and web/glonk.js unpacks it, beside the
+# wasm_exec.js of the Go that built it, which must match, and glonk.js itself, which site/play.js
+# loads. Cloudflare runs this before every deploy, as the build command of the Worker; the files
+# are not committed.
 PLAY := site/media/play
 play:
 	@echo "Building the game of glonk.dev..."
@@ -117,6 +118,7 @@ play:
 	GOOS=js GOARCH=wasm go build -trimpath -ldflags=-s -o $(PLAY)/cube3d.wasm ./examples/cube3d
 	gzip -9nf $(PLAY)/cube3d.wasm
 	cp "$$(go env GOROOT)/lib/wasm/wasm_exec.js" $(PLAY)/
+	cp web/glonk.js $(PLAY)/
 
 EXAMPLE ?= ./examples/bounce2d
 ARGS ?=
