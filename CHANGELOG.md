@@ -4,6 +4,10 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-22
+
+On top of 0.14.0 this release is widgets and the mouse: menus that follow the pointer and take a click, a text field, and the pointer in pixels where the terminal can say. Nothing was removed or renamed and no signature changed, but `Menu` gained fields of its own; what behaves differently is under Changed. The module needs the same versions of `golang.org/x/sys` and `golang.org/x/term` as 0.14.0.
+
 ### Added
 
 - `widget.Menu` takes the mouse when `Config.Mouse` is set: a pointer that moves onto an item selects it, a press of the left button on an item chooses it at once, as Enter does, and a turn of the wheel over an item moves the selection an item a step, wrapping as the keys do (#109). With the mouse on, the terminal no longer selects text with it, so pointing at a line and clicking did nothing, and a program could only add it by working out where the menu had drawn which item. The menu reads the mouse against where `Draw` last drew it, once: a menu not drawn since its last `Update`, before its first `Draw` or on the frame it opens again, ignores the mouse, so a pointer left where an old menu was picks nothing. A pointer that sits still leaves the selection to the keys, so Down is not undone the next frame, and one beside the items or below the last does nothing. A list longer than its rows holds still while the pointer picks among the items it shows, so that it does not run away under the pointer; the keys and the wheel center it as before. With `Config.Mouse` off nothing changes. `examples/world` turns the mouse on for its pause menu.
@@ -16,6 +20,7 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 - **With `Config.Mouse` set, Run asks the terminal two more questions as it starts,** whether it reports the pointer in pixels and how large a cell is, in the same quarter second as the keyboard question, and now also with `LegacyKeys`, where it asked nothing before. Where the terminal has pixel reports, `MousePos` is worked out from them.
 - **A program with `Config.Mouse` set has menus that follow the pointer and take a click,** where they read only the keys. `Menu` has fields of its own for where it was drawn, so a literal of it without field names no longer compiles, and `Draw` now keeps that place, though it still changes neither `Items` nor `Selected`.
+- Reading a mouse report is about 3% slower than in 0.14.0, some 1.5 nanoseconds a report, from telling pixel reports from cells (#113): `make benchcmp BASE=v0.14.0` over the 239 benchmarks both versions have finds `KeyParserFeed/mouse_motion_of_20_reports` slower, the rest the same, and none that allocate more. A copy with 0.14.0's parser shows none of it.
 
 ## [0.14.0] - 2026-11-20
 
@@ -333,7 +338,8 @@ The first release. The API is pre-1.0 and may still change. The README lists the
 - Three example programs (`bounce2d`, `cube3d` and a model `viewer`), runnable examples in the package documentation, fuzz tests for the parsers, rasterizers and clipping, and a test that keeps the documentation complete.
 - Continuous integration (format, vet and race tests on Linux and macOS for Go 1.26 and 1.27, cross-compilation, 32-bit tests), Dependabot, a security policy and contributing notes.
 
-[Unreleased]: https://github.com/kyrokohan/glonk/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/kyrokohan/glonk/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/kyrokohan/glonk/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/kyrokohan/glonk/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/kyrokohan/glonk/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/kyrokohan/glonk/compare/v0.11.0...v0.12.0
