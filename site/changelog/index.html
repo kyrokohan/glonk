@@ -47,6 +47,7 @@
 <p>Contents</p>
 <ul role="list">
 <li><a href="#unreleased">Unreleased</a></li>
+<li><a href="#0160---2026-11-22">0.16.0 - 2026-11-22</a></li>
 <li><a href="#0150---2026-11-22">0.15.0 - 2026-11-22</a></li>
 <li><a href="#0140---2026-11-20">0.14.0 - 2026-11-20</a></li>
 <li><a href="#0130---2026-11-20">0.13.0 - 2026-11-20</a></li>
@@ -66,7 +67,9 @@
 </nav>
 
 <article class="text" id="text">
-<h2 id="unreleased"><a href="https://github.com/kyrokohan/glonk/compare/v0.15.0...HEAD">Unreleased</a></h2>
+<h2 id="unreleased"><a href="https://github.com/kyrokohan/glonk/compare/v0.16.0...HEAD">Unreleased</a></h2>
+<h2 id="0160---2026-11-22"><a href="https://github.com/kyrokohan/glonk/compare/v0.15.0...v0.16.0">0.16.0</a> - 2026-11-22</h2>
+<p>On top of 0.15.0 this release asks the terminal what it can do before a game starts, and runs a game in a web page from any repository. Nothing was removed, renamed or changed. The module needs the same versions of <code>golang.org/x/sys</code> and <code>golang.org/x/term</code> as 0.15.0.</p>
 <h3 id="added">Added</h3>
 <ul>
 <li><code>engine.Probe(cfg)</code> says what the terminal Run would take over can do, without starting a game: a <code>Terminal</code> with <code>KeyReleases</code> (the kitty keyboard protocol, so <code>Input.Exact</code> will be true and several keys can be held), <code>TrueColor</code> (what <code>ColorsAuto</code> would choose), <code>Width</code> and <code>Height</code>, and <code>IsTerminal</code> (#149). <code>Run</code> found these out as it started and kept them to itself apart from <code>Input.Exact</code>, so a launcher or a game&#39;s first screen that wanted to tell the player, before the game began, that this terminal holds one key at a time had to start a game loop or guess from the environment. It reads <code>Config.Input</code> and <code>Config.Output</code> only. Where either is not a terminal it says so and asks nothing; otherwise it puts the terminal in raw mode for the question, at most a quarter second, writes the question and nothing else, and puts it back as it found it. A key pressed meanwhile is dropped, as a terminal cannot be given input back. <code>examples/input</code> prints the answer before it starts.</li>
