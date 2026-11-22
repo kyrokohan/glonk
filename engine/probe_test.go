@@ -3,6 +3,7 @@ package engine
 import (
 	"bytes"
 	"errors"
+	"io"
 	"testing"
 	"time"
 )
@@ -39,6 +40,18 @@ func TestParseProbeReply(t *testing.T) {
 			}
 		})
 	}
+}
+
+// parseProbeReply is readProbeAnswers as the kitty tests read it: whether the protocol was answered, and the wait is over.
+func parseProbeReply(b []byte) (kitty, done bool) {
+	a, done := readProbeAnswers(b)
+	return a.kitty, done
+}
+
+// probeKitty is probe asking the kitty question alone.
+func probeKitty(in <-chan []byte, w io.Writer, timeout time.Duration) (bool, []byte, error) {
+	a, typed, err := probe(in, w, timeout, true, false)
+	return a.kitty, typed, err
 }
 
 func feed(chunks ...string) <-chan []byte {
@@ -259,5 +272,65 @@ func TestProbeKittyKeepsKeysOnClosedInput(t *testing.T) {
 	}
 	if string(typed) != "hi" {
 		t.Errorf("wanted %q, got %q", "hi", typed)
+	}
+}
+
+// The answers about the mouse: DECRPM for 1016, where 1 to 3 mean the terminal has it, and the size of a cell.
+func TestReadProbeAnswersAboutTheMouse(t *testing.T) {
+	for _, tt := range []struct {
+		name         string
+		in           string
+		pixels       bool
+		cellW, cellH int
+		done         bool
+	}{
+		{"set", "\x1b[?1016;1$y\x1b[?62c", true, 0, 0, true},
+		{"reset", "\x1b[?1016;2$y\x1b[?62c", true, 0, 0, true},
+		{"permanently set", "\x1b[?1016;3$y\x1b[?62c", true, 0, 0, true},
+		{"not recognized", "\x1b[?1016;0$y\x1b[?62c", false, 0, 0, true},
+		{"permanently reset", "\x1b[?1016;4$y\x1b[?62c", false, 0, 0, true},
+		{"another mode", "\x1b[?1006;1$y\x1b[?62c", false, 0, 0, true},
+		{"the cell size", "\x1b[6;34;16t\x1b[?62c", false, 16, 34, true},
+		{"a cell size of 0", "\x1b[6;0;16t\x1b[?62c", false, 0, 0, true},
+		{"the text area is not the cell", "\x1b[4;1938;1712t\x1b[?62c", false, 0, 0, true},
+		{"all of them, as Ghostty answers", "\x1b[?0u\x1b[?1016;2$y\x1b[6;34;16t\x1b[?62;22;52c", true, 16, 34, true},
+		{"cut off before the end", "\x1b[?1016;2$y\x1b[6;34;1", true, 0, 0, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			a, done := readProbeAnswers([]byte(tt.in))
+			if a.pixels != tt.pixels || a.cellW != tt.cellW || a.cellH != tt.cellH || done != tt.done {
+				t.Errorf("wanted pixels %v, a cell %d x %d and done %v, got %+v and %v", tt.pixels, tt.cellW, tt.cellH, tt.done, a, done)
+			}
+		})
+	}
+	if got := string(stripProbeReplies([]byte("a\x1b[?1016;2$yb\x1b[6;34;16tc\x1b[?62cd"))); got != "abcd" {
+		t.Errorf("wanted the mouse answers taken out of what was typed, got %q", got)
+	}
+}
+
+// The probe asks only what it is asked to, and reads the mouse answers split across reads.
+func TestProbeAsksWhatItIsAsked(t *testing.T) {
+	for _, tt := range []struct {
+		name            string
+		askKitty, mouse bool
+		want            string
+	}{
+		{"the keyboard", true, false, "\x1b[?u\x1b[c"},
+		{"the mouse", false, true, "\x1b[?1016$p\x1b[16t\x1b[c"},
+		{"both", true, true, "\x1b[?u\x1b[?1016$p\x1b[16t\x1b[c"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var out bytes.Buffer
+			if _, _, err := probe(feed("\x1b[?6c"), &out, time.Second, tt.askKitty, tt.mouse); err != nil {
+				t.Fatal(err)
+			}
+			if out.String() != tt.want {
+				t.Errorf("wanted %q asked, got %q", tt.want, out.String())
+			}
+		})
+	}
+	a, typed, err := probe(feed("x\x1b[?101", "6;2$y\x1b[6;3", "4;16t\x1b[?62c"), &bytes.Buffer{}, time.Second, false, true)
+	if err != nil || !a.pixels || a.cellW != 16 || a.cellH != 34 || string(typed) != "x" {
+		t.Errorf("wanted the split answers read and x kept, got %+v, %q, %v", a, typed, err)
 	}
 }

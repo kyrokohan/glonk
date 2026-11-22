@@ -102,27 +102,50 @@ func (k *Keyboard) Paste(text string) {
 }
 
 // MouseMove moves the pointer to a cell, counted from 0 at the top left, as a terminal reports one: the
-// cell is in Input.MousePos and nothing else changes. A cell outside 0 to 32,767 is brought into it.
+// cell is in Input.MousePos and nothing else changes. A cell outside 0 to 32,767 is brought into it. After
+// CellSize, the pointer goes to the top left pixel of the cell.
 func (k *Keyboard) MouseMove(x, y int) {
+	if m := &k.in.mouse; m.pixels {
+		x, y = clampCell(x)*m.cellW, clampCell(y)*m.cellH
+	}
+	k.in.event(keyEvent{key: cellKey(x, y), kind: kindMouseMove}, k.now)
+}
+
+// CellSize says a cell is w by h pixels of the terminal, and turns on pixel reports, as Run does where the
+// terminal has them (see Input.MouseFine): MouseMovePixels then moves the pointer, MouseMove moves it to the
+// top left pixel of a cell, and MousePixels says where it is with fractions. A size that is not more than 0
+// does nothing.
+func (k *Keyboard) CellSize(w, h int) {
+	if w > 0 && h > 0 {
+		k.in.usePixels(w, h)
+	}
+}
+
+// MouseMovePixels moves the pointer to a pixel of the terminal, counted from 0 at the top left of the grid, as
+// a terminal reports one in pixel mode: Input.MousePos is the cell it is in, and MousePixels where it is in
+// canvas pixels. Before CellSize it moves the pointer to the cell x, y, as MouseMove does, since a terminal not
+// asked for pixels sends cells. A pixel outside 0 to 32,767 is brought into it.
+func (k *Keyboard) MouseMovePixels(x, y int) {
 	k.in.event(keyEvent{key: cellKey(x, y), kind: kindMouseMove}, k.now)
 }
 
 // MouseDown presses a button where the pointer is, which is the cell 0, 0 until a MouseMove. A button that
 // is already down stays down and is not started again; a value that is no MouseButton does nothing.
 func (k *Keyboard) MouseDown(b MouseButton) {
-	k.in.event(keyEvent{key: cellKey(k.in.mouse.x, k.in.mouse.y), kind: kindMouseDown, btn: uint8(b)}, k.now)
+	k.in.event(keyEvent{key: cellKey(k.in.mouse.rawX, k.in.mouse.rawY), kind: kindMouseDown, btn: uint8(b)}, k.now)
 }
 
 // MouseUp lets a button go. A button that is not down does nothing, as on a terminal.
 func (k *Keyboard) MouseUp(b MouseButton) {
-	k.in.event(keyEvent{key: cellKey(k.in.mouse.x, k.in.mouse.y), kind: kindMouseUp, btn: uint8(b)}, k.now)
+	k.in.event(keyEvent{key: cellKey(k.in.mouse.rawX, k.in.mouse.rawY), kind: kindMouseUp, btn: uint8(b)}, k.now)
 }
 
 // Wheel turns the wheel dx steps right and dy down, or left and up for less than 0, as Input.Wheel says it,
 // where the pointer is, which is the cell 0, 0 until a MouseMove. A frame keeps at most 4,096 steps on each
 // axis, as a real one does.
 func (k *Keyboard) Wheel(dx, dy int) {
-	k.MouseMove(k.in.mouse.x, k.in.mouse.y) // a report says where the pointer is, a wheel's too
+	// A report says where the pointer is, a wheel's too.
+	k.in.event(keyEvent{key: cellKey(k.in.mouse.rawX, k.in.mouse.rawY), kind: kindMouseMove}, k.now)
 	k.in.addWheel(dx, dy)
 }
 

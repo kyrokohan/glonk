@@ -42,6 +42,17 @@ const (
 
 	enablePasteSeq  = "\x1b[?2004h"
 	disablePasteSeq = "\x1b[?2004l"
+
+	// Pixel mouse reports (SGR-Pixels): the report of 1006 with the pointer in pixels of the
+	// terminal, counted from 0 at the top left of the grid. It is a report form, as 1006 is, so it
+	// is turned off before 1006 is. queryMousePixelsSeq asks whether the terminal has the mode
+	// (DECRQM: it answers ESC [ ? 1016 ; Ps $ y), and queryCellSizeSeq asks the size of a cell in
+	// pixels (it answers ESC [ 6 ; height ; width t), which the window size does not say exactly
+	// where the terminal pads its window.
+	enableMousePixelsSeq  = "\x1b[?1016h"
+	disableMousePixelsSeq = "\x1b[?1016l"
+	queryMousePixelsSeq   = "\x1b[?1016$p"
+	queryCellSizeSeq      = "\x1b[16t"
 )
 
 // sequenceBuilder collects the bytes of one write to the terminal. It keeps its

@@ -22,6 +22,7 @@ type terminal struct {
 	out      io.Writer
 	keyboard bool // whether we pushed protocol flags that Teardown must pop
 	mouse    bool // whether Config.Mouse asked for the pointer, which Setup turns on and Teardown off
+	pixels   bool // whether pointer reports in pixels are on, which Teardown turns off
 
 	// A headless terminal is no terminal at all: a fixed size, and nothing written
 	// to out but the frames.
@@ -108,6 +109,30 @@ func (t *terminal) EnableKeyboardProtocol() error {
 	return sb.Flush(t.out)
 }
 
+// EnableMousePixels turns on pointer reports in pixels (mode 1016) and asks the size of a cell in pixels,
+// which the answer, read as input, gives Input. Call it only after a probe says the terminal has the mode,
+// and with the mouse on.
+func (t *terminal) EnableMousePixels() error {
+	if t.headless {
+		return nil
+	}
+	t.pixels = true // set first, so that a write that fails halfway is still undone
+	sb := newSequenceBuilder()
+	sb.Print(enableMousePixelsSeq)
+	sb.Print(queryCellSizeSeq)
+	return sb.Flush(t.out)
+}
+
+// AskCellSize asks the size of a cell in pixels again, for a window whose font may have changed.
+func (t *terminal) AskCellSize() error {
+	if t.headless {
+		return nil
+	}
+	sb := newSequenceBuilder()
+	sb.Print(queryCellSizeSeq)
+	return sb.Flush(t.out)
+}
+
 // exitSequence is what Teardown writes: flags are popped first because they were
 // pushed on the alternate screen, which has its own stack. Autowrap goes back on
 // before the screen is left, where it was turned off.
@@ -118,6 +143,9 @@ func (t *terminal) exitSequence() *sequenceBuilder {
 	}
 	if t.keyboard || t.mouse {
 		sb.DisableFocusReporting()
+	}
+	if t.pixels {
+		sb.Print(disableMousePixelsSeq) // a report form, as 1006 is, so it goes before it
 	}
 	if t.mouse {
 		sb.DisableMouse()
@@ -137,7 +165,7 @@ func (t *terminal) Teardown() error {
 	}
 	flushErr := t.exitSequence().Flush(t.out)
 	restoreErr := term.Restore(t.fd, t.state)
-	t.state, t.keyboard = nil, false
+	t.state, t.keyboard, t.pixels = nil, false, false
 	return errors.Join(flushErr, restoreErr)
 }
 
