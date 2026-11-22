@@ -17,8 +17,8 @@ import (
 // What the go command must read from every page. Its answer to glonk.dev/engine?go-get=1
 // is the not-found page, because the command ignores the status code.
 const (
-	wantImport = "glonk.dev git https://github.com/kyrokohan/glonk"
-	wantSource = "glonk.dev https://github.com/kyrokohan/glonk https://github.com/kyrokohan/glonk/tree/main{/dir} https://github.com/kyrokohan/glonk/blob/main{/dir}/{file}#L{line}"
+	wantImport = "glonk.dev git https://github.com/usrgames/glonk"
+	wantSource = "glonk.dev https://github.com/usrgames/glonk https://github.com/usrgames/glonk/tree/main{/dir} https://github.com/usrgames/glonk/blob/main{/dir}/{file}#L{line}"
 )
 
 // pages are the HTML files of the site, by their paths in site/: the two written by hand and

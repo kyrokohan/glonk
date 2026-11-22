@@ -310,7 +310,7 @@ func TestTheShowcaseWithNoProjectsIsAnInvitation(t *testing.T) {
 	}
 	for _, want := range append([]string{
 		maintainerMay,
-		`<a href="https://github.com/kyrokohan/glonk/issues/new?template=show_your_project.yml">fill in the form</a>`,
+		`<a href="https://github.com/usrgames/glonk/issues/new?template=show_your_project.yml">fill in the form</a>`,
 		`<img class="badge" src="/badge.svg" width="127" height="20" alt="made with glonk">`,
 		`<pre tabindex="0" class="odd"><code>[![made with glonk](https://glonk.dev/badge.svg)](https://glonk.dev)` + "\n</code></pre>",
 	}, listingRule...) {

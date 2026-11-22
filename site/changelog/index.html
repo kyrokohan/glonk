@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="go-import" content="glonk.dev git https://github.com/kyrokohan/glonk">
-<meta name="go-source" content="glonk.dev https://github.com/kyrokohan/glonk https://github.com/kyrokohan/glonk/tree/main{/dir} https://github.com/kyrokohan/glonk/blob/main{/dir}/{file}#L{line}">
+<meta name="go-import" content="glonk.dev git https://github.com/usrgames/glonk">
+<meta name="go-source" content="glonk.dev https://github.com/usrgames/glonk https://github.com/usrgames/glonk/tree/main{/dir} https://github.com/usrgames/glonk/blob/main{/dir}/{file}#L{line}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Changelog: glonk</title>
 <meta name="description" content="What each release of glonk added, changed and fixed.">
@@ -32,8 +32,8 @@
   <nav aria-label="glonk">
     <a href="/manual/">Manual</a>
     <a href="/changelog/" aria-current="page">Changelog</a>
-    <a href="https://github.com/kyrokohan/glonk/tree/main/examples">Examples</a>
-    <a href="https://github.com/kyrokohan/glonk">GitHub</a>
+    <a href="https://github.com/usrgames/glonk/tree/main/examples">Examples</a>
+    <a href="https://github.com/usrgames/glonk">GitHub</a>
   </nav>
 </header>
 
@@ -67,15 +67,15 @@
 </nav>
 
 <article class="text" id="text">
-<h2 id="unreleased"><a href="https://github.com/kyrokohan/glonk/compare/v0.16.0...HEAD">Unreleased</a></h2>
-<h2 id="0160---2026-11-22"><a href="https://github.com/kyrokohan/glonk/compare/v0.15.0...v0.16.0">0.16.0</a> - 2026-11-22</h2>
+<h2 id="unreleased"><a href="https://github.com/usrgames/glonk/compare/v0.16.0...HEAD">Unreleased</a></h2>
+<h2 id="0160---2026-11-22"><a href="https://github.com/usrgames/glonk/compare/v0.15.0...v0.16.0">0.16.0</a> - 2026-11-22</h2>
 <p>On top of 0.15.0 this release asks the terminal what it can do before a game starts, and runs a game in a web page from any repository. Nothing was removed, renamed or changed. The module needs the same versions of <code>golang.org/x/sys</code> and <code>golang.org/x/term</code> as 0.15.0.</p>
 <h3 id="added">Added</h3>
 <ul>
 <li><code>engine.Probe(cfg)</code> says what the terminal Run would take over can do, without starting a game: a <code>Terminal</code> with <code>KeyReleases</code> (the kitty keyboard protocol, so <code>Input.Exact</code> will be true and several keys can be held), <code>TrueColor</code> (what <code>ColorsAuto</code> would choose), <code>Width</code> and <code>Height</code>, and <code>IsTerminal</code> (#149). <code>Run</code> found these out as it started and kept them to itself apart from <code>Input.Exact</code>, so a launcher or a game&#39;s first screen that wanted to tell the player, before the game began, that this terminal holds one key at a time had to start a game loop or guess from the environment. It reads <code>Config.Input</code> and <code>Config.Output</code> only. Where either is not a terminal it says so and asks nothing; otherwise it puts the terminal in raw mode for the question, at most a quarter second, writes the question and nothing else, and puts it back as it found it. A key pressed meanwhile is dropped, as a terminal cannot be given input back. <code>examples/input</code> prints the answer before it starts.</li>
 <li>The <code>web</code> package runs a game in a web page, from any repository: <code>web.Run(game, fps)</code> in a file built for the browser, <code>glonk.js</code> from the package&#39;s folder for the page, and xterm.js to draw (#148). glonk.dev&#39;s cover played <code>cube3d</code> this way through <code>internal/webplay</code>, which a game in its own repository could not import. The page now sends more than letters and arrows: function and navigation keys, modifiers, the text a key types, a paste, and the pointer and the wheel, each turned into what a terminal sends in code tested with the rest of glonk, so the keyboard is exact, with releases. <code>glonk.js</code> starts the game in an element and gives back how it ended and a way to stop it, leaves Tab and Command to the browser, and draws nothing while the tab is hidden. The README&#39;s &#34;A game in a web page&#34; shows the two entry files, the build and a whole page.</li>
 </ul>
-<h2 id="0150---2026-11-22"><a href="https://github.com/kyrokohan/glonk/compare/v0.14.0...v0.15.0">0.15.0</a> - 2026-11-22</h2>
+<h2 id="0150---2026-11-22"><a href="https://github.com/usrgames/glonk/compare/v0.14.0...v0.15.0">0.15.0</a> - 2026-11-22</h2>
 <p>On top of 0.14.0 this release is widgets and the mouse: menus that follow the pointer and take a click, a text field, and the pointer in pixels where the terminal can say. Nothing was removed or renamed and no signature changed, but <code>Menu</code> gained fields of its own; what behaves differently is under Changed. The module needs the same versions of <code>golang.org/x/sys</code> and <code>golang.org/x/term</code> as 0.14.0.</p>
 <h3 id="added-1">Added</h3>
 <ul>
@@ -91,7 +91,7 @@
 <li><strong>A program with <code>Config.Mouse</code> set has menus that follow the pointer and take a click,</strong> where they read only the keys. <code>Menu</code> has fields of its own for where it was drawn, so a literal of it without field names no longer compiles, and <code>Draw</code> now keeps that place, though it still changes neither <code>Items</code> nor <code>Selected</code>.</li>
 <li>Reading a mouse report is about 3% slower than in 0.14.0, some 1.5 nanoseconds a report, from telling pixel reports from cells (#113): <code>make benchcmp BASE=v0.14.0</code> over the 239 benchmarks both versions have finds <code>KeyParserFeed/mouse_motion_of_20_reports</code> slower, the rest the same, and none that allocate more. A copy with 0.14.0&#39;s parser shows none of it.</li>
 </ul>
-<h2 id="0140---2026-11-20"><a href="https://github.com/kyrokohan/glonk/compare/v0.13.0...v0.14.0">0.14.0</a> - 2026-11-20</h2>
+<h2 id="0140---2026-11-20"><a href="https://github.com/usrgames/glonk/compare/v0.13.0...v0.14.0">0.14.0</a> - 2026-11-20</h2>
 <p>On top of 0.13.0 this release is textured and colored 3D: boxes and shapes that carry a picture, a camera that looks at a place, pictures drawn on a mesh as their view looks, lights with a color, and far pictures read from smaller copies. Nothing was removed or renamed and no signature changed, but <code>Ambient</code>, <code>Directional</code>, <code>Point</code> and <code>Material</code> gained fields; what draws differently is under Changed. The module needs the same versions of <code>golang.org/x/sys</code> and <code>golang.org/x/term</code> as 0.13.0.</p>
 <h3 id="added-2">Added</h3>
 <ul>
@@ -110,7 +110,7 @@
 <li><strong>A <code>Sphere</code>, <code>Cylinder</code>, <code>Cone</code> or <code>Plane</code> with <code>Material.Texture</code> set now shows the picture,</strong> where it was drawn in its color, since it had no coordinates. Each of them now carries 48 bytes more for each face, picture or not: 25 KB for a <code>Sphere(r, 24, 12)</code> and about 25 MB for the largest, <code>Sphere(r, 512, 512)</code>, and one more list for <code>Clone</code> to copy. Drawing one without a picture is the same as before.</li>
 <li>Making a <code>Mirrored</code>, <code>Shaded</code>, <code>Tinted</code> or <code>Sub</code> view of a picture takes 2 to 4 nanoseconds more than in 0.13.0 (<code>Mirrored</code> 2.3 to 4.4), since a <code>Bitmap</code> now holds the count of its changes and the smaller copies of #118; it still does not allocate. A textured or see-through face draws 3 to 4% slower, for the one test each cell makes for a face whose copy changes across it. <code>make benchcmp BASE=v0.13.0</code> over the 123 benchmarks both versions have finds those rows slower, the rest the same, and none that allocate more. <code>BenchmarkDrawColoredLight</code> and <code>BenchmarkDrawTexturedFar</code> are new, with nothing in 0.13.0 to compare with.</li>
 </ul>
-<h2 id="0130---2026-11-20"><a href="https://github.com/kyrokohan/glonk/compare/v0.12.0...v0.13.0">0.13.0</a> - 2026-11-20</h2>
+<h2 id="0130---2026-11-20"><a href="https://github.com/usrgames/glonk/compare/v0.12.0...v0.13.0">0.13.0</a> - 2026-11-20</h2>
 <p>On top of 0.12.0 this release compiles for the browser and adds small drawing tools: filled rectangles of cells, drawing over a scene, every ray of the screen at once, letters in a frame&#39;s picture, borders that join, and discs with a soft edge. Nothing was removed or renamed and no signature changed, but <code>ImageOptions</code> gained a field; what draws differently is under Changed and Fixed. The module needs the same versions of <code>golang.org/x/sys</code> and <code>golang.org/x/term</code> as 0.12.0.</p>
 <h3 id="added-3">Added</h3>
 <ul>
@@ -132,7 +132,7 @@
 <li><code>Run</code> shows the frame on a terminal that reports 0 columns by 0 rows. It told the game 80 by 24 there, as the docs say, and drew the frame, but cut what it sent to the terminal&#39;s own 0 by 0, so the screen was erased and stayed empty: a recording or a smoke test made under <code>script</code> started from something that is not a terminal, in a CI job or in some container consoles, held nothing (#131). Now an axis the terminal reports as 0 shows the whole frame on it, 80 columns or 24 rows, or what <code>Width</code> or <code>Height</code> chose, until the terminal reports a size.</li>
 <li><code>Mix</code> and <code>Canvas.BlendRect</code> give the same colors on every platform. On arm64 the compiler fused the multiply and the add of each channel into one instruction, which rounds once where amd64 rounds twice, so a mix that lands next to a half went down on arm64 and up on amd64: <code>Mix</code> from red 1 to red 8 at a <code>t</code> just under 1/14 was red 1 on a Mac with Apple silicon and red 2 on an Intel one. The product is now rounded on its own on every platform, which is what amd64 did, so only arm64 changes, and only for those mixes, by one step of one channel.</li>
 </ul>
-<h2 id="0120---2026-11-17"><a href="https://github.com/kyrokohan/glonk/compare/v0.11.0...v0.12.0">0.12.0</a> - 2026-11-17</h2>
+<h2 id="0120---2026-11-17"><a href="https://github.com/usrgames/glonk/compare/v0.11.0...v0.12.0">0.12.0</a> - 2026-11-17</h2>
 <p>On top of 0.11.0 this release reads the rest of what a terminal sends: the function and navigation keys, the modifiers held with a key and the characters typed, a paste as one string, and the mouse. Nothing was removed or renamed and no signature changed; what behaves differently is under Changed, and reading keys costs a little more. The module needs the same versions of <code>golang.org/x/sys</code> and <code>golang.org/x/term</code> as 0.11.0.</p>
 <h3 id="added-4">Added</h3>
 <ul>
@@ -150,7 +150,7 @@
 <li>A mouse report in the older form a terminal sends where it has no decimal mode, <code>ESC [ M</code> and three bytes, is dropped whole. Before, its three bytes were read as typed characters; no key sends <code>ESC [ M</code>, so nothing else is lost. A decimal report (<code>CSI &lt; ... M</code> or <code>m</code>) was dropped before and is read now whether or not <code>Config.Mouse</code> was set, so a mouse mode that another program left on in the terminal moves <code>MousePos</code>.</li>
 <li>Reading keys costs about 8 to 9 ns more a key than in 0.11.0, because a key event now carries its modifiers, a chord flag and its text (24 bytes where it was 8): 80 typed letters take 1.30 us where they took 0.64, and 20 arrow keys, or 20 keys of the kitty protocol, take 7 to 10% more, with the same allocations. Nobody types fast enough to notice. <code>make benchcmp BASE=v0.11.0</code> over the 205 benchmarks both versions have finds 1 slower, <code>BenchmarkImage</code> <code>scale_4</code> at +4.3%, in image code that did not change since 0.11.0 (when that row was checked against <code>main</code> in #97, it moved with the test code in the binary and not with the library), and none that allocate more.</li>
 </ul>
-<h2 id="0110---2026-11-17"><a href="https://github.com/kyrokohan/glonk/compare/v0.10.0...v0.11.0">0.11.0</a> - 2026-11-17</h2>
+<h2 id="0110---2026-11-17"><a href="https://github.com/usrgames/glonk/compare/v0.10.0...v0.11.0">0.11.0</a> - 2026-11-17</h2>
 <p>On top of 0.10.0 this release adds text drawn as pixels on the canvas, a way to put a rectangle of the canvas down over cells that are already in the frame, and a coin in the world example&#39;s panel, and it takes back the time that drawing a plain mesh lost in 0.10.0. Nothing was removed or renamed and no signature changed; the module needs newer versions of <code>golang.org/x/sys</code> and <code>golang.org/x/term</code>.</p>
 <h3 id="added-5">Added</h3>
 <ul>
@@ -166,7 +166,7 @@
 <ul>
 <li>Drawing a mesh with no picture and no opacity is as fast as it was in 0.9.0 again, which 0.10.0 said it was not: 3 to 6% slower, in 12 benchmarks (#86). There were two causes. For each face, 0.9.0 asked a plain mesh one question, whether it had vertex colors, and 0.10.0 asked three, for the picture, for the cut and for the colors; they are inside one test now, set once for the mesh, so a plain mesh skips all of them. And every helper that a mesh draw calls (<code>offscreen</code>, <code>currentBounds</code>, <code>reach</code>, <code>worldNormals</code>, <code>lightsReaching</code> and the two that walk the faces and the edges) took the whole <code>Mesh</code> by value, which grew from 240 to 280 bytes in 0.10.0, so a draw copied it several times; they take a pointer now, and the exported methods keep their value receivers and copy the mesh once, so nothing in the API changes. What did not matter: the bytes of the new fields on their own cost under 1% at the median, and neither the draw closures nor the opacity setup moved the numbers. <code>make benchcmp BASE=v0.9.0</code> over the 48 benchmarks that found it finds 0 slower, and nothing allocates more. Against 0.10.0, meshes with a picture, and meshes that can be seen through, draw 5 to 11% faster in the benchmarks.</li>
 </ul>
-<h2 id="0100---2026-11-16"><a href="https://github.com/kyrokohan/glonk/compare/v0.9.0...v0.10.0">0.10.0</a> - 2026-11-16</h2>
+<h2 id="0100---2026-11-16"><a href="https://github.com/usrgames/glonk/compare/v0.9.0...v0.10.0">0.10.0</a> - 2026-11-16</h2>
 <p>On top of 0.9.0 this release adds pictures on the faces of a mesh, holes where a picture is see-through, meshes that can be seen through as glass is, and lines that lie on a surface. <code>Material</code> and <code>Mesh</code> have new fields, so a literal that lists its values without field names no longer compiles; a model whose picture has transparent pixels is now drawn with holes in it; and drawing a mesh is 3 to 6% slower, which #86 is for. Nothing was removed or renamed.</p>
 <h3 id="added-6">Added</h3>
 <ul>
@@ -188,7 +188,7 @@
 <li>Drawing a mesh that has no picture and no opacity costs 3 to 6% more than it did. <code>make benchcmp BASE=v0.9.0</code> over the 167 benchmarks that exist in both finds 12 slower, by 3.1 to 6.3%, all of them mesh drawing, in cells and in pixels, flat and smooth, with a far plane, in fog and with many meshes, and none that allocates more. Comparing each pull request with the one before it, the cost came with holes and see-through meshes, a step at a time, each under the 3% that the comparison reports, so it was not flagged when it went in. The cause has not been found; it is #86. A face with a picture costs 5 to 10% more for each pixel than a flat color, since it goes through a fill that can leave a pixel alone.</li>
 <li><code>examples/viewer</code> draws a model&#39;s picture, and <code>C</code> puts it aside for the palette color with the other colors of the model&#39;s own.</li>
 </ul>
-<h2 id="090---2026-11-15"><a href="https://github.com/kyrokohan/glonk/compare/v0.8.0...v0.9.0">0.9.0</a> - 2026-11-15</h2>
+<h2 id="090---2026-11-15"><a href="https://github.com/usrgames/glonk/compare/v0.8.0...v0.9.0">0.9.0</a> - 2026-11-15</h2>
 <p>On top of 0.8.0 this release adds a frame drawn as a picture, frame numbers for a running game, a bounding sphere for every mesh that lets drawing skip what is off screen and leave out the lights that cannot reach it, and a way to compare benchmarks with a base. A <code>Mesh</code> has a new unexported field, so a <code>Mesh</code> literal that lists its values without field names no longer compiles; and a mesh from a shape or a loader now carries its bounds, so a program that changes its <code>Vertices</code> in place must call <code>UpdateBounds</code>, or the mesh can be skipped while it is on screen. Nothing was removed or renamed.</p>
 <h3 id="added-7">Added</h3>
 <ul>
@@ -206,7 +206,7 @@
 <ul>
 <li><code>make bench</code> runs every benchmark once with allocations, and <code>make benchcmp</code> compares the benchmarks of the working tree with those of a base commit, tag or branch (<code>BASE=</code>, <code>origin/main</code> unless said), for a change that might have made drawing, loading or searching slower, which was a check made by hand. It builds the test binaries of both without file paths, so that identical code is an identical binary, and runs them in rounds: the base, the base again and the head one after the other in an order that turns, so that a computer that warms up or gets busy affects all alike. The base run twice is a control for noise, which is about 0.3 percent for most benchmarks. A benchmark is reported as slower or faster only if both its best run and its typical run changed by more than a threshold (<code>THRESHOLD=</code>, 3 percent) and its best run by more than twice its noise; one whose noise alone is beyond the threshold is marked noisy; and any rise in allocations is a regression, since several benchmarks promise none, but for one of a thousandth or less in a benchmark that allocates hundreds of thousands of times. On identical code with that flag it flagged nothing in 151 benchmarks, and found a change of 5 percent in 147 of them. A package whose test binary is the same file as the base&#39;s has the same code, so it is not run and is listed as not run, which is exact, and a change to one package takes a minute or two, where all of them take about two minutes a round, ten at the default 5 rounds (<code>FLAGS=-identical</code> runs the rest too, to measure the noise). It exits 1 for a regression and 2 if it could not run. The tool is <code>internal/benchcmp</code> and needs only Go and git, and a <code>bench</code> workflow runs it in GitHub Actions when started by hand.</li>
 </ul>
-<h2 id="080---2026-11-15"><a href="https://github.com/kyrokohan/glonk/compare/v0.7.0...v0.8.0">0.8.0</a> - 2026-11-15</h2>
+<h2 id="080---2026-11-15"><a href="https://github.com/usrgames/glonk/compare/v0.7.0...v0.8.0">0.8.0</a> - 2026-11-15</h2>
 <p>On top of 0.7.0 this release adds pictures made in code and drawn in parts, mirrored, darker or in one color, a way to blend a color over the canvas, a kind for every tile of a tile map, line of sight and ray casts, and a way to walk to a target. A <code>Tile</code> has a new field, <code>Kind</code>, which <code>FromLines</code> fills, so a tile from it is no longer equal to the tile of its legend, and a <code>Tile</code> literal that lists its values without field names no longer compiles.</p>
 <h3 id="added-8">Added</h3>
 <ul>
@@ -219,7 +219,7 @@
 <li><code>Canvas.BlendRect(x, y, w, h, color, t)</code> blends <code>color</code> over the pixels of a rectangle by the part <code>t</code> from 0 to 1: each pixel that is there becomes <code>Mix(pixel, color, t)</code>, so 0 leaves it and 1 makes it <code>color</code>. It is the canvas half of <code>Mix</code>: a dim behind a menu, a fade to black, a red flash and a see-through panel were each a loop of <code>At</code>, <code>RGB</code>, arithmetic and <code>Set</code> in every program, and the whole canvas is <code>BlendRect(0, 0, c.Width(), c.Height(), ...)</code>. A pixel that is empty stays empty, since the terminal&#39;s own background is not known and there is nothing to mix with; a program that wants the tint there fills the pixels first. <code>t</code> outside 0 to 1 is clamped and NaN is 0, as for <code>Mix</code>, which does the arithmetic through the same function, so the two cannot disagree. A palette pixel becomes the exact RGB color it stands for, even at a <code>t</code> of 0, the zero <code>Color</code> as the color is read as black and does not erase, and depth is never read or written, as for <code>FillRect</code>. It clips as <code>FillRect</code> does, so a rectangle with a far-away edge costs no more than one on screen and no position or size overflows. It allocates nothing: a whole 200 by 120 canvas takes about 44 microseconds.</li>
 <li><code>bitmap.New(w, h)</code>, <code>Bitmap.Set(x, y, color)</code> and <code>bitmap.FromImage(img)</code> make a <code>Bitmap</code> in code, where a <code>Bitmap</code> could only come from <code>Decode</code>, which reads a PNG or a JPEG, so that a program that draws a generated texture, a sprite in other colors or a small map of a level had to encode a PNG in memory and decode it again. <code>New</code> makes a picture of see-through pixels and <code>Set</code> gives one a color: the zero <code>Color</code> makes it see-through again, and a pixel outside the picture is left out, as for <code>Canvas.Set</code>. <code>FromImage</code> copies any <code>image.Image</code> with the rule <code>Decode</code> has for alpha, an alpha of 128 or more is drawn as an opaque color and less is not, and the top left of its bounds is pixel (0, 0); changing the image afterwards does not change the <code>Bitmap</code>. <code>Decode</code>&#39;s limits are for files that cannot be trusted, so <code>FromImage</code> has none, its pixels being in memory already; <code>New</code> gives an empty picture, 0 by 0, for a size that is not positive or has more than 4,194,304 pixels (2,048 by 2,048), as <code>tilemap.New</code> does, since a size can come from a file too. A picture with no pixels, from either, is safe to draw, as a nil one is.</li>
 </ul>
-<h2 id="070---2026-11-14"><a href="https://github.com/kyrokohan/glonk/compare/v0.6.0...v0.7.0">0.7.0</a> - 2026-11-14</h2>
+<h2 id="070---2026-11-14"><a href="https://github.com/usrgames/glonk/compare/v0.6.0...v0.7.0">0.7.0</a> - 2026-11-14</h2>
 <p>On top of 0.6.0 this release adds a far plane and fog to the camera, the ray through a place on the screen and the pixel of a point in the world, the lighting rule, pictures that stand in a 3D scene, and a way to tell a key&#39;s first press from its repeats. A <code>Camera</code> literal that lists its values without field names no longer compiles, and <code>widget.Menu</code> chooses on a new press of Enter, not on a held one.</p>
 <h3 id="added-9">Added</h3>
 <ul>
@@ -247,7 +247,7 @@
 <ul>
 <li><code>Run</code> no longer ends at once with &#34;width and height must be positive integers&#34; on a terminal that reports 0 columns by 0 rows, which a pseudo-terminal that nobody gave a size does, as under <code>script</code> started from a CI step or in some container consoles. An axis you left at 0 is taken as 80 columns or 24 rows until the terminal reports a size, and <code>Run</code> follows the size from then on.</li>
 </ul>
-<h2 id="060---2026-11-13"><a href="https://github.com/kyrokohan/glonk/compare/v0.5.0...v0.6.0">0.6.0</a> - 2026-11-13</h2>
+<h2 id="060---2026-11-13"><a href="https://github.com/usrgames/glonk/compare/v0.5.0...v0.6.0">0.6.0</a> - 2026-11-13</h2>
 <p>On top of 0.5.0 this release adds widgets for a heads-up display and menus, rectangles and circles on the canvas, and pictures from JPEG and PNG files, and reads the terminal size from the output so that the examples start on Windows. Nothing was removed, renamed or changed.</p>
 <h3 id="added-10">Added</h3>
 <ul>
@@ -271,7 +271,7 @@
 <ul>
 <li>The terminal size is read from the output handle, so the examples start on Windows (tried in Windows Terminal on Windows 11), where asking the input handle fails with &#34;The handle is invalid&#34;.</li>
 </ul>
-<h2 id="050---2026-11-11"><a href="https://github.com/kyrokohan/glonk/compare/v0.4.0...v0.5.0">0.5.0</a> - 2026-11-11</h2>
+<h2 id="050---2026-11-11"><a href="https://github.com/usrgames/glonk/compare/v0.4.0...v0.5.0">0.5.0</a> - 2026-11-11</h2>
 <p>On top of 0.4.0 this release adds 2D collision, a tile map and a camera that follows the player. Nothing was removed, renamed or changed.</p>
 <h3 id="added-11">Added</h3>
 <ul>
@@ -287,7 +287,7 @@
 <li><code>Layer.All</code> and <code>Layer.Hits(r)</code> range over the sprites of a layer, and over those whose boxes overlap a <code>Rect</code>, in draw order. They allocate nothing (1,000 sprites take about 4 microseconds to ask), the layer must not change while they run, and <code>Layer.Draw</code> is as fast as before.</li>
 <li><code>examples/sprites</code> has a rock in the sea. The ship is pushed out of it, so steering into it stops the ship against its face and steering in at an angle slides it along; the ghost floats through. The ship&#39;s step is capped at 0.05 s so that a long frame cannot carry it through the rock.</li>
 </ul>
-<h2 id="040---2026-11-10"><a href="https://github.com/kyrokohan/glonk/compare/v0.3.0...v0.4.0">0.4.0</a> - 2026-11-10</h2>
+<h2 id="040---2026-11-10"><a href="https://github.com/usrgames/glonk/compare/v0.3.0...v0.4.0">0.4.0</a> - 2026-11-10</h2>
 <p>On top of 0.3.0 this release colors models: from the pictures their materials name, and from colors on their vertices. Nothing was removed or renamed.</p>
 <h3 id="added-12">Added</h3>
 <ul>
@@ -306,7 +306,7 @@
 <li>A model that used to load with no colors, or some, may now load with all: the pirate ship test model went from 1,552 colored faces of 29,860 to all of them, and a model of 800,000 faces from none to all. Loading takes longer by the time to decode the picture (23 to 61 ms, and 615 to 844 ms for the two), and <code>LoadOBJFS</code> of a file with many <code>vt</code> lines and no texture takes about 17% longer to read them. <code>LoadOBJ</code> and <code>LoadOBJLimit</code> are unchanged and read no <code>vt</code>.</li>
 <li>Programs that import <code>mesh</code> now link the standard library&#39;s <code>image/jpeg</code> and <code>image/png</code> decoders, about 320 KB more in the viewer (3.08 to 3.40 MB); they also register those formats with <code>image.Decode</code> in the program, as importing them always does.</li>
 </ul>
-<h2 id="030---2026-11-09"><a href="https://github.com/kyrokohan/glonk/compare/v0.2.0...v0.3.0">0.3.0</a> - 2026-11-09</h2>
+<h2 id="030---2026-11-09"><a href="https://github.com/usrgames/glonk/compare/v0.2.0...v0.3.0">0.3.0</a> - 2026-11-09</h2>
 <p>On top of 0.2.0 this release adds sprites of several cells, see-through and animated, and wireframes drawn as half-block pixels. Nothing was removed or renamed.</p>
 <h3 id="added-13">Added</h3>
 <ul>
@@ -322,7 +322,7 @@
 <ul>
 <li><code>sprite.Sprite</code> has three new fields: <code>Frame</code>, <code>Animation</code> and <code>Overlay</code>. Code that sets fields by name is unaffected, and a sprite with none of them set draws as before. A <code>Sprite{...}</code> literal that lists its values without field names no longer compiles, and <code>go vet</code> already warns about those: name the fields.</li>
 </ul>
-<h2 id="020---2026-11-08"><a href="https://github.com/kyrokohan/glonk/compare/v0.1.0...v0.2.0">0.2.0</a> - 2026-11-08</h2>
+<h2 id="020---2026-11-08"><a href="https://github.com/usrgames/glonk/compare/v0.1.0...v0.2.0">0.2.0</a> - 2026-11-08</h2>
 <p>The module path is now <code>glonk.dev</code>, which is a breaking change: see Changed, and &#34;Moved to glonk.dev&#34; in the README for the commands that move a project. On top of 0.1.0 this release adds smooth shading, true color, depth-tested wireframes and colors on models, and sends the terminal far less per frame.</p>
 <h3 id="added-14">Added</h3>
 <ul>
@@ -355,7 +355,7 @@
 <li><code>Run</code> sends a terminal only the cells that changed since the last frame, as one synchronized update (terminal mode 2026, which terminals that do not know it ignore), instead of every cell of every frame. A screen that does not change writes nothing, and the example programs write 74% to 100% fewer bytes. The screen is drawn again in full after a resize, after Ctrl-Z, after a failed write and when the terminal reports the window regained focus. A headless <code>Run</code> still writes every frame whole. Text that something else prints to the terminal during a run is no longer overwritten by the next frame.</li>
 <li>Escape sequences are built without <code>fmt</code> into a buffer that is reused from frame to frame, and a change of colors or attributes is written as one sequence. A frame takes 2 to 7 times less time to produce, allocates nothing once running, and a color-heavy frame is up to 9% smaller.</li>
 </ul>
-<h2 id="010---2026-11-08"><a href="https://github.com/kyrokohan/glonk/releases/tag/v0.1.0">0.1.0</a> - 2026-11-08</h2>
+<h2 id="010---2026-11-08"><a href="https://github.com/usrgames/glonk/releases/tag/v0.1.0">0.1.0</a> - 2026-11-08</h2>
 <p>The first release. The API is pre-1.0 and may still change. The README lists the known limits of what exists today.</p>
 <h3 id="added-15">Added</h3>
 <p><strong>engine</strong></p>
@@ -396,12 +396,12 @@
 <footer>
   <nav aria-label="More">
     <a href="https://pkg.go.dev/glonk.dev">pkg.go.dev</a>
-    <a href="https://github.com/kyrokohan/glonk">GitHub</a>
+    <a href="https://github.com/usrgames/glonk">GitHub</a>
     <a href="/showcase/">Showcase</a>
-    <a href="https://github.com/kyrokohan/glonk/blob/main/CONTRIBUTING.md">Contributing</a>
-    <a href="https://github.com/kyrokohan/glonk/blob/main/SECURITY.md">Security</a>
-    <a href="https://github.com/kyrokohan/glonk/blob/main/BRAND.md">Brand</a>
-    <a href="https://github.com/kyrokohan/glonk/blob/main/LICENSE">MIT license</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/CONTRIBUTING.md">Contributing</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/SECURITY.md">Security</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/BRAND.md">Brand</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/LICENSE">MIT license</a>
   </nav>
   <p class="fine">Early and pre-1.0: the API may change. Built to work in most terminals; Windows is untested.</p>
 </footer>

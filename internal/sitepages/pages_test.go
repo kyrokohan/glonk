@@ -16,7 +16,7 @@ import (
 
 var update = flag.Bool("update", false, "write the pages again from README.md and CHANGELOG.md")
 
-const repository = "https://github.com/kyrokohan/glonk"
+const repository = "https://github.com/usrgames/glonk"
 
 // The sections of the README that are about the repository and not about using glonk. The manual
 // leaves them out, and the foot of every page links to them.
@@ -40,8 +40,8 @@ var shell = template.Must(template.New("page").Parse(`<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="go-import" content="glonk.dev git https://github.com/kyrokohan/glonk">
-<meta name="go-source" content="glonk.dev https://github.com/kyrokohan/glonk https://github.com/kyrokohan/glonk/tree/main{/dir} https://github.com/kyrokohan/glonk/blob/main{/dir}/{file}#L{line}">
+<meta name="go-import" content="glonk.dev git https://github.com/usrgames/glonk">
+<meta name="go-source" content="glonk.dev https://github.com/usrgames/glonk https://github.com/usrgames/glonk/tree/main{/dir} https://github.com/usrgames/glonk/blob/main{/dir}/{file}#L{line}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.Title}}: glonk</title>
 <meta name="description" content="{{.Description}}">
@@ -70,8 +70,8 @@ var shell = template.Must(template.New("page").Parse(`<!doctype html>
   <nav aria-label="glonk">
     <a href="/manual/"{{if eq .Address "/manual/"}} aria-current="page"{{end}}>Manual</a>
     <a href="/changelog/"{{if eq .Address "/changelog/"}} aria-current="page"{{end}}>Changelog</a>
-    <a href="https://github.com/kyrokohan/glonk/tree/main/examples">Examples</a>
-    <a href="https://github.com/kyrokohan/glonk">GitHub</a>
+    <a href="https://github.com/usrgames/glonk/tree/main/examples">Examples</a>
+    <a href="https://github.com/usrgames/glonk">GitHub</a>
   </nav>
 </header>
 
@@ -93,12 +93,12 @@ var shell = template.Must(template.New("page").Parse(`<!doctype html>
 <footer>
   <nav aria-label="More">
     <a href="https://pkg.go.dev/glonk.dev">pkg.go.dev</a>
-    <a href="https://github.com/kyrokohan/glonk">GitHub</a>
+    <a href="https://github.com/usrgames/glonk">GitHub</a>
     <a href="/showcase/">Showcase</a>
-    <a href="https://github.com/kyrokohan/glonk/blob/main/CONTRIBUTING.md">Contributing</a>
-    <a href="https://github.com/kyrokohan/glonk/blob/main/SECURITY.md">Security</a>
-    <a href="https://github.com/kyrokohan/glonk/blob/main/BRAND.md">Brand</a>
-    <a href="https://github.com/kyrokohan/glonk/blob/main/LICENSE">MIT license</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/CONTRIBUTING.md">Contributing</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/SECURITY.md">Security</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/BRAND.md">Brand</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/LICENSE">MIT license</a>
   </nav>
   <p class="fine">Early and pre-1.0: the API may change. Built to work in most terminals; Windows is untested.</p>
 </footer>
