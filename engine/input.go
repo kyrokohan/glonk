@@ -75,6 +75,9 @@ func (in *Input) event(e keyEvent, at time.Time) {
 	case kindMouseMove, kindMouseDown, kindMouseUp, kindWheel:
 		in.mouseEvent(e)
 		return
+	case kindCellSize:
+		in.setCellSize(e.cell())
+		return
 	}
 
 	in.list(e)
@@ -311,8 +314,15 @@ func (f *inputFeed) expire(now time.Time) inputAction {
 // after a gap in which releases and the rest of a sequence were lost.
 func (f *inputFeed) reset() {
 	f.stop()
-	f.parser = keyParser{}
+	f.parser = keyParser{pixels: f.parser.pixels}
 	f.in.releaseAll()
+}
+
+// usePixels reads pointer reports from now on as pixels, a cell being w by h of them, for a terminal that
+// was asked for mode 1016.
+func (f *inputFeed) usePixels(w, h int) {
+	f.parser.pixels = true
+	f.in.usePixels(w, h)
 }
 
 // stop cancels the wait, draining the channel so a tick that was already on its way

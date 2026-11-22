@@ -56,12 +56,17 @@ type Config struct {
 	Colors ColorMode
 
 	// Mouse asks the terminal to report the pointer: where it is, as it moves with or without a button,
-	// the buttons and the wheel, which Input.MousePos, MouseMoved, MouseDown, MouseStarted, MouseReleased
-	// and Wheel say. It is off unless set, because a terminal that reports the pointer to a program no longer lets
-	// the user select text with it (Shift with the mouse usually still does, in terminals that allow it),
-	// so a program that does not read the mouse is left as it was. It has no effect without a terminal.
-	// Where a terminal does not support it, MousePos says ok is false. Run asks for the decimal form of a
-	// report (mode 1006) and reads nothing older.
+	// the buttons and the wheel, which Input.MousePos, MousePixels, MouseMoved, MouseDown, MouseStarted,
+	// MouseReleased and Wheel say. It is off unless set, because a terminal that reports the pointer to a
+	// program no longer lets the user select text with it (Shift with the mouse usually still does, in
+	// terminals that allow it), so a program that does not read the mouse is left as it was. It has no effect
+	// without a terminal. Where a terminal does not support it, MousePos says ok is false. Run asks for the
+	// decimal form of a report (mode 1006) and reads nothing older.
+	//
+	// Run also asks, at the start and also with LegacyKeys, whether the terminal reports the pointer in its
+	// pixels (mode 1016) and how large a cell is in them (CSI 16 t). Where it says both, the reports come in
+	// pixels, so that MousePixels is finer than a cell (see Input.MouseFine), and the size of a cell is asked
+	// again when the window changes size, since a font can be zoomed.
 	Mouse bool
 
 	// Input is where keys are read from; nil means os.Stdin.
@@ -303,19 +308,22 @@ func Run(ctx context.Context, game Game, cfg Config) (err error) {
 	// A headless input is read as the protocol reports keys: there is no terminal to ask.
 	exact := tty.headless && !cfg.LegacyKeys
 	var typed []byte // keys pressed while the probe waited
-	if !tty.headless && !cfg.LegacyKeys {
-		kitty, rest, err := probeKitty(input, tty.out, probeTimeout)
+	var answers probeAnswers
+	if askKitty, askMouse := !cfg.LegacyKeys, cfg.Mouse; !tty.headless && (askKitty || askMouse) {
+		answers, typed, err = probe(input, tty.out, probeTimeout, askKitty, askMouse)
 		if err != nil {
 			return err
 		}
-		typed = rest
-		if kitty {
+		if answers.kitty {
 			if err := tty.EnableKeyboardProtocol(); err != nil {
 				return err
 			}
 			exact = true
 		}
 	}
+	// Pixel reports need the size of a cell to say which cell the pointer is in, so only a terminal that has
+	// them and said that size is asked for them.
+	pixels := answers.pixels && answers.cellW > 0 && answers.cellH > 0
 
 	ticker := time.NewTicker(time.Second / time.Duration(cfg.FPS))
 	defer ticker.Stop()
@@ -347,19 +355,32 @@ func Run(ctx context.Context, game Game, cfg Config) (err error) {
 				return err
 			}
 		}
+		if pixels {
+			// The font may have changed while stopped, so the size of a cell is asked again.
+			if err := tty.EnableMousePixels(); err != nil {
+				return err
+			}
+		}
 		pres.invalidate() // the screen was left and set up again, so it is blank
 		last = time.Now() // so the time spent stopped is not a frame
 		return nil
 	}
 
 	// The terminal sent those keys before the keyboard protocol was on, so they come
-	// with no release. They count as taps: held, they would never be let go.
+	// with no release. They count as taps: held, they would never be let go. Pointer
+	// reports among them are in cells, so they are read before pixel reports are on.
 	if len(typed) > 0 {
 		action := keys.feed(typed, time.Now())
 		in.releaseAll()
 		if done, err := handle(action, suspend); done {
 			return err
 		}
+	}
+	if pixels {
+		if err := tty.EnableMousePixels(); err != nil {
+			return err
+		}
+		keys.usePixels(answers.cellW, answers.cellH)
 	}
 
 	resizer, _ := game.(Resizer)
@@ -417,6 +438,12 @@ func Run(ctx context.Context, game Game, cfg Config) (err error) {
 				if curW != shownW || curH != shownH {
 					pres.invalidate()
 					shownW, shownH = curW, curH
+					if pixels {
+						// A window that changed size in cells may have changed font size: ask again.
+						if err := tty.AskCellSize(); err != nil {
+							return err
+						}
+					}
 				}
 			}
 

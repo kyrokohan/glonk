@@ -91,7 +91,8 @@ const (
 // own: the marker that opens a paste was read, and the keyParser, which never hands
 // it on, collects what follows. The mouse kinds are not about a key either: key holds the cell the
 // pointer was in (see cellKey), btn the button or the wheel direction (see mouse.go), and a
-// kindMouseMove has no button.
+// kindMouseMove has no button. In pixel mode key holds the pixel instead. kindCellSize is the
+// terminal's answer to how many pixels a cell is, the width and height packed as a cell is.
 type keyKind uint8
 
 const (
@@ -107,6 +108,7 @@ const (
 	kindMouseDown
 	kindMouseUp
 	kindWheel
+	kindCellSize
 )
 
 // keyEvent is one decoded key event.
@@ -220,7 +222,7 @@ func parseEvents(b []byte) []keyEvent {
 // ESC followed by a key is an Alt chord (Alt+x arrives as ESC x). Games do not get
 // chords, and reading them as Escape then x would make Alt+anything press Escape,
 // so they are dropped, as the kitty protocol path already does.
-func parse(b []byte, final bool) (events []keyEvent, consumed int) {
+func parse(b []byte, final, pixels bool) (events []keyEvent, consumed int) {
 	press := func(k Key) { events = append(events, keyEvent{key: k, kind: kindPress}) }
 
 	i := 0
@@ -272,7 +274,7 @@ func parse(b []byte, final bool) (events []keyEvent, consumed int) {
 					i = j + 4
 					continue
 				}
-				events = appendCSI(events, b[i+2:j], b[j])
+				events = appendCSI(events, b[i+2:j], b[j], pixels)
 				i = j + 1
 
 			case next == 'O':
@@ -369,6 +371,8 @@ type keyParser struct {
 	paste   []byte // what has been collected of it, up to maxPaste
 	hold    []byte // the last bytes of it, which may be the start of the end marker
 	scan    []byte // room to look at hold and the next read together
+
+	pixels bool // pointer reports are in pixels (mode 1016), not cells
 }
 
 // Feed decodes the next piece of input after whatever was left over from the last.
@@ -390,7 +394,7 @@ func (p *keyParser) Feed(b []byte) []keyEvent {
 			events = append(events, keyEvent{key: KeyUnknown, kind: kindPaste, text: p.take()})
 		}
 
-		keys, n := parse(data, false)
+		keys, n := parse(data, false, p.pixels)
 		if k := len(keys); k > 0 && keys[k-1].kind == kindPasteStart {
 			events = append(events, keys[:k-1]...)
 			p.inPaste = true
@@ -431,7 +435,7 @@ func (p *keyParser) Flush() []keyEvent {
 		p.addPaste(p.hold) // what might have begun the end marker is text after all
 		events = append(events, keyEvent{key: KeyUnknown, kind: kindPaste, text: p.take()})
 	}
-	keys, _ := parse(p.pending, true)
+	keys, _ := parse(p.pending, true, p.pixels)
 	p.pending = p.pending[:0]
 	if events == nil {
 		return keys
@@ -440,13 +444,14 @@ func (p *keyParser) Flush() []keyEvent {
 }
 
 // appendCSI decodes a CSI sequence (parameter bytes plus final byte) and appends
-// its key event, if it is one we understand. Anything else is dropped.
-func appendCSI(events []keyEvent, params []byte, final byte) []keyEvent {
+// its key event, if it is one we understand. Anything else is dropped. pixels says a mouse
+// report is in pixels.
+func appendCSI(events []keyEvent, params []byte, final byte, pixels bool) []keyEvent {
 	// '<' to '?' as the first parameter byte marks a private sequence, such as a
 	// protocol reply, not a key. CSI < ... M and m are the one kind we read: a mouse report.
 	if len(params) > 0 && params[0] >= '<' && params[0] <= '?' {
 		if params[0] == '<' && (final == 'M' || final == 'm') {
-			return appendMouse(events, params[1:], final)
+			return appendMouse(events, params[1:], final, pixels)
 		}
 		return events
 	}
@@ -482,6 +487,13 @@ func appendCSI(events []keyEvent, params []byte, final byte) []keyEvent {
 		}
 	case final == 'u':
 		return appendKitty(events, fields)
+	case final == 't':
+		// The size of a cell in pixels, CSI 6 ; height ; width t, which Run asks for in pixel mode.
+		if param(fields, 0, 0) == 6 {
+			if h, w := param(fields, 1, 0), param(fields, 2, 0); h > 0 && w > 0 {
+				return append(events, keyEvent{key: cellKey(w, h), kind: kindCellSize})
+			}
+		}
 	}
 	return events
 }

@@ -211,7 +211,7 @@ func TestTheMouseIsShownAndItsButtonsLogged(t *testing.T) {
 	kb.MouseMove(12, 5)
 	kb.MouseDown(engine.MouseLeft)
 	got := frame(t, m, kb)
-	for _, want := range []string{"press   mouse Left at 12,5", "mouse: cell 12,5, down: [Left]"} {
+	for _, want := range []string{"press   mouse Left at 12,5", "mouse: cell 12,5, down: [Left]", "canvas pixel: 12.5,11.0, by cell"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("wanted %q, got\n%s", want, got)
 		}
@@ -271,5 +271,16 @@ func TestTheFieldEditsAndEnterLogsIt(t *testing.T) {
 	got := frame(t, m, kb)
 	if !strings.Contains(got, `entered "helx a blo"`) || m.field.Text != "" || m.field.Cursor != 0 {
 		t.Errorf("wanted Enter to log the text and empty the field, got %q at %d and\n%s", m.field.Text, m.field.Cursor, got)
+	}
+}
+
+// Where the terminal reports pixels, the mouse line says the canvas pixel with its fraction, and fine.
+func TestTheMouseLineInPixels(t *testing.T) {
+	m := newMonitor()
+	kb := engine.NewKeyboard()
+	kb.CellSize(16, 34)
+	kb.MouseMovePixels(40, 50)
+	if got := frame(t, m, kb); !strings.Contains(got, "mouse: cell 2,1,") || !strings.Contains(got, "canvas pixel: 2.5,3.0, fine") {
+		t.Errorf("wanted the pixel and fine on the mouse line, got\n%s", got)
 	}
 }

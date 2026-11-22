@@ -507,3 +507,152 @@ func TestInputMouseMovedIsAnotherCellSinceThePreviousFrame(t *testing.T) {
 		t.Errorf("wanted a Keyboard's move to another cell to count")
 	}
 }
+
+// In pixel mode a report is a pixel of the terminal, counted from 0 at the grid's top left, and less than 0
+// over the padding; the answer to how large a cell is reads as one, and neither is ever a key.
+func TestParsePixelReports(t *testing.T) {
+	parse := func(in string, pixels bool) []keyEvent {
+		p := keyParser{pixels: pixels}
+		return append(p.Feed([]byte(in)), p.Flush()...)
+	}
+	for _, tt := range []struct {
+		name   string
+		in     string
+		pixels bool
+		want   []keyEvent
+	}{
+		{"a pixel", sgr(35, 40, 70, 'M'), true, []keyEvent{mouseEv(kindMouseMove, 0, 40, 70)}},
+		{"pixel 0 is the first", sgr(0, 0, 0, 'M'), true, []keyEvent{mouseEv(kindMouseDown, 0, 0, 0)}},
+		{"over the padding", "\x1b[<35;-4;-3M", true, []keyEvent{mouseEv(kindMouseMove, 0, 0, 0)}},
+		{"the same report in cells", sgr(35, 40, 70, 'M'), false, []keyEvent{mouseEv(kindMouseMove, 0, 39, 69)}},
+		{"a minus in a cell report", "\x1b[<35;-4;3M", false, nil},
+		{"a minus on the button", "\x1b[<-225;4;3M", true, nil}, // its low byte reads as a move, so only the sign stops it
+		{"a minus after a digit", "\x1b[<35;4-2;3M", true, nil},
+		{"two minuses", "\x1b[<35;--4;3M", true, nil},
+		{"the size of a cell", "\x1b[6;34;16t", false, []keyEvent{{key: cellKey(16, 34), kind: kindCellSize}}},
+		{"a size of 0", "\x1b[6;0;16t", false, nil},
+		{"the text area is no cell size", "\x1b[4;1938;1712t", false, nil},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := parse(tt.in, tt.pixels); !slices.Equal(got, tt.want) {
+				t.Errorf("wanted %v, got %v", tt.want, got)
+			}
+		})
+	}
+}
+
+// With pixel reports a cell is the pixel divided by the size of one, and MousePixels says where in it the
+// pointer is; without them MousePixels is the middle of the cell.
+func TestInputMousePixels(t *testing.T) {
+	kb := NewKeyboard()
+	if _, _, ok := kb.Input().MousePixels(); ok || kb.Input().MouseFine() {
+		t.Fatalf("wanted no position and no pixels before a report")
+	}
+	kb.MouseMove(3, 2)
+	if x, y, ok := kb.Input().MousePixels(); !ok || x != 3.5 || y != 5 || kb.Input().MouseFine() {
+		t.Errorf("wanted the middle of cell 3, 2 in cells, got %v, %v, %v", x, y, ok)
+	}
+
+	kb = NewKeyboard()
+	kb.CellSize(16, 34)
+	if !kb.Input().MouseFine() {
+		t.Fatalf("wanted pixel reports on after CellSize")
+	}
+	for _, tt := range []struct {
+		px, py         int
+		cellX, cellY   int
+		pixelX, pixelY float64
+	}{
+		{0, 0, 0, 0, 0.5 / 16, 1.0 / 34},
+		{15, 33, 0, 0, 15.5 / 16, 2 * 33.5 / 34},
+		{16, 34, 1, 1, 16.5 / 16, 2 * 34.5 / 34},
+		{40, 50, 2, 1, 40.5 / 16, 2 * 50.5 / 34},
+	} {
+		kb.MouseMovePixels(tt.px, tt.py)
+		in := kb.Input()
+		if x, y, _ := in.MousePos(); x != tt.cellX || y != tt.cellY {
+			t.Errorf("pixel %d, %d: wanted cell %d, %d, got %d, %d", tt.px, tt.py, tt.cellX, tt.cellY, x, y)
+		}
+		if x, y, ok := in.MousePixels(); !ok || x != tt.pixelX || y != tt.pixelY {
+			t.Errorf("pixel %d, %d: wanted canvas %v, %v, got %v, %v", tt.px, tt.py, tt.pixelX, tt.pixelY, x, y)
+		}
+	}
+
+	// MouseMove goes to the top left pixel of a cell, and a click and the wheel stay where the pointer is.
+	kb.MouseMove(5, 3)
+	kb.MouseDown(MouseLeft)
+	kb.Wheel(0, 1)
+	in := kb.Input()
+	if x, y, _ := in.MousePos(); x != 5 || y != 3 || !in.MouseStarted(MouseLeft) {
+		t.Errorf("wanted a click in cell 5, 3, got %d, %d", x, y)
+	}
+	if x, y, _ := in.MousePixels(); x != 80.5/16 || y != 2*102.5/34 {
+		t.Errorf("wanted the top left pixel of cell 5, 3, got %v, %v", x, y)
+	}
+
+	// A new cell size moves the pointer into the cell it is in at that size; a size of 0 is none.
+	in.setCellSize(8, 17)
+	if x, y, _ := in.MousePos(); x != 10 || y != 6 {
+		t.Errorf("wanted cell 10, 6 at half the size, got %d, %d", x, y)
+	}
+	in.setCellSize(0, 17)
+	if x, y, _ := in.MousePos(); x != 10 || y != 6 || in.mouse.cellW != 8 {
+		t.Errorf("wanted a size of 0 to leave the last, got %d, %d and a cell %d wide", x, y, in.mouse.cellW)
+	}
+	kb.CellSize(0, 9)
+	if in.mouse.cellH != 17 {
+		t.Errorf("wanted CellSize of 0 to do nothing, got a cell %d high", in.mouse.cellH)
+	}
+}
+
+// MouseMoved stays a move to another cell: a move within a cell is not one.
+func TestInputMouseMovedInPixels(t *testing.T) {
+	kb := NewKeyboard()
+	kb.CellSize(16, 34)
+	kb.MouseMovePixels(20, 40)
+	kb.EndFrame()
+	kb.MouseMovePixels(30, 60)
+	if kb.Input().MouseMoved() {
+		t.Errorf("wanted a move within cell 1, 1 not to be a move")
+	}
+	kb.EndFrame()
+	kb.MouseMovePixels(33, 60)
+	if !kb.Input().MouseMoved() {
+		t.Errorf("wanted a move into cell 2, 1 to be one")
+	}
+}
+
+// The answer to how large a cell is reaches Input through the feed, as a terminal sends it.
+func TestInputFeedCellSizeAnswer(t *testing.T) {
+	in := newInput(true)
+	f := newInputFeed(in)
+	f.usePixels(16, 34)
+	now := time.Unix(0, 0)
+	f.feed([]byte(sgr(35, 64, 68, 'M')), now)
+	if x, y, _ := in.MousePos(); x != 4 || y != 2 {
+		t.Fatalf("wanted cell 4, 2, got %d, %d", x, y)
+	}
+	f.feed([]byte("\x1b[6;17;8t"), now)
+	if x, y, _ := in.MousePos(); x != 8 || y != 4 || len(in.KeyEvents()) != 0 {
+		t.Errorf("wanted the zoomed cell 8, 4 and no key, got %d, %d and %v", x, y, in.KeyEvents())
+	}
+	f.reset()
+	f.feed([]byte(sgr(35, 64, 68, 'M')), now)
+	if x, y, _ := in.MousePos(); x != 8 || y != 4 {
+		t.Errorf("wanted reports still read in pixels after a reset, got %d, %d", x, y)
+	}
+}
+
+// Pixel reports turned on after a report in cells keep the pointer in its cell, at the middle of it.
+func TestInputPixelsAfterACellReport(t *testing.T) {
+	kb := NewKeyboard()
+	kb.MouseMove(4, 2)
+	kb.CellSize(16, 34)
+	in := kb.Input()
+	if x, y, _ := in.MousePos(); x != 4 || y != 2 {
+		t.Errorf("wanted the pointer still in cell 4, 2, got %d, %d", x, y)
+	}
+	if x, y, _ := in.MousePixels(); x != 72.5/16 || y != 2*85.5/34 {
+		t.Errorf("wanted the middle of cell 4, 2 in pixels, got %v, %v", x, y)
+	}
+}

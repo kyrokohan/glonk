@@ -3,7 +3,8 @@
 // do, whether the terminal reports key releases, and which keys are held. Run it in every terminal
 // you care about, and press what a game would use: the function keys, Home and End, Page Up and
 // Page Down, the arrows, letters, Ctrl, Alt and Shift with them, paste some text with line breaks,
-// and move the mouse over the window, click, drag and turn the wheel. The field line is a
+// and move the mouse over the window, click, drag and turn the wheel. The mouse line says the canvas pixel
+// too, and "fine" where the terminal reports the pointer in pixels. The field line is a
 // widget.TextField to type into and edit, with Left, Right, Home, End, Backspace and Delete; Enter
 // logs its text and empties it.
 //
@@ -81,6 +82,7 @@ type monitor struct {
 	buttons        []string // the mouse buttons that are down now
 	wheelX, wheelY int      // what the wheel has added up to since the monitor began
 
+	pixel string           // where the pointer is in canvas pixels, and whether finer than a cell, or "" before a report
 	field widget.TextField // a line to type into and edit, which Enter logs and empties
 }
 
@@ -163,6 +165,13 @@ func (m *monitor) mouse(in *engine.Input) {
 	x, y, ok := in.MousePos()
 	if ok {
 		m.pos = fmt.Sprintf("%d,%d", x, y)
+		// The canvas pixel too, with fractions where the terminal reports pixels, and the middle of the cell where not.
+		px, py, _ := in.MousePixels()
+		how := "by cell: the terminal reports no pixels"
+		if in.MouseFine() {
+			how = "fine: the terminal reports pixels"
+		}
+		m.pixel = fmt.Sprintf("canvas pixel: %.1f,%.1f, %s", px, py, how)
 	}
 	m.buttons = m.buttons[:0]
 	for _, mb := range mouseButtons {
@@ -202,11 +211,12 @@ func (m *monitor) Draw(fb *engine.FrameBuffer) {
 	fb.DrawText(1, 4, "typed: "+string(m.typed), engine.Palette(117))
 	fb.DrawText(1, 5, "pasted: "+m.pasted, engine.Palette(183))
 	fb.DrawText(1, 6, m.mouseLine(), engine.Palette(121))
-	fb.DrawText(1, 7, "field:", engine.Palette(117))
-	m.field.Draw(fb, 8, 7, 40)
+	fb.DrawText(1, 7, m.pixel, engine.Palette(121))
+	fb.DrawText(1, 8, "field:", engine.Palette(117))
+	m.field.Draw(fb, 8, 8, 40)
 
 	for i, line := range m.log {
-		y := 9 + i
+		y := 10 + i
 		if y >= fb.Height() {
 			break
 		}

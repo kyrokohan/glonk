@@ -254,3 +254,96 @@ func TestRunAsksForTheMouseOnlyWhenConfiguredAndReadsIt(t *testing.T) {
 		})
 	}
 }
+
+// With the mouse, Run asks the terminal whether it reports the pointer in pixels and how large a cell is, and
+// turns pixel reports on only where it does and said, also under LegacyKeys. It asks the size again when the
+// window changes, and turns pixel reports off first when it ends.
+func TestRunMouseInPixelsWhereTheTerminalHasThem(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		answer  string
+		legacy  bool
+		pixels  bool
+		report  string // a press the terminal sends once Run has started
+		cellX   int    // the cell the game must see it in
+		canvasX float64
+	}{
+		{"has them", "\x1b[?1016;2$y\x1b[6;34;16t\x1b[?62c", false, true, sgr(0, 64, 68, 'M'), 4, 64.5 / 16},
+		// A report that comes before the answers was sent in cells, and is read so: the middle of cell 4, 2.
+		{"has them, a report in cells first", sgr(0, 5, 3, 'M') + "\x1b[?1016;2$y\x1b[6;34;16t\x1b[?62c", false, true, "", 4, 72.5 / 16},
+		{"has them, LegacyKeys", "\x1b[?1016;2$y\x1b[6;34;16t\x1b[?62c", true, true, sgr(0, 64, 68, 'M'), 4, 64.5 / 16},
+		{"does not know the mode", "\x1b[?1016;0$y\x1b[6;34;16t\x1b[?62c", false, false, sgr(0, 5, 3, 'M'), 4, 4.5},
+		{"says no cell size", "\x1b[?1016;2$y\x1b[?62c", false, false, sgr(0, 5, 3, 'M'), 4, 4.5},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			master, slave := openPty(t)
+			written := collect(master)
+
+			type seen struct {
+				x, y   int
+				canvas float64
+				fine   bool
+			}
+			var last atomic.Value
+			game := scriptedGame{update: func(_ float64, in *Input) error {
+				if x, y, ok := in.MousePos(); ok && in.MouseStarted(MouseLeft) {
+					cx, _, _ := in.MousePixels()
+					last.Store(seen{x, y, cx, in.MouseFine()})
+				}
+				return nil
+			}}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			done := make(chan error, 1)
+			go func() {
+				done <- Run(ctx, game, Config{FPS: 60, Width: 20, Height: 5, Input: slave, Output: slave, Mouse: true, LegacyKeys: tt.legacy})
+			}()
+
+			waitFor(t, "the questions about the mouse", func() bool { return strings.Contains(written(), "\x1b[?1016$p\x1b[16t") })
+			if got := strings.Contains(written(), "\x1b[?u"); got == tt.legacy {
+				t.Errorf("wanted the keyboard asked about only without LegacyKeys, got asked %v", got)
+			}
+			if _, err := master.WriteString(tt.answer); err != nil {
+				t.Fatalf("answering: %v", err)
+			}
+			waitFor(t, "the terminal to be set up", func() bool { return strings.Contains(written(), "\x1b[?2004h") })
+			if tt.pixels {
+				waitFor(t, "pixel reports turned on", func() bool { return strings.Contains(written(), "\x1b[?1016h") })
+			}
+			if tt.report != "" {
+				if _, err := master.WriteString(tt.report); err != nil {
+					t.Fatalf("sending the report: %v", err)
+				}
+			}
+			waitFor(t, "the click to reach the game", func() bool { return last.Load() != nil })
+			got := last.Load().(seen)
+			if got.x != tt.cellX || got.y != 2 || got.canvas != tt.canvasX || got.fine != tt.pixels {
+				t.Errorf("wanted cell %d, 2, canvas x %v and fine %v, got %+v", tt.cellX, tt.canvasX, tt.pixels, got)
+			}
+
+			if tt.pixels {
+				// A window that changes size may have a new font: the size of a cell is asked again.
+				before := strings.Count(written(), "\x1b[16t")
+				if err := unix.IoctlSetWinsize(int(slave.Fd()), unix.TIOCSWINSZ, &unix.Winsize{Row: 40, Col: 120}); err != nil {
+					t.Fatalf("resizing: %v", err)
+				}
+				waitFor(t, "the size of a cell asked again", func() bool { return strings.Count(written(), "\x1b[16t") > before })
+			}
+
+			cancel()
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Fatalf("wanted Run to end within 5 s of its context being canceled")
+			}
+			waitFor(t, "the alternate screen to be left", func() bool { return strings.Contains(written(), "\x1b[?1049l") })
+			all := written()
+			if got := strings.Contains(all, "\x1b[?1016h"); got != tt.pixels {
+				t.Errorf("wanted pixel reports turned on: %v, got %v", tt.pixels, got)
+			}
+			if tt.pixels && !strings.Contains(all, "\x1b[?1016l\x1b[?1006l\x1b[?1003l") {
+				t.Errorf("wanted pixel reports turned off before 1006 and 1003, got %q", all[max(len(all)-200, 0):])
+			}
+		})
+	}
+}
