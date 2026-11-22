@@ -2,9 +2,85 @@ package engine
 
 import (
 	"bytes"
+	"errors"
 	"io"
+	"os"
 	"time"
+
+	"golang.org/x/term"
 )
+
+// Terminal is what Probe found out about the terminal a program runs in.
+type Terminal struct {
+	// IsTerminal says the input and the output are both a terminal. Where they are not, the
+	// other fields are zero: there is nothing to ask.
+	IsTerminal bool
+
+	// Width and Height are its size in cells.
+	Width, Height int
+
+	// KeyReleases says it speaks the kitty keyboard protocol, so that it reports a key let
+	// go: Input.Exact will be true, and several keys can be held at once. Without it, a held
+	// key is a timing guess and only one stays held (see the README's Compatibility section).
+	KeyReleases bool
+
+	// TrueColor says the environment says it shows 24-bit colors, so that ColorsAuto sends
+	// RGB colors exactly; otherwise they are sent as the nearest of the 256-color palette.
+	TrueColor bool
+}
+
+// Probe asks the terminal Run would take over what it can do, without starting a game: whether
+// it reports key releases, whether it shows 24-bit colors, and its size, for a launcher or a
+// game's first screen to tell the player before the game begins. It reads Config.Input and
+// Config.Output, nil meaning stdin and stdout, and no other field of cfg.
+//
+// Where the input or the output is not a terminal, Probe says so and asks nothing. Otherwise it
+// puts the terminal in raw mode for as long as the question takes, at most a quarter second and
+// much less where the terminal answers, writes the question and nothing else, and puts it back as
+// it found it. A key pressed meanwhile, Ctrl-C included, is read along with the answer and
+// dropped: a terminal cannot be given input back. Call it before Run, not while Run has the
+// terminal.
+//
+// The error says the terminal could not be put in raw mode, written to or put back.
+func Probe(cfg Config) (_ Terminal, err error) {
+	var in io.Reader = os.Stdin
+	if cfg.Input != nil {
+		in = cfg.Input
+	}
+	var out io.Writer = os.Stdout
+	if cfg.Output != nil {
+		out = cfg.Output
+	}
+	inFile, inOK := in.(*os.File)
+	outFile, outOK := out.(*os.File)
+	if !inOK || !outOK || !term.IsTerminal(int(inFile.Fd())) || !term.IsTerminal(int(outFile.Fd())) {
+		return Terminal{}, nil
+	}
+
+	w, h, err := newTerminal(inFile, out).Size()
+	if err != nil {
+		return Terminal{}, err
+	}
+	state, err := term.MakeRaw(int(inFile.Fd()))
+	if err != nil {
+		return Terminal{}, err
+	}
+	defer func() { err = errors.Join(err, term.Restore(int(inFile.Fd()), state)) }()
+	chunks, stop := readInput(inFile)
+	defer stop() // before the restore: nothing may read the terminal once Probe is over
+
+	answers, _, err := probe(chunks, out, probeTimeout, true, false)
+	if err != nil {
+		return Terminal{}, err
+	}
+	return Terminal{
+		IsTerminal:  true,
+		Width:       w,
+		Height:      h,
+		KeyReleases: answers.kitty,
+		TrueColor:   detectTrueColor(os.Getenv),
+	}, nil
+}
 
 // probeAnswers is what a terminal said to the probe.
 type probeAnswers struct {

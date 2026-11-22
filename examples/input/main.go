@@ -10,7 +10,8 @@
 //
 //	go run ./examples/input
 //
-// Ctrl-C quits, so that Escape and every other key can be tried.
+// Ctrl-C quits, so that Escape and every other key can be tried. Before it starts, it prints what
+// engine.Probe says of the terminal, which is there again once it quits.
 package main
 
 import (
@@ -237,7 +238,22 @@ func (m *monitor) mouseLine() string {
 	return fmt.Sprintf("mouse: cell %s, down: [%s], wheel total: right %+d, down %+d", m.pos, strings.Join(m.buttons, " "), m.wheelX, m.wheelY)
 }
 
+// probeLine is what engine.Probe found, in a line, or why it could not ask.
+func probeLine(t engine.Terminal, err error) string {
+	switch {
+	case err != nil:
+		return "could not ask the terminal: " + err.Error()
+	case !t.IsTerminal:
+		return "not a terminal: input or output is redirected"
+	}
+	yes := map[bool]string{true: "yes", false: "no"}
+	return fmt.Sprintf("this terminal: key releases %s, true color %s, %d by %d cells", yes[t.KeyReleases], yes[t.TrueColor], t.Width, t.Height)
+}
+
 func main() {
+	// Asked before the game, so the answer is on the screen again when Ctrl-C leaves the game's.
+	fmt.Println(probeLine(engine.Probe(engine.Config{})))
+
 	// Width and Height of 0 fill the terminal and follow resizes.
 	err := engine.Run(context.Background(), newMonitor(), engine.Config{FPS: 30, Mouse: true})
 	if err != nil {

@@ -4,6 +4,10 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+### Added
+
+- `engine.Probe(cfg)` says what the terminal Run would take over can do, without starting a game: a `Terminal` with `KeyReleases` (the kitty keyboard protocol, so `Input.Exact` will be true and several keys can be held), `TrueColor` (what `ColorsAuto` would choose), `Width` and `Height`, and `IsTerminal` (#149). `Run` found these out as it started and kept them to itself apart from `Input.Exact`, so a launcher or a game's first screen that wanted to tell the player, before the game began, that this terminal holds one key at a time had to start a game loop or guess from the environment. It reads `Config.Input` and `Config.Output` only. Where either is not a terminal it says so and asks nothing; otherwise it puts the terminal in raw mode for the question, at most a quarter second, writes the question and nothing else, and puts it back as it found it. A key pressed meanwhile is dropped, as a terminal cannot be given input back. `examples/input` prints the answer before it starts.
+
 ## [0.15.0] - 2026-11-22
 
 On top of 0.14.0 this release is widgets and the mouse: menus that follow the pointer and take a click, a text field, and the pointer in pixels where the terminal can say. Nothing was removed or renamed and no signature changed, but `Menu` gained fields of its own; what behaves differently is under Changed. The module needs the same versions of `golang.org/x/sys` and `golang.org/x/term` as 0.14.0.
