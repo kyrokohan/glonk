@@ -104,11 +104,12 @@ func TestProbeLeavesTheTerminalAsItFoundIt(t *testing.T) {
 	if err := <-done; err != nil {
 		t.Fatalf("wanted no error, got %v", err)
 	}
-	// Its reader is gone, so nothing reads the terminal after it: a stack of every goroutine has none in it.
-	stacks := make([]byte, 1<<20)
-	if s := string(stacks[:runtime.Stack(stacks, true)]); strings.Contains(s, "engine.readInput") {
-		t.Errorf("wanted Probe's reader stopped when it returns, one is still running")
-	}
+	// Its reader is gone, so nothing reads the terminal after it. stop returns once the reader's loop is
+	// over, a moment before its goroutine leaves, so wait for it to leave.
+	waitFor(t, "Probe's reader to leave", func() bool {
+		stacks := make([]byte, 1<<20)
+		return !strings.Contains(string(stacks[:runtime.Stack(stacks, true)]), "engine.readInput")
+	})
 	after, err := unix.IoctlGetTermios(int(slave.Fd()), getTermios)
 	if err != nil {
 		t.Fatalf("reading the terminal's settings again: %v", err)
