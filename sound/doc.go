@@ -9,7 +9,8 @@
 //
 //	mixer.Listen(cam.Position, cam.Right())
 //
-// [Mixer.Read] is the mix, for a test to read with no sound device.
+// [Open] plays a mixer on the machine's sound device, once in a program. [Mixer.Read] is the mix,
+// for a test to read with no sound device.
 //
 // Every method of a Mixer and a Voice can be called from any goroutine, so a game plays sounds
 // from its Update while the mix is read from another.

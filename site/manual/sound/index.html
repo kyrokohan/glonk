@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="go-import" content="glonk.dev git https://github.com/usrgames/glonk">
+<meta name="go-source" content="glonk.dev https://github.com/usrgames/glonk https://github.com/usrgames/glonk/tree/main{/dir} https://github.com/usrgames/glonk/blob/main{/dir}/{file}#L{line}">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sound: glonk</title>
+<meta name="description" content="glonk.dev/sound plays sounds at places in a scene. Each is louder as the listener nears it, and in the ear nearer to it. It is a module of its own, so a game without sound gets no audio library:">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://glonk.dev/manual/sound/">
+<meta property="og:title" content="Sound: glonk">
+<meta property="og:description" content="glonk.dev/sound plays sounds at places in a scene. Each is louder as the listener nears it, and in the ear nearer to it. It is a module of its own, so a game without sound gets no audio library:">
+<meta property="og:image" content="https://glonk.dev/card.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="The glonk logo, the words: a terminal rendering engine for Go: 2D, 3D, or both in one frame, and a gold block on a dark floor of lines.">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" href="/media/fonts/DepartureMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+<!-- Made from the repository by internal/sitepages. Do not edit: change the source and run make site. -->
+<a class="skip" href="#text">Skip to the text</a>
+<div class="page">
+
+<header class="top">
+  <a class="name" href="/"><span class="mark" aria-hidden="true"></span>glonk</a>
+  <nav aria-label="glonk">
+    <a href="/manual/" aria-current="true">Manual</a>
+    <a href="/changelog/">Changelog</a>
+    <a href="https://github.com/usrgames/glonk/tree/main/examples">Examples</a>
+    <a href="https://github.com/usrgames/glonk">GitHub</a>
+  </nav>
+</header>
+
+<main class="doc">
+<div class="front">
+<h1 id="sound">Sound</h1>
+<p class="lede"><code>glonk.dev/sound</code> plays sounds at places in a scene. Each is louder as the listener nears it, and in the ear nearer to it. It is a module of its own, so a game without sound gets no audio library:</p>
+<pre tabindex="0" class="odd"><code>go get glonk.dev/sound
+</code></pre>
+</div>
+
+<nav class="contents" aria-label="Contents">
+<p>Contents</p>
+<ul role="list">
+<li><a href="#playing-a-sound">Playing a sound</a></li>
+<li><a href="#distance">Distance</a></li>
+<li><a href="#following-a-camera">Following a camera</a></li>
+<li><a href="#loops-and-fades">Loops and fades</a></li>
+<li><a href="#wav-files">WAV files</a></li>
+<li><a href="#where-it-plays">Where it plays</a></li>
+</ul>
+</nav>
+
+<article class="text" id="text">
+<h2 id="playing-a-sound">Playing a sound</h2>
+<p>A <code>Mixer</code> mixes the sounds, and a <code>Speaker</code> plays the mix on the sound device. This is how <code>examples/listen</code> starts:</p>
+<pre tabindex="0"><code>	mixer := sound.NewMixer(0)
+	g := newGame(mixer)
+	speaker, err := sound.Open(mixer)
+	if err != nil {
+		g.trouble = &#34;no sound: &#34; + err.Error()
+	} else {
+		defer speaker.Close()
+	}
+</code></pre>
+<p><code>Read</code> gives the mix to a test. Here <code>tone</code> is a clip made in code, a stand-in for a WAV file:</p>
+<pre tabindex="0" class="odd"><code>	mixer := sound.NewMixer(0)
+	mixer.Listen(geometry.Vector3{}, geometry.Vector3{X: 1}) // at the origin, +x to the right
+
+	bell := tone(0.5, time.Second)
+	mixer.Play(bell, geometry.Vector3{X: 2, Z: 2}, sound.Sound{Near: 4}) // ahead, to the right
+
+	stereo := make([]float32, 2) // one frame: left, right
+	mixer.Read(stereo)
+	fmt.Printf(&#34;left %.2f, right %.2f\n&#34;, stereo[0], stereo[1])
+	// Output:
+	// left 0.11, right 0.49
+</code></pre>
+<ul>
+<li><strong><code>NewMixer(n)</code></strong> plays up to <code>n</code> sounds at once, and 0 means 32. A sound past the limit takes the place of the one nearest its end. A loop never gives way.</li>
+<li><strong><code>Play</code></strong> puts a sound at a place, <strong><code>PlayHere</code></strong> at the listener, in both ears, and <strong><code>Loop</code></strong> plays it until it is stopped.</li>
+<li><strong><code>Open</code></strong> once in a program. Where there is no sound device it returns an error, which <code>listen</code> shows as it plays on in silence. Every method of the mixer works the same with no speaker.</li>
+<li><strong><code>Read</code></strong> is the mix itself, so a test hears a game with no sound device.</li>
+<li><strong>Every method is safe from any goroutine.</strong> A loud mix is bent toward full scale, never past it, and <code>SetVolume</code> sets the volume of all of it.</li>
+</ul>
+<h2 id="distance">Distance</h2>
+<pre tabindex="0"><code>	for _, d := range []float64{1, 4, 7, 10} {
+		mixer := sound.NewMixer(0)
+		mixer.Play(tone(0.5, time.Second), geometry.Vector3{Z: d}, sound.Sound{Near: 1, Range: 7})
+		stereo := make([]float32, 2)
+		mixer.Read(stereo)
+		fmt.Printf(&#34;%2.0f away: %.3f\n&#34;, d, stereo[0]+stereo[1])
+	}
+	// Output:
+	//  1 away: 0.707
+	//  4 away: 0.177
+	//  7 away: 0.000
+	// 10 away: 0.000
+</code></pre>
+<ul>
+<li><strong>Within <code>Near</code></strong> a sound is heard at its full <code>Gain</code>. Beyond it the gain falls, as a square, to silence at <code>Range</code>.</li>
+<li><strong>The zero <code>Sound</code></strong> is a gain of 1, a <code>Near</code> of 1 and a <code>Range</code> of 32, in the units of the scene.</li>
+<li><strong>In front of the listener</strong> a sound is in both ears, each at 0.707 of it. Turned to one side it is all in that ear.</li>
+<li><strong>When a sound or the listener moves,</strong> each ear&#39;s gain glides to its new level over 20 ms, so nothing clicks.</li>
+</ul>
+<h2 id="following-a-camera">Following a camera</h2>
+<pre tabindex="0"><code>	mixer := sound.NewMixer(0)
+	position, right := geometry.Vector3{X: 10}, geometry.Vector3{Z: -1} // a camera turned left
+	mixer.Listen(position, right)
+
+	mixer.Play(tone(0.5, time.Second), geometry.Vector3{X: 10, Z: -2}, sound.Sound{Near: 4})
+	stereo := make([]float32, 2)
+	mixer.Read(stereo)
+	fmt.Printf(&#34;left %.2f, right %.2f\n&#34;, stereo[0], math.Round(float64(stereo[1])*100)/100)
+	// Output:
+	// left 0.00, right 0.50
+</code></pre>
+<ul>
+<li><strong><code>Listen</code></strong> takes the listener&#39;s place and the way to its right. With a <a href="/manual/3d/">3D scene</a>&#39;s camera, call <code>mixer.Listen(cam.Position, cam.Right())</code> once a frame.</li>
+<li><strong><code>Voice.Move</code></strong> moves a sound that is playing, such as one a ship makes as it flies.</li>
+</ul>
+<h2 id="loops-and-fades">Loops and fades</h2>
+<pre tabindex="0" class="odd"><code>	mixer := sound.NewMixer(0)
+	wind := mixer.Loop(tone(0.5, time.Second), geometry.Vector3{}, sound.Sound{})
+	wind.Fade(0.2, 50*time.Millisecond)
+
+	stereo := make([]float32, 2*sound.Rate/10) // a tenth of a second
+	mixer.Read(stereo)
+	fmt.Printf(&#34;after the fade: %.3f\n&#34;, stereo[len(stereo)-1])
+	// Output:
+	// after the fade: 0.071
+</code></pre>
+<ul>
+<li><strong><code>Play</code>, <code>PlayHere</code> and <code>Loop</code></strong> each give a <code>Voice</code>. Keep it to change the sound later.</li>
+<li><strong><code>Fade</code></strong> takes a sound to a level from 0 to 1 over a time.</li>
+<li><strong><code>Stop</code></strong> ends a sound with a fade of 10 ms, so it does not click.</li>
+<li><strong>A voice that has ended</strong> ignores all three, and so does a nil one, the voice of a sound that was not played.</li>
+</ul>
+<h2 id="wav-files">WAV files</h2>
+<pre tabindex="0"><code>	clip, err := sound.LoadWAV(&amp;file)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println(clip.Duration().Round(time.Millisecond))
+	// Output:
+	// 100ms
+</code></pre>
+<ul>
+<li><strong><code>LoadWAV</code> reads any <code>io.Reader</code>:</strong> a file, or an embedded asset. Here it is a file made in the test.</li>
+<li><strong>What it reads:</strong> 16-bit PCM, at any rate and with any number of channels. A clip is mono at 48 kHz, so the channels are mixed down and another rate is converted.</li>
+<li><strong>What it refuses:</strong> other formats, and files over 32 MiB. The error says why.</li>
+<li><strong><code>NewClip</code></strong> makes a clip from samples between -1 and 1, at <code>sound.Rate</code>: a sound made in code.</li>
+</ul>
+<h2 id="where-it-plays">Where it plays</h2>
+<ul>
+<li><strong>On the machine the game runs on.</strong> Over SSH, that is the server&#39;s speakers, not the player&#39;s.</li>
+<li><strong>macOS and Linux need no C compiler.</strong> Linux plays through PulseAudio, or ALSA where there is none.</li>
+<li><strong>In a browser,</strong> the sound starts once the visitor presses a key or clicks: browsers allow nothing sooner.</li>
+<li><strong>Windows is untested.</strong> There, a missing device is silence and not an error.</li>
+</ul>
+<p><code>sound/examples/listen</code> has three sounds to walk among. <code>go run glonk.dev/sound/examples/listen@latest</code> runs it without a clone.</p>
+<nav class="guides" aria-label="Guides">
+<a rel="prev" href="/manual/models/">Before: Models and textures</a>
+<a href="/manual/">All guides</a>
+<a rel="next" href="/manual/web/">Next: A game in a web page</a>
+</nav>
+</article>
+</main>
+
+<footer>
+  <nav aria-label="More">
+    <a href="https://pkg.go.dev/glonk.dev">pkg.go.dev</a>
+    <a href="https://github.com/usrgames/glonk">GitHub</a>
+    <a href="/showcase/">Showcase</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/CONTRIBUTING.md">Contributing</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/SECURITY.md">Security</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/BRAND.md">Brand</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/LICENSE">MIT license</a>
+  </nav>
+  <p class="fine">Early and pre-1.0: the API may change. Built to work in most terminals; Windows is untested.</p>
+</footer>
+
+</div>
+</body>
+</html>
