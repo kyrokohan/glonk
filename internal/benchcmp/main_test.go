@@ -265,8 +265,8 @@ func TestParseFlags(t *testing.T) {
 	if err != nil || c != want {
 		t.Errorf("wanted the defaults %+v, got %+v %v", want, c, err)
 	}
-	c, err = parseFlags([]string{"-base", "v0.8.0", "-bench", "Draw", "-pkgs", "./mesh", "-rounds", "9", "-benchtime", "1s", "-threshold", "2.5", "-all", "-identical"}, os.Stderr)
-	want = config{dir: ".", base: "v0.8.0", bench: "Draw", pkgs: "./mesh", rounds: 9, benchtime: "1s", threshold: 0.025, all: true, identical: true}
+	c, err = parseFlags([]string{"-dir", "sound", "-base", "v0.8.0", "-bench", "Draw", "-pkgs", "./mesh", "-rounds", "9", "-benchtime", "1s", "-threshold", "2.5", "-all", "-identical"}, os.Stderr)
+	want = config{dir: "sound", base: "v0.8.0", bench: "Draw", pkgs: "./mesh", rounds: 9, benchtime: "1s", threshold: 0.025, all: true, identical: true}
 	if err != nil || c != want {
 		t.Errorf("wanted %+v, got %+v %v", want, c, err)
 	}
