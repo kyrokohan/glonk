@@ -75,6 +75,7 @@ A box fills the window and an @ walks across it. Esc quits. It is [examples/hell
 | [Widgets](docs/widgets.md) | A label, a panel, a bar, a menu, a text field |
 | [A 3D scene](docs/3d.md) | A camera, shapes, lights, wireframes, fog, rays |
 | [Models and textures](docs/models.md) | OBJ files, colors on each vertex, pictures on faces, see-through faces |
+| [Sound](docs/sound.md) | Sounds at places in a scene, loops and fades, WAV files |
 | [A game in a web page](docs/web.md) | The same game, played in a browser |
 | [Terminals, colors and limits](docs/terminals.md) | What a terminal needs, and what glonk does not do |
 

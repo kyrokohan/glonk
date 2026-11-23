@@ -4,6 +4,10 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+### Added
+
+- The Sound guide in the manual, for `glonk.dev/sound`, a module of its own (#120).
+
 ## [0.16.2] - 2026-11-23
 
 On top of 0.16.1 this release is the manual: ten guides by task, and the README as a front page. Nothing in the API was removed, renamed or changed. The module needs the same versions of `golang.org/x/sys` and `golang.org/x/term` as 0.16.1.

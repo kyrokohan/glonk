@@ -108,4 +108,4 @@ The [package's documentation](https://pkg.go.dev/glonk.dev/web?GOOS=js&GOARCH=wa
 
 ## Not included
 
-Sound, phones and touch, and a change of size while the game runs.
+Phones and touch, and a change of size while the game runs. Sound is a module of its own: see [Sound](sound.md).

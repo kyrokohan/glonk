@@ -1,2 +1,12 @@
+github.com/ebitengine/oto/v3 v3.5.1 h1:7gL5DxxSQp8S1Me2jDSp+gSAyondYxpjM5RPBBqLT0c=
+github.com/ebitengine/oto/v3 v3.5.1/go.mod h1:Elkm7yzTRns3w2efvibzVOoQ65YOwmec9a76dCiK10o=
+github.com/ebitengine/purego v0.11.0 h1:jhp/D+Nyv7UUW8HAcmcjt2N2rYrYi9m3SL21k0Ua/NI=
+github.com/ebitengine/purego v0.11.0/go.mod h1:DCHPP08djqhNSoTfImcnHYQRZmd0qhakvrozqaEYhGQ=
+github.com/jfreymuth/pulse v0.1.3 h1:bc5TdxiB8E+2INnFjFWWgyfgXtz2IyNNNCX+Wt/ZD14=
+github.com/jfreymuth/pulse v0.1.3/go.mod h1:cpYspI6YljhkUf1WLXLLDmeaaPFc3CnGLjDZf9dZ4no=
 glonk.dev v0.16.2 h1:cl6UT+C3PyGnfDuo3EpBO1BZqQXLVg97CZq/pgLyceU=
 glonk.dev v0.16.2/go.mod h1:L2PX+1Txe5RcxwDCC9Pv6P8RnZcG2VT6et8fDGX/NdE=
+golang.org/x/sys v0.50.0 h1:dkKZEFTEKaLr1sjhs0WiKqoi8Jj5nHbS3Njmx1UoMJs=
+golang.org/x/sys v0.50.0/go.mod h1:hNLxWAXmnKAxqDtdwIYC4bM9oQPEecfsnNMuSxOs3og=
+golang.org/x/term v0.48.0 h1:G6UU1eiSB8nl3DzeUGt7Mg+2SctI8tPS6Z5/mBt6cOk=
+golang.org/x/term v0.48.0/go.mod h1:BRDLHCZr2SUjIeBHHpRyQeC9xzSAVbzY2rvKgafnHf4=

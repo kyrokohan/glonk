@@ -10,3 +10,5 @@ The changes to `glonk.dev/sound`, a module of its own with its own versions, tag
 - `Mixer.Listen(position, right)`, a voice limit where the sound nearest its end gives way, a soft limiter, and `SetVolume`. Every method can be called from any goroutine.
 - `LoadWAV` reads 16-bit PCM WAV files of any rate and any number of channels, resampled to 48 kHz mono, and refuses a file over 32 MiB.
 - `Mixer.Read`, the mix as stereo samples, for tests with no sound device.
+- `Open` plays a mixer on the sound device through [oto](https://github.com/ebitengine/oto), with no C compiler on macOS and Linux. Where there is no device it returns an error, and the game plays on in silence.
+- `examples/listen`, three sounds to walk among, and [the Sound guide](https://glonk.dev/manual/sound/).

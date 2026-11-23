@@ -87,12 +87,16 @@ jobs:
         run: for mod in . sound; do (cd $mod && go mod tidy -diff) || exit 1; done
       - name: glonk itself needs only x/sys and x/term
         run: test "$(go list -m all | tail -n +2 | cut -d' ' -f1 | tr '\n' ' ')" = "golang.org/x/sys golang.org/x/term "
+      # sound plays through oto, whose purego needs one flag to build for FreeBSD without cgo, as
+      # oto's README says; a native FreeBSD build, with cgo, needs nothing.
       - name: vet for other systems
         run: |
           for mod in . sound; do
             for target in windows/amd64 freebsd/amd64 darwin/amd64 linux/arm linux/386 js/wasm; do
               echo "go vet ($mod, $target)"
-              (cd $mod && GOOS=${target%/*} GOARCH=${target#*/} go vet ./...) || exit 1
+              flags=
+              if [ "$target" = freebsd/amd64 ]; then flags=-gcflags=github.com/ebitengine/purego/internal/fakecgo=-std; fi
+              (cd $mod && GOOS=${target%/*} GOARCH=${target#*/} go vet $flags ./...) || exit 1
             done
           done
       - name: build for windows

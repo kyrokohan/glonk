@@ -10,6 +10,7 @@ Guides to glonk, one for each job, in an order to read them in. Each has code th
 - [Widgets](widgets.md): a label, a panel, a bar, a menu and a text field.
 - [A 3D scene](3d.md): a camera, shapes, lights, wireframes, fog and rays.
 - [Models and textures](models.md): OBJ files, colors on each vertex, pictures on faces, and see-through faces.
+- [Sound](sound.md): sounds at places in a scene, loops and fades, and WAV files.
 - [A game in a web page](web.md): the same game as in the terminal, played in a browser.
 - [Terminals, colors and limits](terminals.md): what a terminal needs, what glonk uses where it has more, and what glonk does not do.
 

@@ -17,6 +17,7 @@ In a clone, `go run ./examples/viewer`, or `make run EXAMPLE=./examples/viewer`.
 | [world](world) | A level bigger than the screen, with walls, coins, a coin panel and a pause menu. |
 | [cube3d](cube3d) | A walk among shaded cubes, a tree that is a picture, and a cube drawn as lines. |
 | [viewer](viewer) | The bundled models and shapes, solid or as lines, faceted or smooth. `go run ./examples/viewer my.obj` shows your own. |
+| [listen](../sound/examples/listen) | Three sounds to walk among, in `glonk.dev/sound`: louder as you near each, and in the nearer ear. The arrows walk. `go run glonk.dev/sound/examples/listen@latest` |
 
 Letters work in either case, Esc quits, and Ctrl+C quits any program built on glonk.
 
