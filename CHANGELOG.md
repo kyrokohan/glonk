@@ -4,6 +4,14 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+### Changed
+
+- The manual is ten guides by task, in `docs/` and each a page at [glonk.dev/manual](https://glonk.dev/manual/): a first game, input, testing, pixels, sprites and tile maps, widgets, a 3D scene, models and textures, a web page, and terminals. The README is a front page. Every block of Go in the guides, the README and on glonk.dev's cover is lines of a file that the tests build and run (#126).
+
+### Added
+
+- `examples/hello`, the smallest game, and `examples/README.md`, the examples with their keys.
+
 ## [0.16.1] - 2026-11-23
 
 On top of 0.16.0 this release draws colorful frames right in a web page. Nothing was removed, renamed or changed. The module needs the same versions of `golang.org/x/sys` and `golang.org/x/term` as 0.16.0.

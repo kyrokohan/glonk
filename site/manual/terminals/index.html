@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="go-import" content="glonk.dev git https://github.com/usrgames/glonk">
+<meta name="go-source" content="glonk.dev https://github.com/usrgames/glonk https://github.com/usrgames/glonk/tree/main{/dir} https://github.com/usrgames/glonk/blob/main{/dir}/{file}#L{line}">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terminals, colors and limits: glonk</title>
+<meta name="description" content="glonk is built to work in most terminals. This guide says what it needs from one, what it uses where a terminal has more, and what it does not do.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://glonk.dev/manual/terminals/">
+<meta property="og:title" content="Terminals, colors and limits: glonk">
+<meta property="og:description" content="glonk is built to work in most terminals. This guide says what it needs from one, what it uses where a terminal has more, and what it does not do.">
+<meta property="og:image" content="https://glonk.dev/card.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="The glonk logo, the words: a terminal rendering engine for Go: 2D, 3D, or both in one frame, and a gold block on a dark floor of lines.">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" href="/media/fonts/DepartureMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+<!-- Made from the repository by internal/sitepages. Do not edit: change the source and run make site. -->
+<a class="skip" href="#text">Skip to the text</a>
+<div class="page">
+
+<header class="top">
+  <a class="name" href="/"><span class="mark" aria-hidden="true"></span>glonk</a>
+  <nav aria-label="glonk">
+    <a href="/manual/" aria-current="true">Manual</a>
+    <a href="/changelog/">Changelog</a>
+    <a href="https://github.com/usrgames/glonk/tree/main/examples">Examples</a>
+    <a href="https://github.com/usrgames/glonk">GitHub</a>
+  </nav>
+</header>
+
+<main class="doc">
+<div class="front">
+<h1 id="terminals-colors-and-limits">Terminals, colors and limits</h1>
+<p class="lede">glonk is built to work in most terminals. This guide says what it needs from one, what it uses where a terminal has more, and what it does not do.</p>
+</div>
+
+<nav class="contents" aria-label="Contents">
+<p>Contents</p>
+<ul role="list">
+<li><a href="#what-a-terminal-needs">What a terminal needs</a></li>
+<li><a href="#what-it-uses-where-a-terminal-has-it">What it uses where a terminal has it</a></li>
+<li><a href="#colors">Colors</a></li>
+<li><a href="#apples-terminal-and-half-blocks">Apple&#39;s Terminal and half blocks</a></li>
+<li><a href="#the-size-of-the-window">The size of the window</a></li>
+<li><a href="#what-glonk-sends">What glonk sends</a></li>
+<li><a href="#something-wrong">Something wrong</a></li>
+</ul>
+</nav>
+
+<article class="text" id="text">
+<h2 id="what-a-terminal-needs">What a terminal needs</h2>
+<ul>
+<li><strong>The basics need only three things:</strong> the alternate screen, cursor movement, and the 256-color palette.</li>
+<li><strong>Box lines and the pixel canvas need a Unicode font,</strong> for <code>┌─┐│└┘</code> and <code>▀▄</code>. Nearly every monospace font has them. Character shading needs only ASCII.</li>
+<li><strong>Cells are taken as twice as tall as they are wide.</strong> That is what makes a cube look like a cube. Set <code>Camera.CellAspect</code> for a font that is not.</li>
+<li><strong>Line wrapping is turned off while a game runs,</strong> and all of it is undone when <code>Run</code> returns.</li>
+<li><strong>glonk is developed on macOS,</strong> and tested mainly in Ghostty.</li>
+<li><strong>Windows is untested.</strong></li>
+</ul>
+<h2 id="what-it-uses-where-a-terminal-has-it">What it uses where a terminal has it</h2>
+<table>
+<thead>
+<tr><th>Where the terminal has</th><th>glonk uses it for</th></tr>
+</thead>
+<tbody>
+<tr><td>True color</td><td>Exact RGB colors, in place of the nearest of the palette</td></tr>
+<tr><td>The kitty keyboard protocol</td><td>Key releases, so several keys can be held: see <a href="/manual/input/#terminals-without-key-releases">Keys, text and the mouse</a></td></tr>
+<tr><td>Bracketed paste</td><td>A paste as one string, not as key presses</td></tr>
+<tr><td>Focus reporting</td><td>Drawing everything again when the window comes back to the front</td></tr>
+<tr><td>The decimal mouse mode, 1006</td><td>The mouse, when <code>Config.Mouse</code> asks for it</td></tr>
+<tr><td>The pointer in pixels, mode 1016</td><td>The pointer finer than a cell</td></tr>
+<tr><td>Synchronized updates</td><td>Each frame shown all at once. A terminal without them ignores the request.</td></tr>
+</tbody>
+</table>
+<p>Which terminals were tried:</p>
+<ul>
+<li><strong>Ghostty and Apple&#39;s Terminal</strong> both send the decimal mouse mode.</li>
+<li><strong>Ghostty</strong> reports the pointer in pixels. Apple&#39;s Terminal does not, and the pointer moves a cell at a time there.</li>
+<li><code>go run glonk.dev/examples/input@latest</code> shows what your terminal sends.</li>
+</ul>
+<h2 id="colors">Colors</h2>
+<ul>
+<li><strong>An RGB color is sent exactly</strong> when <code>COLORTERM</code> says the terminal has true color: <code>truecolor</code> or <code>24bit</code>. Terminals that have it set that themselves.</li>
+<li><strong>Otherwise it is sent as the nearest of the palette colors 16 to 255.</strong></li>
+<li><strong>Inside tmux or over ssh, <code>COLORTERM</code> often does not arrive.</strong> Export <code>COLORTERM=truecolor</code>, or set <code>Config.Colors</code> to <code>engine.ColorsTrue</code>.</li>
+<li><strong>Forcing true color on a terminal that cannot show it</strong> gives wrong colors. <code>engine.Colors256</code> turns it off.</li>
+<li><strong>A palette color is always sent as the palette color,</strong> so colors 0 to 15 follow the player&#39;s theme.</li>
+<li><strong>Apple&#39;s Terminal does not set <code>COLORTERM</code>,</strong> and keeps the 256-color look.</li>
+<li><strong><code>engine.Probe</code></strong> says before a game starts whether there is a terminal at all, whether it has true color and reports key releases, and its size.</li>
+</ul>
+<h2 id="apples-terminal-and-half-blocks">Apple&#39;s Terminal and half blocks</h2>
+<p>Apple&#39;s Terminal draws a faint line along the edges of half blocks, since its block characters fall a little short of the cell. glonk detects it, and <code>Compose</code> draws solid cells there instead: no line, and a picture a pixel blockier. <code>Canvas.Seamless</code> overrides the choice, for one inside tmux, which hides the variable glonk reads.</p>
+<h2 id="the-size-of-the-window">The size of the window</h2>
+<ul>
+<li><strong>A terminal that reports no size is taken as 80 by 24.</strong> That is a pseudo-terminal nobody gave a size, as under <code>script</code> in a CI step, or in some container consoles.</li>
+<li><strong><code>Run</code> uses 80 columns or 24 rows for each axis left at 0,</strong> until the terminal reports a size, and follows it from then on.</li>
+<li><strong>Resizing can flicker for one frame.</strong></li>
+</ul>
+<h2 id="what-glonk-sends">What glonk sends</h2>
+<p>Each frame sends only the cells that changed since the frame before, as one update. A screen that does not change sends nothing. Over ssh, the bytes a frame takes decide whether a game is playable: <a href="/manual/first-game/#frame-numbers">Frame numbers</a> says how to see them.</p>
+<h2 id="something-wrong">Something wrong</h2>
+<ul>
+<li><strong>A bug in how glonk leaves the terminal</strong> after a crash, a signal or a panic it says it handles is a security problem: see <a href="https://github.com/usrgames/glonk/blob/main/SECURITY.md">SECURITY.md</a>.</li>
+<li><strong>The endings it cannot clean up after</strong> are in <a href="/manual/first-game/#how-a-run-ends">How a run ends</a>.</li>
+<li><strong>Anything else</strong> is an <a href="https://github.com/usrgames/glonk/issues">issue</a>.</li>
+</ul>
+<nav class="guides" aria-label="Guides">
+<a rel="prev" href="/manual/web/">Before: A game in a web page</a>
+<a href="/manual/">All guides</a>
+</nav>
+</article>
+</main>
+
+<footer>
+  <nav aria-label="More">
+    <a href="https://pkg.go.dev/glonk.dev">pkg.go.dev</a>
+    <a href="https://github.com/usrgames/glonk">GitHub</a>
+    <a href="/showcase/">Showcase</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/CONTRIBUTING.md">Contributing</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/SECURITY.md">Security</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/BRAND.md">Brand</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/LICENSE">MIT license</a>
+  </nav>
+  <p class="fine">Early and pre-1.0: the API may change. Built to work in most terminals; Windows is untested.</p>
+</footer>
+
+</div>
+</body>
+</html>

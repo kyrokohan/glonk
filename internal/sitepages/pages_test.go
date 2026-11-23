@@ -16,13 +16,9 @@ import (
 	"text/template"
 )
 
-var update = flag.Bool("update", false, "write the pages again from README.md, CHANGELOG.md and the guides in docs")
+var update = flag.Bool("update", false, "write the pages again from the guides in docs and CHANGELOG.md")
 
 const repository = "https://github.com/usrgames/glonk"
-
-// The sections of the README that are about the repository and not about using glonk. The manual
-// leaves them out, and the foot of every page links to them.
-var notInTheManual = []string{"Development", "Contributing", "License"}
 
 // A page of the site.
 type page struct {
@@ -200,7 +196,8 @@ func link(target string) (string, error) { return linkFrom("")(target) }
 
 // linkFrom gives, for a file in the folder dir of the repository, the address on the site of what
 // a link in it names: a section of the page or another site as it is, a file of the site by its
-// address there, a guide by its page, and any other file of the repository on GitHub. A path is
+// address there, a guide or the changelog by its page, and any other file of the repository on
+// GitHub. A path is
 // read from the file's own folder, as GitHub reads it, and the file must be there.
 func linkFrom(dir string) func(target string) (string, error) {
 	return func(target string) (string, error) {
@@ -218,6 +215,8 @@ func linkFrom(dir string) func(target string) (string, error) {
 			return strings.TrimPrefix(path, "site") + part, nil
 		case path == "docs/README.md":
 			return "/manual/" + part, nil
+		case path == "CHANGELOG.md":
+			return "/changelog/" + part, nil
 		case guideFile.MatchString(path):
 			return "/manual/" + guideFile.FindStringSubmatch(path)[1] + "/" + part, nil
 		}
@@ -263,33 +262,39 @@ func pictureFrom(dir string) func(alt, src string, linked bool) (string, error) 
 	}
 }
 
-// manual is the page made from README.md: its sections on using glonk, under a head of the
-// page's own, since what stands above them in the README (the logo, the line, a recording) is
-// the cover's.
+// manual is the page made from docs/README.md, the index of the guides: its title and first
+// paragraph above, and the list of guides as its text.
 func manual() (page, error) {
-	lines, err := source("README.md")
+	lines, err := source("docs/README.md")
 	if err != nil {
 		return page{}, err
 	}
-	_, kept, err := sections(lines, notInTheManual)
-	if err != nil {
-		return page{}, fmt.Errorf("README.md: %w", err)
+	// The front is the title and the paragraph under it, to the second blank line.
+	split, blanks := len(lines), 0
+	for i, l := range lines {
+		if l.text == "" {
+			if blanks++; blanks == 2 {
+				split = i
+				break
+			}
+		}
 	}
-	r := &renderer{link: link, picture: picture}
-	text, err := r.render(kept)
+	r := &renderer{link: linkFrom("docs"), picture: pictureFrom("docs")}
+	front, err := r.render(lines[:split])
 	if err != nil {
-		return page{}, fmt.Errorf("README.md: %w", err)
+		return page{}, fmt.Errorf("docs/README.md: %w", err)
+	}
+	text, err := r.render(lines[split:])
+	if err != nil {
+		return page{}, fmt.Errorf("docs/README.md: %w", err)
 	}
 	return page{
 		Path:        "site/manual/index.html",
 		Address:     "/manual/",
 		Title:       "Manual",
-		Description: "How to use glonk, a terminal rendering engine for Go: models, shapes, textures, sprites, tile maps, widgets, input and testing a game.",
-		Front: `<h1>Manual</h1>
-<p class="lede">What glonk does and how to use it. This page is the <a href="` + repository + `#readme">README</a>, and every package is documented, with examples that run, on <a href="https://pkg.go.dev/glonk.dev">pkg.go.dev</a>.</p>
-`,
-		Contents: r.headings,
-		Text:     text,
+		Description: "How to use glonk, a terminal rendering engine for Go: guides to a first game, input, testing, pixels, sprites, widgets, 3D, models, a web page and terminals.",
+		Front:       strings.Replace(front, "<p>", `<p class="lede">`, 1),
+		Text:        text,
 	}, nil
 }
 
@@ -466,8 +471,8 @@ func pages() ([]page, error) {
 	return append(all, g...), err
 }
 
-// The pages are what README.md, CHANGELOG.md and the guides say now. Run with -update, or make
-// site, to write them again.
+// The pages are what the guides and CHANGELOG.md say now. Run with -update, or make site, to
+// write them again.
 func TestThePagesAreWhatTheRepositorySays(t *testing.T) {
 	// The pictures are a module of their own, so that a download of glonk leaves them out (see
 	// site/media/go.mod), and a page cannot be made without the sizes of its pictures.

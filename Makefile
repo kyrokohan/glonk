@@ -14,7 +14,7 @@ help:
 	@echo "  benchcmp - Compare the benchmarks with those of BASE (default origin/main), the packages that differ"
 	@echo "  brand    - Write the logo files and the site's icons again from internal/brand"
 	@echo "  record   - Play the examples' scripts and write the recordings, as asciicasts, into CASTS (default casts)"
-	@echo "  site     - Write the manual, the guides and the changelog of glonk.dev again from README.md, docs and CHANGELOG.md"
+	@echo "  site     - Write the manual and the changelog of glonk.dev again from docs and CHANGELOG.md"
 	@echo "  play     - Build the game on glonk.dev's cover for the browser, into site/media/play (Cloudflare runs it)"
 	@echo "  run      - Run an example (default bounce2d; EXAMPLE=./examples/cube3d; ARGS= passes arguments)"
 	@echo "  build    - Compile every package"
@@ -99,11 +99,11 @@ record:
 	@echo "Recording the examples into $(CASTS)..."
 	go test ./examples/cube3d ./examples/viewer ./examples/sprites ./examples/world -run '^TestRecord$$' -record '$(abspath $(CASTS))'
 
-# The manual and the changelog on glonk.dev are README.md and CHANGELOG.md as pages, and each
-# guide is a file of docs. The test in internal/sitepages makes them, and fails under make check
-# when one of those files has changed and its page has not.
+# The manual and the changelog on glonk.dev are the guides in docs and CHANGELOG.md as pages.
+# The test in internal/sitepages makes them, and fails under make check when one of those files
+# has changed and its page has not.
 site:
-	@echo "Writing the manual, the guides and the changelog of glonk.dev..."
+	@echo "Writing the manual and the changelog of glonk.dev..."
 	go test ./internal/sitepages -run TestThePagesAreWhatTheRepositorySays -update
 
 # The game on glonk.dev's cover is cube3d built for the browser (see glonk.dev/web), gzipped,

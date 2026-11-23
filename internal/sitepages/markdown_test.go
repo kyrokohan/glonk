@@ -1,5 +1,5 @@
 // Package sitepages makes the pages of glonk.dev that are the repository's own text: the manual
-// from README.md, a page for each guide in docs, and the changelog from CHANGELOG.md. It is a
+// and a page for each guide from the files of docs, and the changelog from CHANGELOG.md. It is a
 // test, like internal/brand: under make check it fails when a page is not what those files say, and
 //
 //	go test ./internal/sitepages -update
@@ -27,7 +27,7 @@ type heading struct {
 	id, text string
 }
 
-// A renderer turns the Markdown that README.md, CHANGELOG.md and the guides use into HTML: headings,
+// A renderer turns the Markdown that CHANGELOG.md and the guides use into HTML: headings,
 // paragraphs, fenced code, flat lists, tables, and in a line code, bold, links and pictures. It
 // knows that much and no more. Anything else is an error that names the line, so that a new kind
 // of Markdown in those files is noticed here and not as a broken page.

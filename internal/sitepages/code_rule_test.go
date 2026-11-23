@@ -53,3 +53,13 @@ func TestTooLong(t *testing.T) {
 		t.Errorf("wanted the bullet and the last paragraph, counted in characters, and neither the table nor the code, got %+v", got)
 	}
 }
+
+// A block of code on a page is read as its text, with what HTML escapes put back.
+func TestPageBlocks(t *testing.T) {
+	page := "<p>One</p>\n<pre tabindex=\"0\"><code>a := &amp;b{}\n\nfmt.Println(&#34;x&#34;)</code></pre>\n<pre><code>c()</code></pre>"
+	got := pageBlocks(page)
+	if len(got) != 2 || got[0].line != 2 || len(got[0].parts) != 2 || got[0].parts[0][0] != "a := &b{}" ||
+		got[0].parts[1][0] != `fmt.Println("x")` || got[1].line != 5 || got[1].parts[0][0] != "c()" {
+		t.Errorf("wanted the two blocks, unescaped, with their lines, got %+v", got)
+	}
+}

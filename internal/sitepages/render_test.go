@@ -192,6 +192,7 @@ func TestLinkFromAGuide(t *testing.T) {
 		{"web.md", "/manual/web/"},
 		{"web.md#build-it", "/manual/web/#build-it"},
 		{"README.md", "/manual/"},
+		{"../CHANGELOG.md", "/changelog/"},
 		{"../README.md", repository + "/blob/main/README.md"},
 		{"../examples/cube3d", repository + "/blob/main/examples/cube3d"},
 		{"../site/style.css", "/style.css"},
@@ -309,32 +310,27 @@ func TestTheContentsListTheSections(t *testing.T) {
 	}
 }
 
-// The manual has every section of the README but the three about the repository, and each page
-// lists its sections.
+// The manual is the index of the guides and links every one of them, and each page lists its
+// sections.
 func TestThePagesHoldTheirSections(t *testing.T) {
 	if _, err := os.Stat(root("site/media")); os.IsNotExist(err) {
 		t.Skip("site/media is not in this copy of glonk")
-	}
-	readme, err := os.ReadFile(root("README.md"))
-	if err != nil {
-		t.Fatal(err)
 	}
 	m, err := manual()
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err := m.write()
+	names, err := guideNames()
 	if err != nil {
 		t.Fatal(err)
 	}
-	listed := strings.Count(string(out), `<li><a href="#`)
-	if want := strings.Count("\n"+string(readme), "\n## ") - len(notInTheManual); listed != want || listed == 0 {
-		t.Errorf("wanted the manual's contents to list %d sections, got %d", want, listed)
-	}
-	for _, name := range notInTheManual {
-		if strings.Contains(string(out), ">"+name+"</h2>") {
-			t.Errorf("wanted the manual without the section %q", name)
+	for _, name := range names {
+		if !strings.Contains(m.Text, `href="/manual/`+name+`/"`) {
+			t.Errorf("wanted the manual to link the guide %s", name)
 		}
+	}
+	if !strings.Contains(m.Front, `<p class="lede">`) || len(names) == 0 {
+		t.Errorf("wanted the manual to open with its title and a paragraph, and to list guides, got %q", m.Front)
 	}
 
 	c, err := changelog()

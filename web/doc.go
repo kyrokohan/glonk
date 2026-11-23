@@ -22,7 +22,7 @@
 // Build it with GOOS=js GOARCH=wasm go build, and put beside it, on the page, wasm_exec.js from the
 // same Go ($(go env GOROOT)/lib/wasm), xterm.js and its WebGL addon, and glonk.js from this package's
 // folder, which starts the game in an element and wires the keys, a paste, the pointer and the wheel
-// to it. The README's "A game in a web page" shows a whole page.
+// to it. The guide at glonk.dev/manual/web/ shows a whole page.
 //
 // The page and Run meet in one object in the global scope, glonk, which glonk.js sets up: the page
 // gives it cols and rows, the size of the frame in cells, frame(bytes, n), called with each write of a
