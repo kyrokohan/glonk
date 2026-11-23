@@ -13,15 +13,13 @@ glonk is built to work in most terminals. This guide says what it needs from one
 
 ## What it uses where a terminal has it
 
-| Where the terminal has | glonk uses it for |
-|---|---|
-| True color | Exact RGB colors, in place of the nearest of the palette |
-| The kitty keyboard protocol | Key releases, so several keys can be held: see [Keys, text and the mouse](input.md#terminals-without-key-releases) |
-| Bracketed paste | A paste as one string, not as key presses |
-| Focus reporting | Drawing everything again when the window comes back to the front |
-| The decimal mouse mode, 1006 | The mouse, when `Config.Mouse` asks for it |
-| The pointer in pixels, mode 1016 | The pointer finer than a cell |
-| Synchronized updates | Each frame shown all at once. A terminal without them ignores the request. |
+- **True color:** exact RGB colors, in place of the nearest of the palette.
+- **The kitty keyboard protocol:** key releases, so several keys can be held. See [Keys, text and the mouse](input.md#terminals-without-key-releases).
+- **Bracketed paste:** a paste as one string, not as key presses.
+- **Focus reporting:** everything drawn again when the window comes back to the front.
+- **The decimal mouse mode, 1006:** the mouse, when `Config.Mouse` asks for it.
+- **The pointer in pixels, mode 1016:** the pointer finer than a cell.
+- **Synchronized updates:** each frame shown all at once. A terminal without them ignores the request.
 
 Which terminals were tried:
 

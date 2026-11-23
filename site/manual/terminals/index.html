@@ -67,20 +67,15 @@
 <li><strong>Windows is untested.</strong></li>
 </ul>
 <h2 id="what-it-uses-where-a-terminal-has-it">What it uses where a terminal has it</h2>
-<table>
-<thead>
-<tr><th>Where the terminal has</th><th>glonk uses it for</th></tr>
-</thead>
-<tbody>
-<tr><td>True color</td><td>Exact RGB colors, in place of the nearest of the palette</td></tr>
-<tr><td>The kitty keyboard protocol</td><td>Key releases, so several keys can be held: see <a href="/manual/input/#terminals-without-key-releases">Keys, text and the mouse</a></td></tr>
-<tr><td>Bracketed paste</td><td>A paste as one string, not as key presses</td></tr>
-<tr><td>Focus reporting</td><td>Drawing everything again when the window comes back to the front</td></tr>
-<tr><td>The decimal mouse mode, 1006</td><td>The mouse, when <code>Config.Mouse</code> asks for it</td></tr>
-<tr><td>The pointer in pixels, mode 1016</td><td>The pointer finer than a cell</td></tr>
-<tr><td>Synchronized updates</td><td>Each frame shown all at once. A terminal without them ignores the request.</td></tr>
-</tbody>
-</table>
+<ul>
+<li><strong>True color:</strong> exact RGB colors, in place of the nearest of the palette.</li>
+<li><strong>The kitty keyboard protocol:</strong> key releases, so several keys can be held. See <a href="/manual/input/#terminals-without-key-releases">Keys, text and the mouse</a>.</li>
+<li><strong>Bracketed paste:</strong> a paste as one string, not as key presses.</li>
+<li><strong>Focus reporting:</strong> everything drawn again when the window comes back to the front.</li>
+<li><strong>The decimal mouse mode, 1006:</strong> the mouse, when <code>Config.Mouse</code> asks for it.</li>
+<li><strong>The pointer in pixels, mode 1016:</strong> the pointer finer than a cell.</li>
+<li><strong>Synchronized updates:</strong> each frame shown all at once. A terminal without them ignores the request.</li>
+</ul>
 <p>Which terminals were tried:</p>
 <ul>
 <li><strong>Ghostty and Apple&#39;s Terminal</strong> both send the decimal mouse mode.</li>
