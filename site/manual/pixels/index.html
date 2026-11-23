@@ -91,16 +91,17 @@
 <tr><th>Call</th><th>Draws</th></tr>
 </thead>
 <tbody>
-<tr><td><code>FillRect(x, y, w, h, color)</code></td><td>A filled rectangle</td></tr>
-<tr><td><code>DrawRect(x, y, w, h, color)</code></td><td>Its border, one pixel thick, inside the same rectangle</td></tr>
-<tr><td><code>FillCircle(cx, cy, r, color)</code></td><td>A filled circle, <code>2r+1</code> pixels across</td></tr>
-<tr><td><code>DrawCircle(cx, cy, r, color)</code></td><td>Its outline, one pixel thick</td></tr>
-<tr><td><code>FillDisc(cx, cy, r, color)</code></td><td>A disc whose center and radius can be fractions of a pixel, with a smooth edge</td></tr>
-<tr><td><code>DrawLine(x0, y0, x1, y1, color)</code></td><td>A line, one pixel thick</td></tr>
-<tr><td><code>BlendRect(x, y, w, h, color, t)</code></td><td>A color mixed over a rectangle, by the part <code>t</code> from 0 to 1</td></tr>
-<tr><td><code>BlendDisc(cx, cy, r, color, t)</code></td><td>A color mixed over a disc: a shadow or a glow</td></tr>
+<tr><td><code>FillRect</code></td><td>A filled rectangle</td></tr>
+<tr><td><code>DrawRect</code></td><td>Its border, one pixel thick, inside the same rectangle</td></tr>
+<tr><td><code>FillCircle</code></td><td>A filled circle of radius <code>r</code>, <code>2r+1</code> pixels across</td></tr>
+<tr><td><code>DrawCircle</code></td><td>Its outline, one pixel thick</td></tr>
+<tr><td><code>FillDisc</code></td><td>A disc whose center and radius can be fractions of a pixel, with a smooth edge</td></tr>
+<tr><td><code>DrawLine</code></td><td>A line, one pixel thick</td></tr>
+<tr><td><code>BlendRect</code></td><td>A color mixed over a rectangle, by a part <code>t</code> from 0 to 1</td></tr>
+<tr><td><code>BlendDisc</code></td><td>A color mixed over a disc: a shadow or a glow</td></tr>
 </tbody>
 </table>
+<p>The arguments of each are on <a href="https://pkg.go.dev/glonk.dev/engine#Canvas">pkg.go.dev</a>.</p>
 <ul>
 <li><strong>Shapes clip.</strong> Only the pixels on the canvas are visited, so a shape far off screen costs nothing.</li>
 <li><strong>The zero <code>Color</code> erases.</strong></li>
