@@ -172,11 +172,37 @@ func TestLink(t *testing.T) {
 		{"http://example.com", ""},
 		{"mailto:someone", ""},
 		{"/etc/hosts", ""},
-		{"internal/../LICENSE", ""}, // a path that leaves the repository would be sent to GitHub as it is
+		{"/LICENSE", ""},
+		{"../LICENSE", ""}, // it leaves the repository
+		{"internal/../LICENSE", repository + "/blob/main/LICENSE"},
+		{"docs/web.md#build-it", "/manual/web/#build-it"},
 	} {
 		got, err := link(c.in)
 		if (err != nil) != (c.want == "") || got != c.want {
 			t.Errorf("link(%q): wanted %q, got %q and %v", c.in, c.want, got, err)
+		}
+	}
+}
+
+// A link in a guide is read from docs, the guide's own folder, as GitHub reads it: another guide
+// is its page, the index is the manual, and what is outside docs is where it was before.
+func TestLinkFromAGuide(t *testing.T) {
+	for _, c := range []struct{ in, want string }{
+		{"#build-it", "#build-it"},
+		{"web.md", "/manual/web/"},
+		{"web.md#build-it", "/manual/web/#build-it"},
+		{"README.md", "/manual/"},
+		{"../README.md", repository + "/blob/main/README.md"},
+		{"../examples/cube3d", repository + "/blob/main/examples/cube3d"},
+		{"../site/style.css", "/style.css"},
+		{"no-such-guide.md", ""},
+		{"examples/cube3d", ""}, // from the root, which is not where a guide is
+		{"../../etc/hosts", ""}, // it leaves the repository
+		{"../docs/../../x", ""},
+	} {
+		got, err := linkFrom("docs")(c.in)
+		if (err != nil) != (c.want == "") || got != c.want {
+			t.Errorf("a link to %q in a guide: wanted %q, got %q and %v", c.in, c.want, got, err)
 		}
 	}
 }
@@ -203,6 +229,71 @@ func TestPicture(t *testing.T) {
 		got, err := picture("A <block>.", c.src, c.linked)
 		if (err != nil) != (c.want == "") || got != c.want {
 			t.Errorf("picture(%q, linked %v):\ngot  %q and %v\nwant %q", c.src, c.linked, got, err, c.want)
+		}
+	}
+	// In a guide a picture is named from docs.
+	if got, err := pictureFrom("docs")("A <block>.", "../site/media/cube3d.png", false); err != nil || got != still {
+		t.Errorf("a picture in a guide:\ngot  %q and %v\nwant %q", got, err, still)
+	}
+	for _, src := range []string{"site/media/cube3d.png", "../brand/mark.png", "../../site/media/cube3d.png"} {
+		if got, err := pictureFrom("docs")("A block.", src, false); err == nil {
+			t.Errorf("wanted the picture %q in a guide refused, got %q", src, got)
+		}
+	}
+}
+
+// A guide's page names the guide before it and the one after it, leads back to the manual, and
+// shows in the top bar that it is part of the manual.
+func TestAGuideLinksItsNeighbors(t *testing.T) {
+	out, err := page{
+		Address: "/manual/sprites/", Guide: true,
+		Before: &neighbor{"/manual/pixels/", "Pixels &amp; pictures"}, After: &neighbor{"/manual/widgets/", "Widgets"},
+	}.write()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`<a href="/manual/" aria-current="true">Manual</a>`,
+		`<a rel="prev" href="/manual/pixels/">Before: Pixels &amp; pictures</a>`,
+		`<a href="/manual/">All guides</a>`,
+		`<a rel="next" href="/manual/widgets/">Next: Widgets</a>`,
+	} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("wanted a guide's page to have %s, got:\n%s", want, out)
+		}
+	}
+	// The first guide has none before it, and a page that is no guide has none of this.
+	first, _ := page{Address: "/manual/web/", Guide: true}.write()
+	plain, _ := page{Address: "/changelog/"}.write()
+	if strings.Contains(string(first), `rel="prev"`) || strings.Contains(string(first), `rel="next"`) || strings.Contains(string(plain), `class="guides"`) || strings.Contains(string(plain), `aria-current="true"`) {
+		t.Errorf("wanted no neighbors where there are none, got:\n%s\nand\n%s", first, plain)
+	}
+}
+
+// The guides are the files of docs in the order their index links them, each with a title, what
+// it is about, and its sections.
+func TestTheGuidesAreTheFilesOfDocs(t *testing.T) {
+	if _, err := os.Stat(root("site/media")); os.IsNotExist(err) {
+		t.Skip("site/media is not in this copy of glonk")
+	}
+	names, err := guideNames()
+	if err != nil {
+		t.Fatal(err)
+	}
+	all, err := guides()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(names) == 0 || len(all) != len(names) {
+		t.Fatalf("wanted a page for each of the guides %v, got %d", names, len(all))
+	}
+	for i, g := range all {
+		if g.Address != "/manual/"+names[i]+"/" || g.Title == "" || g.Description == "" || len(g.Contents) == 0 ||
+			!strings.Contains(g.Front, "<h1 id=") || !strings.Contains(g.Front, `<p class="lede">`) {
+			t.Errorf("wanted the guide %s with its address, title, description, sections and a first paragraph, got %+v", names[i], g)
+		}
+		if (g.Before == nil) != (i == 0) || (g.After == nil) != (i == len(all)-1) {
+			t.Errorf("wanted the guide %s to name the guides beside it, got %+v and %+v", names[i], g.Before, g.After)
 		}
 	}
 }
