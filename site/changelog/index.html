@@ -68,6 +68,10 @@
 
 <article class="text" id="text">
 <h2 id="unreleased"><a href="https://github.com/usrgames/glonk/compare/v0.16.0...HEAD">Unreleased</a></h2>
+<h3 id="fixed">Fixed</h3>
+<ul>
+<li><code>glonk.js</code> starts a fresh atlas for xterm.js&#39;s WebGL addon before the addon would merge its pages, which drew wrong cells in games with many colors (#164, xterm.js #5883).</li>
+</ul>
 <h2 id="0160---2026-11-22"><a href="https://github.com/usrgames/glonk/compare/v0.15.0...v0.16.0">0.16.0</a> - 2026-11-22</h2>
 <p>On top of 0.15.0 this release asks the terminal what it can do before a game starts, and runs a game in a web page from any repository. Nothing was removed, renamed or changed. The module needs the same versions of <code>golang.org/x/sys</code> and <code>golang.org/x/term</code> as 0.15.0.</p>
 <h3 id="added">Added</h3>
@@ -127,7 +131,7 @@
 <li><strong><code>DrawBox</code> and <code>widget.Panel</code> join their borders with the light box lines already in the frame.</strong> Each drew its corners as if it were alone, so panels that share an edge, a list of rows, a table, a view split in two, showed <code>┌</code> where <code>├</code> belonged, and a program fixed each join by hand. Now a border drawn over a light line meets it as <code>├ ┤ ┬ ┴ ┼</code>. A box or a panel alone looks as it did, and so does one drawn over anything else; a picture changes only where a border is drawn over a light line. <code>DrawBox</code> now writes each cell once and visits only the part inside the frame, and a size near the largest <code>int</code> no longer wraps around.</li>
 <li><code>Canvas.BlendRect</code> is 5 to 6% slower on arm64 than in 0.12.0, about 2 microseconds for a whole 200 by 120 canvas, because <code>Mix</code> now rounds the same way on every platform (see Fixed): each channel is a multiply and an add where arm64 fused them into one instruction. amd64 never fused them. <code>make benchcmp BASE=v0.12.0</code> over the 216 benchmarks both versions have finds those four rows and <code>DrawRect</code> (+6 to 7%, which does not mix but moves with the same change) slower, <code>Image</code> 4 to 5% faster, and none that allocate more. Two more rows, <code>DrawMany/pixels_200x60</code> and the scrolling log of <code>BenchmarkFrames</code>, were slower in one run, the same in the next, and slower again only once the <code>Mix</code> change was taken out, so they move with how the binary is laid out and not with any code they run.</li>
 </ul>
-<h3 id="fixed">Fixed</h3>
+<h3 id="fixed-1">Fixed</h3>
 <ul>
 <li><code>Run</code> shows the frame on a terminal that reports 0 columns by 0 rows. It told the game 80 by 24 there, as the docs say, and drew the frame, but cut what it sent to the terminal&#39;s own 0 by 0, so the screen was erased and stayed empty: a recording or a smoke test made under <code>script</code> started from something that is not a terminal, in a CI job or in some container consoles, held nothing (#131). Now an axis the terminal reports as 0 shows the whole frame on it, 80 columns or 24 rows, or what <code>Width</code> or <code>Height</code> chose, until the terminal reports a size.</li>
 <li><code>Mix</code> and <code>Canvas.BlendRect</code> give the same colors on every platform. On arm64 the compiler fused the multiply and the add of each channel into one instruction, which rounds once where amd64 rounds twice, so a mix that lands next to a half went down on arm64 and up on amd64: <code>Mix</code> from red 1 to red 8 at a <code>t</code> just under 1/14 was red 1 on a Mac with Apple silicon and red 2 on an Intel one. The product is now rounded on its own on every platform, which is what amd64 did, so only arm64 changes, and only for those mixes, by one step of one channel.</li>
@@ -162,7 +166,7 @@
 <li>The module needs <code>golang.org/x/term</code> v0.48.0 and <code>golang.org/x/sys</code> v0.50.0, up from v0.47.0 and v0.49.0: the terminal layer, which <code>engine</code> uses for raw mode and the size of the window, and for the system calls under it. <code>go get</code> moves a program that pins older ones up to them. Nothing in the API comes from them.</li>
 <li><code>make benchcmp BASE=v0.10.0</code> over the 199 benchmarks that the two releases have finds 1 slower, 26 faster and 0 that allocate more. The slower one is <code>FillCircle</code> of radius 50, by 4.6%, in code that this release does not change; the 0.9.0 notes recorded that row and <code>tilemap</code> <code>Route.Steps</code>, which is 7.1% faster here, moving with an unrelated file added to <code>engine</code>, and an unrelated function added there moves <code>FillCircle</code> from 3329 to 3510 ns, so both follow the layout of the binary and not the code. Of the faster ones, 25 are mesh drawing, by 3.6 to 10.9%, and meshes with a picture or that can be seen through draw 5 to 11% faster.</li>
 </ul>
-<h3 id="fixed-1">Fixed</h3>
+<h3 id="fixed-2">Fixed</h3>
 <ul>
 <li>Drawing a mesh with no picture and no opacity is as fast as it was in 0.9.0 again, which 0.10.0 said it was not: 3 to 6% slower, in 12 benchmarks (#86). There were two causes. For each face, 0.9.0 asked a plain mesh one question, whether it had vertex colors, and 0.10.0 asked three, for the picture, for the cut and for the colors; they are inside one test now, set once for the mesh, so a plain mesh skips all of them. And every helper that a mesh draw calls (<code>offscreen</code>, <code>currentBounds</code>, <code>reach</code>, <code>worldNormals</code>, <code>lightsReaching</code> and the two that walk the faces and the edges) took the whole <code>Mesh</code> by value, which grew from 240 to 280 bytes in 0.10.0, so a draw copied it several times; they take a pointer now, and the exported methods keep their value receivers and copy the mesh once, so nothing in the API changes. What did not matter: the bytes of the new fields on their own cost under 1% at the median, and neither the draw closures nor the opacity setup moved the numbers. <code>make benchcmp BASE=v0.9.0</code> over the 48 benchmarks that found it finds 0 slower, and nothing allocates more. Against 0.10.0, meshes with a picture, and meshes that can be seen through, draw 5 to 11% faster in the benchmarks.</li>
 </ul>
@@ -243,7 +247,7 @@
 <li>The keys of the examples that switch something use <code>Input.Started</code>, so holding one no longer flickers it: M and B in <code>cube3d</code>, N, R, V, M, D, C, F, L and B in the viewer, and Esc in <code>world</code>, which opened the pause menu and closed it again for as long as it was held. Esc in the other examples only quits, so it still uses <code>Pressed</code>.</li>
 <li><code>examples/cube3d</code> says &#34;no key releases here: one key at a time&#34; under its fps line where the terminal reports no key releases (<code>Input.Exact</code> is false), since walking and turning together does not work there.</li>
 </ul>
-<h3 id="fixed-2">Fixed</h3>
+<h3 id="fixed-3">Fixed</h3>
 <ul>
 <li><code>Run</code> no longer ends at once with &#34;width and height must be positive integers&#34; on a terminal that reports 0 columns by 0 rows, which a pseudo-terminal that nobody gave a size does, as under <code>script</code> started from a CI step or in some container consoles. An axis you left at 0 is taken as 80 columns or 24 rows until the terminal reports a size, and <code>Run</code> follows the size from then on.</li>
 </ul>
@@ -267,7 +271,7 @@
 <li>Model textures find the kind of their picture and read its size from the header through the same internal code as <code>bitmap</code>. What a texture accepts and refuses, and the pixel budget, are as they were.</li>
 <li><code>examples/world</code> has a coin panel at the top left, with the count and a bar that fills as coins are collected, and a pause menu: Esc now opens a menu to resume or quit, with the world standing still, instead of quitting at once.</li>
 </ul>
-<h3 id="fixed-3">Fixed</h3>
+<h3 id="fixed-4">Fixed</h3>
 <ul>
 <li>The terminal size is read from the output handle, so the examples start on Windows (tried in Windows Terminal on Windows 11), where asking the input handle fails with &#34;The handle is invalid&#34;.</li>
 </ul>

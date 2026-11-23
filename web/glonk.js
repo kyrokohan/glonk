@@ -35,6 +35,18 @@ globalThis.glonkPlay = async function glonkPlay(box, { game, cols = 80, rows = 2
     const webgl = new WebglAddon.WebglAddon();
     webgl.onContextLoss(() => webgl.dispose());
     term.loadAddon(webgl);
+    // shortcut: addon-webgl 0.19.0 draws wrong cells once its atlas merges pages (xterm.js #5883, glonk
+    // #164), so a fresh atlas starts long before that; delete once a stable xterm.js has the fix.
+    let pages = 1;
+    webgl.onChangeTextureAtlas(() => { pages = 1; });
+    webgl.onAddTextureAtlasCanvas(() => { pages++; });
+    webgl.onRemoveTextureAtlasCanvas(() => { pages--; });
+    term.onRender(() => {
+      if (pages < 4) return;
+      // An atlas option changed makes a new atlas, and changed back, a fresh one like the first.
+      term.options.drawBoldTextInBrightColors = !term.options.drawBoldTextInBrightColors;
+      term.options.drawBoldTextInBrightColors = !term.options.drawBoldTextInBrightColors;
+    });
   } catch { /* xterm.js draws without WebGL too, with faint seams through half blocks */ }
   term.write("\x1b[?25l");
 
