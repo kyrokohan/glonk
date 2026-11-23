@@ -1,6 +1,7 @@
 // Package web runs a glonk game in a web page: the engine without a terminal, the page's keys, pastes
 // and pointer in, and its frames out, drawn by xterm.js. It is built for the browser only, with
-// GOOS=js GOARCH=wasm; elsewhere it is empty.
+// GOOS=js GOARCH=wasm; elsewhere it is empty. On pkg.go.dev, Run shows in
+// [its documentation for the browser].
 //
 // A game keeps its terminal entry in a file built for everything but the browser, and adds one for
 // the page:
@@ -27,4 +28,6 @@
 // gives it cols and rows, the size of the frame in cells, frame(bytes, n), called with each write of a
 // frame, of which the first n bytes are new, and done(message), called once when the game ends with
 // "quit" or what went wrong. Run adds key, paste, pointer, focus and stop for the page to call.
+//
+// [its documentation for the browser]: https://pkg.go.dev/glonk.dev/web?GOOS=js&GOARCH=wasm
 package web
