@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="go-import" content="glonk.dev git https://github.com/usrgames/glonk">
+<meta name="go-source" content="glonk.dev https://github.com/usrgames/glonk https://github.com/usrgames/glonk/tree/main{/dir} https://github.com/usrgames/glonk/blob/main{/dir}/{file}#L{line}">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Widgets: glonk</title>
+<meta name="description" content="The widget package draws the pieces of a HUD and a menu: a label, a panel, a bar, a menu and a text field. Each is a value with a Draw method that takes a place in cells, as DrawBox does.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://glonk.dev/manual/widgets/">
+<meta property="og:title" content="Widgets: glonk">
+<meta property="og:description" content="The widget package draws the pieces of a HUD and a menu: a label, a panel, a bar, a menu and a text field. Each is a value with a Draw method that takes a place in cells, as DrawBox does.">
+<meta property="og:image" content="https://glonk.dev/card.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="The glonk logo, the words: a terminal rendering engine for Go: 2D, 3D, or both in one frame, and a gold block on a dark floor of lines.">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" href="/media/fonts/DepartureMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+<!-- Made from the repository by internal/sitepages. Do not edit: change the source and run make site. -->
+<a class="skip" href="#text">Skip to the text</a>
+<div class="page">
+
+<header class="top">
+  <a class="name" href="/"><span class="mark" aria-hidden="true"></span>glonk</a>
+  <nav aria-label="glonk">
+    <a href="/manual/" aria-current="true">Manual</a>
+    <a href="/changelog/">Changelog</a>
+    <a href="https://github.com/usrgames/glonk/tree/main/examples">Examples</a>
+    <a href="https://github.com/usrgames/glonk">GitHub</a>
+  </nav>
+</header>
+
+<main class="doc">
+<div class="front">
+<h1 id="widgets">Widgets</h1>
+<p class="lede">The <code>widget</code> package draws the pieces of a HUD and a menu: a label, a panel, a bar, a menu and a text field. Each is a value with a <code>Draw</code> method that takes a place in cells, as <code>DrawBox</code> does.</p>
+</div>
+
+<nav class="contents" aria-label="Contents">
+<p>Contents</p>
+<ul role="list">
+<li><a href="#a-hud">A HUD</a></li>
+<li><a href="#panels-that-share-an-edge">Panels that share an edge</a></li>
+<li><a href="#a-menu">A menu</a></li>
+<li><a href="#a-text-field">A text field</a></li>
+<li><a href="#always-safe">Always safe</a></li>
+<li><a href="#not-included">Not included</a></li>
+</ul>
+</nav>
+
+<article class="text" id="text">
+<h2 id="a-hud">A HUD</h2>
+<pre tabindex="0"><code>	widget.Panel{Title: &#34;Status&#34;}.Draw(fb, 0, 0, 22, 4)
+	widget.Label{Text: fmt.Sprintf(&#34;coins %d/%d&#34;, coins, total)}.Draw(fb, 2, 1, 18)
+	widget.Bar{Value: float64(coins) / float64(total)}.Draw(fb, 2, 2, 18)
+
+	fmt.Println(fb)
+	// Output:
+	// ┌─ Status ───────────┐
+	// │ coins 3/12         │
+	// │ █████░░░░░░░░░░░░░ │
+	// └────────────────────┘
+</code></pre>
+<ul>
+<li><strong>Draw widgets after the world.</strong> They are placed on the screen, not in the level.</li>
+<li><strong>A style is an <code>engine.Cell</code>.</strong> Its colors and attributes are used, and its character is not.</li>
+<li><strong>A <code>Label</code></strong> is a line of text, cut off at its width. <code>Align</code> is <code>Left</code>, <code>Center</code> or <code>Right</code>.</li>
+<li><strong>A <code>Bar</code></strong> shows a <code>Value</code> from 0 to 1 in the cells <code>Full</code> and <code>Empty</code>, which are <code>█</code> and <code>░</code> unless you say.</li>
+<li><strong>A <code>Panel</code></strong> is a border with a title, which shows from 7 cells wide.</li>
+<li><strong>A blank <code>Fill</code> is a hole.</strong> The panel then leaves its inside alone and shows what is under it.</li>
+</ul>
+<h2 id="panels-that-share-an-edge">Panels that share an edge</h2>
+<p>A border drawn over a light box line that is already there meets it as <code>├ ┤ ┬ ┴ ┼</code>. So a list of rows, a table or a view split in two is panels drawn edge on edge.</p>
+<ul>
+<li><strong><code>fb.SetJoined(x, y, cell)</code></strong> draws one cell that way, for lines of your own.</li>
+<li><strong>Double, heavy and rounded lines are drawn over,</strong> not joined.</li>
+</ul>
+<h2 id="a-menu">A menu</h2>
+<p>A menu keeps its selection, so the game keeps the menu:</p>
+<pre tabindex="0"><code>// pause is a game&#39;s pause screen: a menu keeps its selection, so the game keeps the menu.
+type pause struct {
+	menu widget.Menu
+}
+
+func (p *pause) Update(dt float64, in *engine.Input) error {
+	if choice, chosen := p.menu.Update(in); chosen &amp;&amp; choice == 1 {
+		return engine.ErrQuit
+	}
+	return nil
+}
+
+func (p *pause) Draw(fb *engine.FrameBuffer) {
+	widget.Panel{Title: &#34;Paused&#34;}.Draw(fb, 0, 0, 14, 4)
+	p.menu.Draw(fb, 2, 1, 10, 2)
+}
+</code></pre>
+<ul>
+<li><strong>Up and Down move the selection,</strong> and wrap around. Enter chooses, and <code>Update</code> returns the index of the item.</li>
+<li><strong>Escape and every other key are left to the game,</strong> which can use Escape to open and close the menu.</li>
+<li><strong>The selected row is drawn reversed.</strong> A list longer than its rows scrolls, keeping the selection in the middle row.</li>
+<li><strong>With <code>Config.Mouse</code> set it takes the mouse too.</strong> A pointer that moves onto an item selects it, a left click chooses it, and the wheel steps the selection.</li>
+<li><strong>A menu not drawn since its last <code>Update</code> ignores the mouse,</strong> as on the frame it opens.</li>
+</ul>
+<h2 id="a-text-field">A text field</h2>
+<pre tabindex="0"><code>	field, kb := widget.TextField{MaxLength: 4, Accept: unicode.IsDigit}, engine.NewKeyboard()
+
+	kb.Type(&#34;12ab345&#34;)
+	kb.Press(engine.KeyEnter)
+	entered := field.Update(kb.Input())
+	fmt.Printf(&#34;%q entered: %v\n&#34;, field.Text, entered)
+
+	fb, _ := engine.NewFrameBuffer(12, 1)
+	fb.DrawText(0, 0, &#34;Score:&#34;, engine.Color{})
+	field.Draw(fb, 7, 0, 5)
+	fmt.Println(fb)
+	// Output:
+	// &#34;1234&#34; entered: true
+	// Score: 1234
+</code></pre>
+<ul>
+<li><strong>A <code>TextField</code></strong> is one line to type into: a name, a number, a search.</li>
+<li><strong>Call <code>Update</code> for the field that has the keyboard.</strong> It reports Enter.</li>
+<li><strong>Typing and a paste go in at the cursor.</strong> A paste&#39;s line breaks go in as spaces.</li>
+<li><strong>Left, Right, Home and End move the cursor,</strong> and Backspace and Delete delete.</li>
+<li><strong>Only characters one column wide go in,</strong> none past <code>MaxLength</code>, and only those <code>Accept</code> takes.</li>
+<li><strong>Text longer than the field scrolls</strong> to keep the cursor in view. The cursor is drawn reversed.</li>
+<li><strong>Escape, Tab and focus are the game&#39;s.</strong></li>
+</ul>
+<h2 id="always-safe">Always safe</h2>
+<ul>
+<li>What runs off the frame is cut off.</li>
+<li>A size that is not positive draws nothing.</li>
+<li>Nothing allocates, except a text field&#39;s new text.</li>
+</ul>
+<h2 id="not-included">Not included</h2>
+<p>Several lines of text, selecting text, layouts, and focus or nesting: a widget is drawn where you say. <code>examples/world</code> has a coin panel and a pause menu, and <code>examples/input</code> a text field.</p>
+<nav class="guides" aria-label="Guides">
+<a rel="prev" href="/manual/sprites/">Before: Sprites, collision and tile maps</a>
+<a href="/manual/">All guides</a>
+<a rel="next" href="/manual/web/">Next: A game in a web page</a>
+</nav>
+</article>
+</main>
+
+<footer>
+  <nav aria-label="More">
+    <a href="https://pkg.go.dev/glonk.dev">pkg.go.dev</a>
+    <a href="https://github.com/usrgames/glonk">GitHub</a>
+    <a href="/showcase/">Showcase</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/CONTRIBUTING.md">Contributing</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/SECURITY.md">Security</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/BRAND.md">Brand</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/LICENSE">MIT license</a>
+  </nav>
+  <p class="fine">Early and pre-1.0: the API may change. Built to work in most terminals; Windows is untested.</p>
+</footer>
+
+</div>
+</body>
+</html>
