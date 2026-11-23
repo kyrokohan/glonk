@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="go-import" content="glonk.dev git https://github.com/usrgames/glonk">
+<meta name="go-source" content="glonk.dev https://github.com/usrgames/glonk https://github.com/usrgames/glonk/tree/main{/dir} https://github.com/usrgames/glonk/blob/main{/dir}/{file}#L{line}">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pixels, shapes and pictures: glonk</title>
+<meta name="description" content="A terminal cell is about twice as tall as it is wide. The pixel canvas cuts every cell into two square pixels, one above the other, so a frame can hold shapes and pictures finer than characters.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://glonk.dev/manual/pixels/">
+<meta property="og:title" content="Pixels, shapes and pictures: glonk">
+<meta property="og:description" content="A terminal cell is about twice as tall as it is wide. The pixel canvas cuts every cell into two square pixels, one above the other, so a frame can hold shapes and pictures finer than characters.">
+<meta property="og:image" content="https://glonk.dev/card.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="The glonk logo, the words: a terminal rendering engine for Go: 2D, 3D, or both in one frame, and a gold block on a dark floor of lines.">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" href="/media/fonts/DepartureMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+<!-- Made from the repository by internal/sitepages. Do not edit: change the source and run make site. -->
+<a class="skip" href="#text">Skip to the text</a>
+<div class="page">
+
+<header class="top">
+  <a class="name" href="/"><span class="mark" aria-hidden="true"></span>glonk</a>
+  <nav aria-label="glonk">
+    <a href="/manual/" aria-current="true">Manual</a>
+    <a href="/changelog/">Changelog</a>
+    <a href="https://github.com/usrgames/glonk/tree/main/examples">Examples</a>
+    <a href="https://github.com/usrgames/glonk">GitHub</a>
+  </nav>
+</header>
+
+<main class="doc">
+<div class="front">
+<h1 id="pixels-shapes-and-pictures">Pixels, shapes and pictures</h1>
+<p class="lede">A terminal cell is about twice as tall as it is wide. The pixel canvas cuts every cell into two square pixels, one above the other, so a frame can hold shapes and pictures finer than characters.</p>
+</div>
+
+<nav class="contents" aria-label="Contents">
+<p>Contents</p>
+<ul role="list">
+<li><a href="#the-canvas">The canvas</a></li>
+<li><a href="#shapes">Shapes</a></li>
+<li><a href="#text-in-pixels">Text in pixels</a></li>
+<li><a href="#pictures">Pictures</a></li>
+<li><a href="#files-that-cannot-be-trusted">Files that cannot be trusted</a></li>
+<li><a href="#over-cells">Over cells</a></li>
+<li><a href="#in-a-3d-scene">In a 3D scene</a></li>
+<li><a href="#not-included">Not included</a></li>
+</ul>
+</nav>
+
+<article class="text" id="text">
+<h2 id="the-canvas">The canvas</h2>
+<pre tabindex="0" class="odd"><code>	canvas := fb.Canvas() // 20 pixels across and 10 down
+	canvas.FillRect(1, 1, 6, 7, engine.RGB(40, 60, 220))
+	canvas.FillCircle(14, 5, 4, engine.RGB(230, 210, 40))
+	canvas.Compose() // the pixels become cells of the frame
+
+	show(canvas)
+	// Output:
+	// ....................
+	// .######.......#.....
+	// .######.....#####...
+	// .######....#######..
+	// .######....#######..
+	// .######...#########.
+	// .######....#######..
+	// .######....#######..
+	// ............#####...
+	// ..............#.....
+</code></pre>
+<p>Each <code>#</code> here is a pixel that was set, printed for this guide. On screen they are colors.</p>
+<ul>
+<li><strong><code>fb.Canvas()</code></strong> is the frame&#39;s canvas. It is as wide as the frame, and twice as tall.</li>
+<li><strong><code>Compose()</code></strong> turns the pixels into cells of the frame. Nothing drawn on the canvas shows without it.</li>
+<li><strong>A cell whose two pixels differ</strong> becomes the upper half block, <code>▀</code>, in two colors. One whose pixels are alike becomes a solid cell.</li>
+<li><strong>Draw the cells of a HUD after <code>Compose</code>.</strong> Text written then replaces the cells it lands on.</li>
+<li><strong>Apple&#39;s Terminal shows a faint line through half blocks.</strong> glonk detects it, and <code>Compose</code> draws solid cells there: no line, and a blockier picture. <code>Canvas.Seamless</code> overrides the choice.</li>
+</ul>
+<h2 id="shapes">Shapes</h2>
+<table>
+<thead>
+<tr><th>Call</th><th>Draws</th></tr>
+</thead>
+<tbody>
+<tr><td><code>FillRect(x, y, w, h, color)</code></td><td>A filled rectangle</td></tr>
+<tr><td><code>DrawRect(x, y, w, h, color)</code></td><td>Its border, one pixel thick, inside the same rectangle</td></tr>
+<tr><td><code>FillCircle(cx, cy, r, color)</code></td><td>A filled circle, <code>2r+1</code> pixels across</td></tr>
+<tr><td><code>DrawCircle(cx, cy, r, color)</code></td><td>Its outline, one pixel thick</td></tr>
+<tr><td><code>FillDisc(cx, cy, r, color)</code></td><td>A disc whose center and radius can be fractions of a pixel, with a smooth edge</td></tr>
+<tr><td><code>DrawLine(x0, y0, x1, y1, color)</code></td><td>A line, one pixel thick</td></tr>
+<tr><td><code>BlendRect(x, y, w, h, color, t)</code></td><td>A color mixed over a rectangle, by the part <code>t</code> from 0 to 1</td></tr>
+<tr><td><code>BlendDisc(cx, cy, r, color, t)</code></td><td>A color mixed over a disc: a shadow or a glow</td></tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Shapes clip.</strong> Only the pixels on the canvas are visited, so a shape far off screen costs nothing.</li>
+<li><strong>The zero <code>Color</code> erases.</strong></li>
+<li><strong>Shapes ignore depth.</strong> They replace the pixels under them.</li>
+<li><strong>None of them allocates.</strong></li>
+<li><strong>Circles and discs draw the same pixels on every platform.</strong></li>
+<li><strong><code>FillDisc</code> is for a small round thing that moves smoothly.</strong> A pixel on its edge is mixed toward the color by how much of it the disc covers.</li>
+<li><strong>An empty pixel has nothing to mix with.</strong> On a disc&#39;s edge it takes the color from half covered, and stays empty below that. Fill a background first for a smooth edge everywhere.</li>
+<li><strong><code>BlendRect</code> and <code>BlendDisc</code> leave empty pixels empty,</strong> since the terminal&#39;s own background is not known. Fill first where the tint should show.</li>
+<li><strong><code>BlendRect</code> over the whole canvas</strong> is a dim behind a menu, a fade to black or a red flash, in one call.</li>
+</ul>
+<h2 id="text-in-pixels">Text in pixels</h2>
+<pre tabindex="0"><code>	title, white := &#34;GLONK&#34;, engine.RGB(255, 255, 255)
+	canvas.DrawText((canvas.Width()-engine.PixelTextWidth(title, 1))/2, 0, title, white)
+	canvas.Compose()
+
+	show(canvas)
+	// Output:
+	// ..###..#......###..#...#.#...#..
+	// .#...#.#.....#...#.##..#.#..#...
+	// .#.....#.....#...#.##..#.#.#....
+	// .#.###.#.....#...#.#.#.#.##.....
+	// .#...#.#.....#...#.#..##.#.#....
+	// .#...#.#.....#...#.#..##.#..#...
+	// ..###..#####..###..#...#.#...#..
+	// ................................
+</code></pre>
+<ul>
+<li><strong><code>Canvas.DrawText</code></strong> draws the printable ASCII characters in a font that comes with glonk: letters 5 pixels wide and 7 tall, 6 apart.</li>
+<li><strong><code>DrawTextScaled(x, y, text, color, scale)</code></strong> draws them at 2 or 3 times the size, or more.</li>
+<li><strong><code>engine.PixelTextWidth(text, scale)</code></strong> is how wide the text is, so a title centers. Its height is <code>7*scale</code>.</li>
+<li><strong>Only the pixels of the letters are written,</strong> so what is behind them shows between the strokes. <code>FillRect</code> a background first to have one.</li>
+<li><strong>A character with no letter is drawn as <code>?</code>,</strong> and there is no wrapping.</li>
+<li><code>FrameBuffer.DrawText</code> still draws cells. Use it where text is part of the grid, and this where it is part of a picture.</li>
+</ul>
+<h2 id="pictures">Pictures</h2>
+<p>The <code>bitmap</code> package reads a JPEG or a PNG once, at start-up: from a <code>//go:embed</code> byte slice, a file or a download.</p>
+<pre tabindex="0" class="odd"><code>	pic, err := bitmap.Decode(&amp;file)
+	if err != nil {
+		fmt.Println(&#34;no picture:&#34;, err)
+		return
+	}
+</code></pre>
+<ul>
+<li><strong><code>Decode</code> finds the format by what the file holds,</strong> not by its name.</li>
+<li><strong>A pixel with an alpha of 128 or more is drawn as an opaque color.</strong> A lighter one is a hole: what is under it shows. There is no blending.</li>
+<li><strong>Black is a color</strong> and is drawn.</li>
+</ul>
+<p>A picture can also be made in code:</p>
+<pre tabindex="0" class="odd"><code>// coin is a picture made in code: a see-through square with a gold disc in it.
+func coin() *bitmap.Bitmap {
+	gold := engine.RGB(255, 200, 0)
+	pic := bitmap.New(5, 5)
+	for y := range 5 {
+		for x := range 5 {
+			if (x-2)*(x-2)+(y-2)*(y-2) &lt;= 5 {
+				pic.Set(x, y, gold)
+			}
+		}
+	}
+	return pic
+}
+</code></pre>
+<ul>
+<li><strong><code>bitmap.New(w, h)</code></strong> makes a picture of holes, and <code>Set</code> colors one pixel.</li>
+<li><strong><code>bitmap.FromImage(img)</code></strong> copies any <code>image.Image</code>, with the same rule for alpha.</li>
+</ul>
+<p>Then draw it:</p>
+<pre tabindex="0"><code>	pic := coin()
+	pic.Draw(canvas, 1, 1)                  // at its own size
+	pic.DrawScaled(canvas, 8, 0, 10, 10)    // stretched to 10 by 10 pixels
+	pic.Sub(0, 0, 3, 5).Draw(canvas, 20, 1) // its left three columns only
+	canvas.Compose()
+
+	show(canvas)
+	// Output:
+	// ..........######........
+	// ..###.....######.....##.
+	// .#####..##########..###.
+	// .#####..##########..###.
+	// .#####..##########..###.
+	// ..###...##########...##.
+	// ........##########......
+	// ........##########......
+	// ..........######........
+	// ..........######........
+</code></pre>
+<ul>
+<li><strong><code>Draw</code></strong> copies the picture at its own size, and <strong><code>DrawScaled</code></strong> stretches it. Neither allocates.</li>
+<li><strong><code>DrawScaled</code> takes the nearest pixel,</strong> with no smoothing, so a picture at its own size comes out exactly.</li>
+<li><strong><code>Sub(x, y, w, h)</code></strong> is a view of one rectangle of a picture. It shares the pixels, so a strip of animation frames is one picture, drawn a frame at a time.</li>
+<li><strong><code>Mirrored()</code></strong> is a view with its columns reversed, for a thing that faces the other way.</li>
+<li><strong><code>Shaded(brightness)</code></strong> is a view drawn darker, and <strong><code>Tinted(color, part)</code></strong> one mixed toward a color. Drawing either costs about five times a plain draw.</li>
+<li><strong>Make the views once,</strong> at start-up. Nothing is copied.</li>
+</ul>
+<h2 id="files-that-cannot-be-trusted">Files that cannot be trusted</h2>
+<ul>
+<li><strong>A small file can claim a picture of billions of pixels.</strong> <code>Decode</code> reads the size from the header first.</li>
+<li><strong>It refuses a file over 32 MiB, or a picture of more than 4,194,304 pixels,</strong> which is 2,048 by 2,048, before decoding it.</li>
+<li><strong><code>DecodeLimit</code></strong> takes limits of your own. A source that never ends is read only up to the limit.</li>
+<li><strong>The decoders add about 220 KB to a program,</strong> and only to one that imports <code>bitmap</code>.</li>
+</ul>
+<h2 id="over-cells">Over cells</h2>
+<p>The canvas is under every cell, so a filled panel drawn after a picture covers it. <code>ComposeRect</code> puts one rectangle of the canvas down over cells that are already in the frame:</p>
+<pre tabindex="0"><code>	widget.Panel{Title: &#34;coins&#34;, Fill: engine.Cell{Background: engine.Palette(236)}}.Draw(fb, 0, 0, 14, 5)
+	fb.DrawText(8, 2, &#34;x 3&#34;, engine.Color{})
+
+	canvas, pic := fb.Canvas(), coin()
+	pic.Draw(canvas, 2, 2) // pixel (2, 2) is in cell (2, 1): a cell is one pixel across and two down
+	canvas.ComposeRect(2, 2, pic.Width(), pic.Height())
+</code></pre>
+<ul>
+<li><strong>The order is:</strong> draw the cells, draw the pixels, then <code>ComposeRect</code> that rectangle, in pixels.</li>
+<li><strong>A cell that holds a letter loses it</strong> when a pixel is put down in it, since a half block cannot hold one.</li>
+<li><strong>A cell whose two pixels are both empty is not touched,</strong> and keeps its letter.</li>
+<li><strong>Where the canvas also holds a world</strong> that <code>Compose</code> has put down, <code>Clear</code> it first and draw the picture on the empty canvas.</li>
+<li><code>examples/world</code> has a coin in its panel, drawn this way.</li>
+</ul>
+<h2 id="in-a-3d-scene">In a 3D scene</h2>
+<ul>
+<li><strong><code>Draw</code> and <code>DrawScaled</code> never read or write depth.</strong> That is right for a logo or a HUD.</li>
+<li><strong><code>DrawScaledDepth(canvas, x, y, w, h, depth)</code></strong> is for a picture of a thing that stands in the scene: an enemy, a pickup, a tree. A nearer surface hides it, and it hides a farther one.</li>
+<li><strong>The depth is one number for the whole picture.</strong> <code>Camera.ProjectPixels</code> gives it, with the pixel to draw at. It costs 4 to 5 percent more than <code>DrawScaled</code>.</li>
+<li><strong><code>Compose</code> gives each cell the depth of its nearer pixel,</strong> so what is drawn with a depth afterwards is hidden behind nearer pixels.</li>
+</ul>
+<h2 id="not-included">Not included</h2>
+<p>Smooth scaling, anti-aliasing other than the edge of a disc, animated formats, ellipses, rounded rectangles, lines thicker than a pixel, and blending by a pixel&#39;s own alpha.</p>
+<nav class="guides" aria-label="Guides">
+<a rel="prev" href="/manual/testing/">Before: Testing a game</a>
+<a href="/manual/">All guides</a>
+<a rel="next" href="/manual/sprites/">Next: Sprites, collision and tile maps</a>
+</nav>
+</article>
+</main>
+
+<footer>
+  <nav aria-label="More">
+    <a href="https://pkg.go.dev/glonk.dev">pkg.go.dev</a>
+    <a href="https://github.com/usrgames/glonk">GitHub</a>
+    <a href="/showcase/">Showcase</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/CONTRIBUTING.md">Contributing</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/SECURITY.md">Security</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/BRAND.md">Brand</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/LICENSE">MIT license</a>
+  </nav>
+  <p class="fine">Early and pre-1.0: the API may change. Built to work in most terminals; Windows is untested.</p>
+</footer>
+
+</div>
+</body>
+</html>
