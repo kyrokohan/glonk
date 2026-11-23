@@ -4,6 +4,14 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-11-23
+
+On top of 0.16.0 this release draws colorful frames right in a web page. Nothing was removed, renamed or changed. The module needs the same versions of `golang.org/x/sys` and `golang.org/x/term` as 0.16.0.
+
+### Changed
+
+- The repository is now [github.com/usrgames/glonk](https://github.com/usrgames/glonk). The module path `glonk.dev` is unchanged, and the old address redirects (#150).
+
 ### Fixed
 
 - `glonk.js` starts a fresh atlas for xterm.js's WebGL addon before the addon would merge its pages, which drew wrong cells in games with many colors (#164, xterm.js #5883).
@@ -351,7 +359,8 @@ The first release. The API is pre-1.0 and may still change. The README lists the
 - Three example programs (`bounce2d`, `cube3d` and a model `viewer`), runnable examples in the package documentation, fuzz tests for the parsers, rasterizers and clipping, and a test that keeps the documentation complete.
 - Continuous integration (format, vet and race tests on Linux and macOS for Go 1.26 and 1.27, cross-compilation, 32-bit tests), Dependabot, a security policy and contributing notes.
 
-[Unreleased]: https://github.com/usrgames/glonk/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/usrgames/glonk/compare/v0.16.1...HEAD
+[0.16.1]: https://github.com/usrgames/glonk/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/usrgames/glonk/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/usrgames/glonk/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/usrgames/glonk/compare/v0.13.0...v0.14.0
