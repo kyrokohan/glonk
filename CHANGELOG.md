@@ -4,9 +4,14 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.16.2] - 2026-11-23
+
+On top of 0.16.1 this release is the manual: ten guides by task, and the README as a front page. Nothing in the API was removed, renamed or changed. The module needs the same versions of `golang.org/x/sys` and `golang.org/x/term` as 0.16.1.
+
 ### Changed
 
 - The manual is ten guides by task, in `docs/` and each a page at [glonk.dev/manual](https://glonk.dev/manual/): a first game, input, testing, pixels, sprites and tile maps, widgets, a 3D scene, models and textures, a web page, and terminals. The README is a front page. Every block of Go in the guides, the README and on glonk.dev's cover is lines of a file that the tests build and run (#126).
+- `glonk.dev/web`'s documentation links its view for the browser, where pkg.go.dev shows `Run` (#168).
 
 ### Added
 
@@ -367,7 +372,8 @@ The first release. The API is pre-1.0 and may still change. The README lists the
 - Three example programs (`bounce2d`, `cube3d` and a model `viewer`), runnable examples in the package documentation, fuzz tests for the parsers, rasterizers and clipping, and a test that keeps the documentation complete.
 - Continuous integration (format, vet and race tests on Linux and macOS for Go 1.26 and 1.27, cross-compilation, 32-bit tests), Dependabot, a security policy and contributing notes.
 
-[Unreleased]: https://github.com/usrgames/glonk/compare/v0.16.1...HEAD
+[Unreleased]: https://github.com/usrgames/glonk/compare/v0.16.2...HEAD
+[0.16.2]: https://github.com/usrgames/glonk/compare/v0.16.1...v0.16.2
 [0.16.1]: https://github.com/usrgames/glonk/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/usrgames/glonk/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/usrgames/glonk/compare/v0.14.0...v0.15.0
