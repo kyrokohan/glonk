@@ -450,8 +450,8 @@ footer {
   text-decoration: none;
 }
 
-/* A page of text: the manual and the changelog, which internal/sitepages makes from README.md
-   and CHANGELOG.md. The contents stay in view beside 50 cells of text. */
+/* A page of text: the manual, a guide or the changelog, which internal/sitepages makes from
+   README.md, a file of docs or CHANGELOG.md. The contents stay in view beside 50 cells of text. */
 .doc {
   display: grid;
   grid-template-columns: calc(22 * var(--cw)) calc(50 * var(--cw));
@@ -506,6 +506,11 @@ footer {
 
 .text > * {
   max-width: calc(50 * var(--cw));
+}
+
+/* Under a guide: the guide before it, all of them, and the one after it. */
+.guides {
+  margin-top: calc(2 * var(--rh));
 }
 
 /* A link to a section leaves a row above its heading. */
