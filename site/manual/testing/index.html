@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="go-import" content="glonk.dev git https://github.com/usrgames/glonk">
+<meta name="go-source" content="glonk.dev https://github.com/usrgames/glonk https://github.com/usrgames/glonk/tree/main{/dir} https://github.com/usrgames/glonk/blob/main{/dir}/{file}#L{line}">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Testing a game: glonk</title>
+<meta name="description" content="Update and Draw are plain methods, so a game is tested by calling them. No terminal is needed: engine.Keyboard stands in for the keys, and a frame prints as text or draws as a picture.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://glonk.dev/manual/testing/">
+<meta property="og:title" content="Testing a game: glonk">
+<meta property="og:description" content="Update and Draw are plain methods, so a game is tested by calling them. No terminal is needed: engine.Keyboard stands in for the keys, and a frame prints as text or draws as a picture.">
+<meta property="og:image" content="https://glonk.dev/card.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="The glonk logo, the words: a terminal rendering engine for Go: 2D, 3D, or both in one frame, and a gold block on a dark floor of lines.">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" href="/media/fonts/DepartureMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+<!-- Made from the repository by internal/sitepages. Do not edit: change the source and run make site. -->
+<a class="skip" href="#text">Skip to the text</a>
+<div class="page">
+
+<header class="top">
+  <a class="name" href="/"><span class="mark" aria-hidden="true"></span>glonk</a>
+  <nav aria-label="glonk">
+    <a href="/manual/" aria-current="true">Manual</a>
+    <a href="/changelog/">Changelog</a>
+    <a href="https://github.com/usrgames/glonk/tree/main/examples">Examples</a>
+    <a href="https://github.com/usrgames/glonk">GitHub</a>
+  </nav>
+</header>
+
+<main class="doc">
+<div class="front">
+<h1 id="testing-a-game">Testing a game</h1>
+<p class="lede"><code>Update</code> and <code>Draw</code> are plain methods, so a game is tested by calling them. No terminal is needed: <code>engine.Keyboard</code> stands in for the keys, and a frame prints as text or draws as a picture.</p>
+</div>
+
+<nav class="contents" aria-label="Contents">
+<p>Contents</p>
+<ul role="list">
+<li><a href="#press-a-key">Press a key</a></li>
+<li><a href="#read-a-frame-as-text">Read a frame as text</a></li>
+<li><a href="#read-a-frame-as-a-picture">Read a frame as a picture</a></li>
+<li><a href="#a-whole-run">A whole run</a></li>
+</ul>
+</nav>
+
+<article class="text" id="text">
+<h2 id="press-a-key">Press a key</h2>
+<p>This tests the game of <a href="/manual/first-game/">Your first game</a>:</p>
+<pre tabindex="0"><code>func TestEscapeQuits(t *testing.T) {
+	kb := engine.NewKeyboard()
+	kb.Press(engine.KeyEscape)
+
+	err := (&amp;game{}).Update(1.0/30, kb.Input())
+
+	if !errors.Is(err, engine.ErrQuit) {
+		t.Errorf(&#34;wanted ErrQuit, got %v&#34;, err)
+	}
+}
+</code></pre>
+<ul>
+<li><strong><code>NewKeyboard</code></strong> acts like a terminal with key releases. A key is down from <code>Press</code> until <code>Release</code>.</li>
+<li><strong><code>kb.Input()</code></strong> is what <code>Update</code> takes.</li>
+<li><strong><code>EndFrame</code></strong> ends a frame as <code>Run</code> does. <code>Pressed</code> and <code>Started</code> are true for one frame only.</li>
+<li><strong>A <code>Press</code> of a key that is already down is a repeat.</strong> <code>Pressed</code> is true again and <code>Started</code> is not, so a test can hold a key.</li>
+<li><strong><code>PressWith(mods, keys...)</code></strong> presses a chord, <strong><code>Type(text)</code></strong> types, and <strong><code>Paste(text)</code></strong> pastes.</li>
+<li><strong><code>MouseMove</code>, <code>MouseDown</code>, <code>MouseUp</code> and <code>Wheel</code></strong> move and click the pointer.</li>
+<li>None of it needs a clock, so the tests are exact.</li>
+</ul>
+<p><code>NewLegacyKeyboard</code> acts like a <a href="/manual/input/#terminals-without-key-releases">terminal without key releases</a>, for a game that asks <code>in.Exact()</code>. A key stays held for about 150 ms after its last <code>Press</code>, <code>Release</code> does nothing, and <code>Advance</code> moves the clock.</p>
+<h2 id="read-a-frame-as-text">Read a frame as text</h2>
+<pre tabindex="0"><code>func TestTheAtWalksAcrossTheBox(t *testing.T) {
+	g := &amp;game{}
+	g.Update(0.25, engine.NewKeyboard().Input()) // a quarter of a second at 20 cells a second
+
+	fb, _ := engine.NewFrameBuffer(12, 3)
+	g.Draw(fb)
+
+	want := &#34;┌──────────┐\n&#34; +
+		&#34;│    @     │\n&#34; +
+		&#34;└──────────┘&#34;
+	if got := fb.String(); got != want {
+		t.Errorf(&#34;wanted\n%s\ngot\n%s&#34;, want, got)
+	}
+}
+</code></pre>
+<ul>
+<li><strong><code>engine.NewFrameBuffer(w, h)</code></strong> makes a frame of any size.</li>
+<li><strong><code>fb.String()</code></strong> is the frame as text, one line per row.</li>
+<li>It leaves off the trailing spaces of each line, and shows characters only, not colors.</li>
+</ul>
+<h2 id="read-a-frame-as-a-picture">Read a frame as a picture</h2>
+<p><code>fb.Image</code> draws what <code>String</code> cannot show: colors, and the two pixels of every cell of the pixel canvas.</p>
+<pre tabindex="0"><code>	canvas := fb.Canvas()
+	canvas.FillRect(0, 0, 4, 5, engine.RGB(240, 140, 30)) // pixels: four across, five down
+	canvas.Compose()
+	fb.DrawText(5, 1, &#34;score&#34;, engine.Palette(46))
+
+	img := fb.Image(engine.ImageOptions{Scale: 4})
+</code></pre>
+<ul>
+<li><strong>The picture is <code>Width*Scale</code> by <code>2*Height*Scale</code> pixels.</strong> At <code>Scale: 1</code>, a frame drawn on the pixel canvas comes out pixel for pixel.</li>
+<li><strong>A character is drawn as a mark:</strong> a rectangle in its color, which shows where text is and not what it says.</li>
+<li><strong>With <code>Text: true</code> and a <code>Scale</code> of 6 or more,</strong> printable ASCII is drawn as letters, so a screenshot can be read.</li>
+<li><strong>Pixels set on the pixel canvas are in the picture only after <code>Compose</code>.</strong></li>
+<li><strong>A picture of more than 4,194,304 pixels is not made.</strong></li>
+</ul>
+<p>A test can write the picture to a file when it is asked to, for a person to look at:</p>
+<pre tabindex="0"><code>	if path := os.Getenv(&#34;GLONK_SCREENSHOT&#34;); path != &#34;&#34; {
+		f, err := os.Create(path)
+		if err != nil {
+			panic(err)
+		}
+		defer f.Close()
+		if err := png.Encode(f, img); err != nil {
+			panic(err)
+		}
+	}
+</code></pre>
+<p>That is <code>GLONK_SCREENSHOT=scene.png go test</code>. <code>ExampleFrameBuffer_Image</code> in the <code>engine</code> package is all of it, and the documentation of <a href="https://pkg.go.dev/glonk.dev/engine#FrameBuffer.Image">Image</a> has the rest of its rules.</p>
+<h2 id="a-whole-run">A whole run</h2>
+<p>To test a whole run, with key bytes in and frames out, give <code>Config.Input</code> and <code>Config.Output</code> a reader and a writer that are not a terminal:</p>
+<pre tabindex="0"><code>	var out bytes.Buffer
+	err := engine.Run(context.Background(), &amp;greeter{}, engine.Config{
+		Width: 8, Height: 1, FPS: 100,
+		Input:  strings.NewReader(&#34;&#34;), // key presses would be read from here
+		Output: &amp;out,
+	})
+</code></pre>
+<ul>
+<li><strong><code>Run</code> then has no terminal to take over.</strong> It needs a <code>Width</code> and a <code>Height</code>, and writes nothing but the frames.</li>
+<li><strong>Every frame is sent whole,</strong> so <code>Stats.Bytes</code> is the size of the frame.</li>
+<li><strong>A key is held from its press to its release,</strong> and <code>in.Exact()</code> is true. A plain letter has no release, so it stays held.</li>
+<li><strong><code>Config.LegacyKeys</code></strong> makes it act like a terminal without key releases.</li>
+<li><strong>Ctrl+C still ends the run.</strong> Ctrl+Z does nothing, and quit signals are left to your program.</li>
+<li><strong>The end of the input does not end the run.</strong></li>
+</ul>
+<p>The pictures on glonk.dev are made this way: each example plays a script of key presses with no terminal.</p>
+<nav class="guides" aria-label="Guides">
+<a rel="prev" href="/manual/input/">Before: Keys, text and the mouse</a>
+<a href="/manual/">All guides</a>
+<a rel="next" href="/manual/web/">Next: A game in a web page</a>
+</nav>
+</article>
+</main>
+
+<footer>
+  <nav aria-label="More">
+    <a href="https://pkg.go.dev/glonk.dev">pkg.go.dev</a>
+    <a href="https://github.com/usrgames/glonk">GitHub</a>
+    <a href="/showcase/">Showcase</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/CONTRIBUTING.md">Contributing</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/SECURITY.md">Security</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/BRAND.md">Brand</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/LICENSE">MIT license</a>
+  </nav>
+  <p class="fine">Early and pre-1.0: the API may change. Built to work in most terminals; Windows is untested.</p>
+</footer>
+
+</div>
+</body>
+</html>

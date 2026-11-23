@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="go-import" content="glonk.dev git https://github.com/usrgames/glonk">
+<meta name="go-source" content="glonk.dev https://github.com/usrgames/glonk https://github.com/usrgames/glonk/tree/main{/dir} https://github.com/usrgames/glonk/blob/main{/dir}/{file}#L{line}">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Keys, text and the mouse: glonk</title>
+<meta name="description" content="Update is handed an *engine.Input every frame. It says which keys are down, what was typed or pasted, and where the mouse is.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://glonk.dev/manual/input/">
+<meta property="og:title" content="Keys, text and the mouse: glonk">
+<meta property="og:description" content="Update is handed an *engine.Input every frame. It says which keys are down, what was typed or pasted, and where the mouse is.">
+<meta property="og:image" content="https://glonk.dev/card.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="The glonk logo, the words: a terminal rendering engine for Go: 2D, 3D, or both in one frame, and a gold block on a dark floor of lines.">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" href="/media/fonts/DepartureMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+<!-- Made from the repository by internal/sitepages. Do not edit: change the source and run make site. -->
+<a class="skip" href="#text">Skip to the text</a>
+<div class="page">
+
+<header class="top">
+  <a class="name" href="/"><span class="mark" aria-hidden="true"></span>glonk</a>
+  <nav aria-label="glonk">
+    <a href="/manual/" aria-current="true">Manual</a>
+    <a href="/changelog/">Changelog</a>
+    <a href="https://github.com/usrgames/glonk/tree/main/examples">Examples</a>
+    <a href="https://github.com/usrgames/glonk">GitHub</a>
+  </nav>
+</header>
+
+<main class="doc">
+<div class="front">
+<h1 id="keys-text-and-the-mouse">Keys, text and the mouse</h1>
+<p class="lede"><code>Update</code> is handed an <code>*engine.Input</code> every frame. It says which keys are down, what was typed or pasted, and where the mouse is.</p>
+</div>
+
+<nav class="contents" aria-label="Contents">
+<p>Contents</p>
+<ul role="list">
+<li><a href="#three-ways-to-ask-about-a-key">Three ways to ask about a key</a></li>
+<li><a href="#terminals-without-key-releases">Terminals without key releases</a></li>
+<li><a href="#shortcuts">Shortcuts</a></li>
+<li><a href="#typing-and-a-paste">Typing and a paste</a></li>
+<li><a href="#the-mouse">The mouse</a></li>
+</ul>
+</nav>
+
+<article class="text" id="text">
+<h2 id="three-ways-to-ask-about-a-key">Three ways to ask about a key</h2>
+<pre tabindex="0"><code>func (p *player) Update(dt float64, in *engine.Input) error {
+	if in.IsDown(&#39;d&#39;) || in.IsDown(engine.KeyRight) {
+		p.x++ // held: every frame while the key is down
+	}
+	if in.Started(&#39; &#39;) {
+		p.jumps++ // went down: once, however long it is held
+	}
+	if in.Pressed(engine.KeyDown) {
+		p.row++ // went down or repeated: a held key moves a menu on
+	}
+	return nil
+}
+</code></pre>
+<ul>
+<li><strong><code>IsDown</code></strong> is true while the key is held. Use it for what keeps going, such as walking.</li>
+<li><strong><code>Started</code></strong> is true in the frame the key went down. A repeat does not set it off again. Use it for what happens once, such as a jump.</li>
+<li><strong><code>Pressed</code></strong> is true when the key went down, and again each time it repeats. Use it where a held key should act again, such as moving through a menu.</li>
+</ul>
+<p>A key is its character, such as <code>&#39;d&#39;</code> or <code>&#39; &#39;</code>, or one of these constants:</p>
+<table>
+<thead>
+<tr><th>Keys</th><th>Constants</th></tr>
+</thead>
+<tbody>
+<tr><td>The arrows</td><td><code>KeyUp</code>, <code>KeyDown</code>, <code>KeyLeft</code>, <code>KeyRight</code></td></tr>
+<tr><td>Editing</td><td><code>KeyEnter</code>, <code>KeyBackspace</code>, <code>KeyTab</code>, <code>KeyEscape</code>, <code>KeyInsert</code>, <code>KeyDelete</code></td></tr>
+<tr><td>Moving</td><td><code>KeyHome</code>, <code>KeyEnd</code>, <code>KeyPageUp</code>, <code>KeyPageDown</code></td></tr>
+<tr><td>Function keys</td><td><code>KeyF1</code> to <code>KeyF12</code></td></tr>
+</tbody>
+</table>
+<h2 id="terminals-without-key-releases">Terminals without key releases</h2>
+<p>Most terminals say when a key goes down and when it repeats, and never when it comes up. Some say that too, through the <a href="https://sw.kovidgoyal.net/kitty/keyboard-protocol/">kitty keyboard protocol</a>: Ghostty, kitty, WezTerm, foot, iTerm2 and Alacritty. Only there can several keys be held at once. glonk asks the terminal at startup, and uses key releases where it has them.</p>
+<p>Without key releases:</p>
+<ul>
+<li><strong>A held key is a timing guess.</strong> It counts as held until about 150 ms pass with no repeat.</li>
+<li><strong>Only one key stays held.</strong> The OS repeats just the last key pressed, so holding W and then pressing E lets W go. Apple&#39;s Terminal is one of these.</li>
+<li><strong><code>Started</code> can fire twice.</strong> The OS waits longer than 150 ms before its first repeat, so a key held past that starts again.</li>
+<li><strong>A letter has the case Shift gives it:</strong> <code>&#39;W&#39;</code> with Shift held. With key releases a letter is always lower case. The examples ask for both.</li>
+</ul>
+<pre tabindex="0"><code>	kb := engine.NewLegacyKeyboard()
+
+	kb.Press(&#39;w&#39;)
+	fmt.Println(&#34;exact:&#34;, kb.Input().Exact(), &#34;held:&#34;, kb.Input().IsDown(&#39;w&#39;))
+
+	kb.Advance(200 * time.Millisecond) // no repeat came
+	fmt.Println(&#34;held:&#34;, kb.Input().IsDown(&#39;w&#39;))
+	// Output:
+	// exact: false held: true
+	// held: false
+</code></pre>
+<ul>
+<li><strong><code>in.Exact()</code></strong> says which kind this run has. A game can warn the player, or change to controls that work one key at a time.</li>
+<li><strong><code>Config.LegacyKeys</code></strong> turns key releases off, for a terminal that misbehaves with them.</li>
+<li><strong><code>engine.Probe(cfg)</code></strong> asks before a game starts. It takes a quarter of a second at most, and leaves the terminal as it found it.</li>
+<li><strong><code>KeyReleases</code></strong> in its answer is what <code>Exact</code> will say. A launcher or a first screen can tell the player, and name a better terminal.</li>
+</ul>
+<p><code>examples/input</code> opens by printing what <code>Probe</code> found:</p>
+<pre tabindex="0" class="odd"><code>// probeLine is what engine.Probe found, in a line, or why it could not ask.
+func probeLine(t engine.Terminal, err error) string {
+	switch {
+	case err != nil:
+		return &#34;could not ask the terminal: &#34; + err.Error()
+	case !t.IsTerminal:
+		return &#34;not a terminal: input or output is redirected&#34;
+	}
+	yes := map[bool]string{true: &#34;yes&#34;, false: &#34;no&#34;}
+	return fmt.Sprintf(&#34;this terminal: key releases %s, true color %s, %d by %d cells&#34;, yes[t.KeyReleases], yes[t.TrueColor], t.Width, t.Height)
+}
+</code></pre>
+<pre tabindex="0" class="odd"><code>	fmt.Println(probeLine(engine.Probe(engine.Config{})))
+</code></pre>
+<h2 id="shortcuts">Shortcuts</h2>
+<pre tabindex="0" class="odd"><code>	for _, k := range in.KeyEvents() {
+		if k.Key == &#39;s&#39; &amp;&amp; k.Mods.Has(engine.ModCtrl) &amp;&amp; k.Action == engine.ActionPress {
+			e.saved = true
+		}
+	}
+</code></pre>
+<ul>
+<li><strong><code>KeyEvents</code></strong> is the frame&#39;s key events, in order. Each has its key, the modifiers held with it, and whether it was a press, a repeat or a release.</li>
+<li><strong>The modifiers</strong> are <code>ModShift</code>, <code>ModAlt</code>, <code>ModCtrl</code> and <code>ModSuper</code>.</li>
+<li><strong>A chord is only there.</strong> A character key with Ctrl, Alt or Super held is never in <code>IsDown</code>, <code>Pressed</code> or <code>Started</code>, so Ctrl+W does not walk a player who walks on W.</li>
+<li><strong>An arrow or a function key with a modifier is still that key:</strong> Ctrl+PageDown is <code>KeyPageDown</code> to <code>IsDown</code>, <code>Pressed</code> and <code>Started</code>.</li>
+<li><strong>Hyper and Meta chords are not read.</strong></li>
+</ul>
+<p>Without key releases a terminal says less about modifiers:</p>
+<ul>
+<li><strong>Escape counts after 50 ms.</strong> An Escape and the start of an arrow key are the same byte, so Escape waits to see that nothing follows.</li>
+<li><strong>Alt+key arrives as Escape, then the key.</strong> glonk reads it as Alt+key, and so it reads an Escape and a key that arrive together.</li>
+<li><strong>Ctrl+letter is a control byte.</strong> That is why Ctrl+I is Tab, Ctrl+M is Enter and Ctrl+H is Backspace.</li>
+<li><strong>Shift is the case of a letter,</strong> not a modifier of it.</li>
+<li><strong>The arrows, Home, End, Page Up, Page Down, Insert, Delete and F1 to F12 carry their modifiers.</strong></li>
+</ul>
+<h2 id="typing-and-a-paste">Typing and a paste</h2>
+<pre tabindex="0" class="odd"><code>	e.text += in.Text() + in.Paste()
+</code></pre>
+<ul>
+<li><strong><code>Text</code></strong> is the characters typed this frame, for a text field such as <code>widget.TextField</code>.</li>
+<li><strong><code>Paste</code></strong> is what was pasted, as one string. A newline in it does not press Enter, and a Ctrl+C in it does not end the run.</li>
+<li><strong>A paste needs bracketed paste.</strong> glonk asks the terminal for it, and turns it off again when the run ends and across Ctrl+Z.</li>
+<li><strong>Where a terminal lacks it,</strong> a paste arrives as the key presses it is, a newline as Enter, and <code>Paste</code> is empty.</li>
+<li><strong>A paste is cut at 1 MiB.</strong> Its text is valid UTF-8, and its line breaks are newlines.</li>
+</ul>
+<h2 id="the-mouse">The mouse</h2>
+<p>Set <code>Config.Mouse</code>, and the terminal reports the pointer:</p>
+<pre tabindex="0" class="odd"><code>func (p *pointer) Update(dt float64, in *engine.Input) error {
+	if x, y, ok := in.MousePos(); ok {
+		p.x, p.y = x, y
+	}
+	if in.MouseStarted(engine.MouseLeft) {
+		p.clicks++
+	}
+	_, turned := in.Wheel()
+	p.scroll += turned
+	return nil
+}
+</code></pre>
+<ul>
+<li><strong><code>MousePos</code></strong> is the cell the pointer is in, counted from 0 at the top left of the terminal. <code>ok</code> is false until the terminal has said where it is.</li>
+<li><strong><code>MouseDown</code>, <code>MouseStarted</code> and <code>MouseReleased</code></strong> ask about <code>MouseLeft</code>, <code>MouseMiddle</code> and <code>MouseRight</code>. A click shorter than a frame is not lost.</li>
+<li><strong><code>Wheel</code></strong> is how far the wheel turned in the frame, and <strong><code>MouseMoved</code></strong> whether the pointer went to another cell.</li>
+<li><strong><code>MousePixels</code></strong> is where the pointer is on the pixel canvas. A cell is two pixels tall, so the top pixel of the cell (x, y) is (x, 2y).</li>
+<li><strong><code>MouseFine</code></strong> says the terminal reports the pointer in pixels. <code>MousePixels</code> then has fractions of a pixel. Elsewhere it is the middle of the cell.</li>
+</ul>
+<p>What to know before turning it on:</p>
+<ul>
+<li><strong>A terminal that reports the mouse no longer selects text with it.</strong> Shift with the mouse still does, in most terminals. That is why it is off unless you ask.</li>
+<li><strong>glonk turns it off again</strong> when the run ends, and across Ctrl+Z.</li>
+<li><strong>Only the three buttons and the wheel are reported,</strong> with no modifiers.</li>
+<li><strong>A terminal without the decimal mouse mode, 1006, sends nothing glonk reads,</strong> and <code>ok</code> stays false.</li>
+<li><strong>The cell can be outside the frame,</strong> when the frame is smaller than the terminal.</li>
+</ul>
+<p><code>go run glonk.dev/examples/input@latest</code> shows what your terminal sends, as glonk reads it.</p>
+<nav class="guides" aria-label="Guides">
+<a rel="prev" href="/manual/first-game/">Before: Your first game</a>
+<a href="/manual/">All guides</a>
+<a rel="next" href="/manual/testing/">Next: Testing a game</a>
+</nav>
+</article>
+</main>
+
+<footer>
+  <nav aria-label="More">
+    <a href="https://pkg.go.dev/glonk.dev">pkg.go.dev</a>
+    <a href="https://github.com/usrgames/glonk">GitHub</a>
+    <a href="/showcase/">Showcase</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/CONTRIBUTING.md">Contributing</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/SECURITY.md">Security</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/BRAND.md">Brand</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/LICENSE">MIT license</a>
+  </nav>
+  <p class="fine">Early and pre-1.0: the API may change. Built to work in most terminals; Windows is untested.</p>
+</footer>
+
+</div>
+</body>
+</html>

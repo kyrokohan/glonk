@@ -204,7 +204,9 @@ func (in *Input) Text() string {
 
 // IsDown reports whether k is held. Where the terminal reports releases this is
 // exact. Elsewhere a new hold reads up briefly before the OS starts
-// auto-repeating, and a released key stays down for up to about 150 ms.
+// auto-repeating, and a released key stays down for up to about 150 ms. A key
+// pressed while Run starts, before the terminal has said whether it reports
+// releases, arrives as a tap and not as a hold.
 func (in *Input) IsDown(k Key) bool {
 	if in.exact {
 		// pressed keeps a tap shorter than one frame visible.

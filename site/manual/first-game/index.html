@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="go-import" content="glonk.dev git https://github.com/usrgames/glonk">
+<meta name="go-source" content="glonk.dev https://github.com/usrgames/glonk https://github.com/usrgames/glonk/tree/main{/dir} https://github.com/usrgames/glonk/blob/main{/dir}/{file}#L{line}">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your first game: glonk</title>
+<meta name="description" content="A glonk game is a type with two methods, Update and Draw. engine.Run calls them and puts each frame on the terminal. This guide gets one on screen and says what each part does.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://glonk.dev/manual/first-game/">
+<meta property="og:title" content="Your first game: glonk">
+<meta property="og:description" content="A glonk game is a type with two methods, Update and Draw. engine.Run calls them and puts each frame on the terminal. This guide gets one on screen and says what each part does.">
+<meta property="og:image" content="https://glonk.dev/card.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="The glonk logo, the words: a terminal rendering engine for Go: 2D, 3D, or both in one frame, and a gold block on a dark floor of lines.">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" href="/media/fonts/DepartureMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+<!-- Made from the repository by internal/sitepages. Do not edit: change the source and run make site. -->
+<a class="skip" href="#text">Skip to the text</a>
+<div class="page">
+
+<header class="top">
+  <a class="name" href="/"><span class="mark" aria-hidden="true"></span>glonk</a>
+  <nav aria-label="glonk">
+    <a href="/manual/" aria-current="true">Manual</a>
+    <a href="/changelog/">Changelog</a>
+    <a href="https://github.com/usrgames/glonk/tree/main/examples">Examples</a>
+    <a href="https://github.com/usrgames/glonk">GitHub</a>
+  </nav>
+</header>
+
+<main class="doc">
+<div class="front">
+<h1 id="your-first-game">Your first game</h1>
+<p class="lede">A glonk game is a type with two methods, <code>Update</code> and <code>Draw</code>. <code>engine.Run</code> calls them and puts each frame on the terminal. This guide gets one on screen and says what each part does.</p>
+</div>
+
+<nav class="contents" aria-label="Contents">
+<p>Contents</p>
+<ul role="list">
+<li><a href="#install">Install</a></li>
+<li><a href="#the-smallest-game">The smallest game</a></li>
+<li><a href="#the-loop">The loop</a></li>
+<li><a href="#cells-and-colors">Cells and colors</a></li>
+<li><a href="#how-a-run-ends">How a run ends</a></li>
+<li><a href="#the-size-of-the-frame">The size of the frame</a></li>
+<li><a href="#nothing-else-prints">Nothing else prints</a></li>
+<li><a href="#frame-numbers">Frame numbers</a></li>
+</ul>
+</nav>
+
+<article class="text" id="text">
+<h2 id="install">Install</h2>
+<pre tabindex="0" class="odd"><code>go get glonk.dev
+</code></pre>
+<ul>
+<li>glonk needs Go 1.26 or newer.</li>
+<li>It has no package at its root. Import the packages you use, <code>glonk.dev/engine</code> first.</li>
+<li>Run <code>go mod tidy</code> once. Without it, <code>go run</code> stops on a missing <code>go.sum</code> entry.</li>
+</ul>
+<h2 id="the-smallest-game">The smallest game</h2>
+<pre tabindex="0" class="odd"><code>package main
+
+import (
+	&#34;context&#34;
+	&#34;fmt&#34;
+	&#34;os&#34;
+
+	&#34;glonk.dev/engine&#34;
+)
+
+type game struct{ x float64 }
+
+func (g *game) Update(dt float64, in *engine.Input) error {
+	if in.Pressed(engine.KeyEscape) {
+		return engine.ErrQuit
+	}
+	g.x += 20 * dt // cells per second
+	return nil
+}
+
+func (g *game) Draw(fb *engine.FrameBuffer) {
+	fb.DrawBox(0, 0, fb.Width(), fb.Height(), engine.Color{})
+	fb.Set(int(g.x)%fb.Width(), fb.Height()/2,
+		engine.Cell{Character: &#39;@&#39;, Foreground: engine.Palette(208)})
+}
+
+func main() {
+	err := engine.Run(context.Background(), &amp;game{}, engine.Config{FPS: 30})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+</code></pre>
+<p>Run it with <code>go run .</code> and a box fills the window, with an @ walking across it. Esc quits. It is <a href="https://github.com/usrgames/glonk/blob/main/examples/hello">examples/hello</a> in the repository.</p>
+<h2 id="the-loop">The loop</h2>
+<ul>
+<li><strong><code>engine.Run</code></strong> takes over the terminal and calls <code>Update</code>, then <code>Draw</code>, <code>FPS</code> times a second. It sends each frame after <code>Draw</code>.</li>
+<li><strong><code>Update(dt, in)</code></strong> moves the game on. <code>dt</code> is the seconds since the frame before, a quarter of a second at most.</li>
+<li><strong><code>in</code></strong> is the keyboard and the mouse: see <a href="/manual/input/">Keys, text and the mouse</a>.</li>
+<li><strong><code>Draw(fb)</code></strong> writes the frame. <code>fb</code> is blank at the start of every call, so draw everything each time.</li>
+<li><strong><code>FPS</code></strong> runs from 1 to 1000. Outside that, <code>Run</code> returns an error.</li>
+<li><code>Run</code> calls the two one at a time, from the goroutine that called it.</li>
+</ul>
+<h2 id="cells-and-colors">Cells and colors</h2>
+<p>A frame is a grid of cells. Each cell holds a character, a foreground color, a background color and attributes.</p>
+<pre tabindex="0"><code>	fb.DrawBox(0, 0, fb.Width(), fb.Height(), engine.Color{})
+	fb.DrawText(2, 1, &#34;glonk&#34;, engine.Palette(220))
+	fb.Set(2, 3, engine.Cell{Character: &#39;@&#39;, Foreground: engine.RGB(255, 135, 0), Attrs: engine.Bold})
+	fb.Set(4, 3, engine.Cell{Character: &#39;~&#39;, Background: engine.Palette(27)})
+
+	fmt.Println(fb.String())
+	// Output:
+	// ┌──────────────────────┐
+	// │ glonk                │
+	// │                      │
+	// │ @ ~                  │
+	// └──────────────────────┘
+</code></pre>
+<ul>
+<li><strong><code>Set(x, y, cell)</code></strong> writes one cell. Cells count from 0 at the top left, and a write outside the frame is ignored.</li>
+<li><strong><code>DrawText</code></strong> writes a line of text and <strong><code>DrawBox</code></strong> a border. <code>DrawLine</code> and <code>FillRect</code> draw with a cell.</li>
+<li><strong><code>engine.Color{}</code></strong>, the zero color, is the terminal&#39;s own default.</li>
+<li><strong><code>engine.Palette(n)</code></strong> is one of the terminal&#39;s 256 colors.</li>
+<li><strong><code>engine.RGB(r, g, b)</code></strong> is an exact color where the terminal has true color, and the nearest of the 256 where it does not.</li>
+<li><strong>The attributes</strong> are <code>Bold</code>, <code>Dim</code>, <code>Underline</code> and <code>Reverse</code>. Join them with <code>|</code>.</li>
+<li><strong>One character takes one column.</strong> A wide character, such as CJK or most emoji, is drawn as <code>?</code>.</li>
+<li><strong>A control character is drawn as <code>?</code> too,</strong> so text can never send the terminal a command.</li>
+</ul>
+<h2 id="how-a-run-ends">How a run ends</h2>
+<ul>
+<li><strong><code>engine.ErrQuit</code></strong> from <code>Update</code> ends the run, and <code>Run</code> returns <code>nil</code>. Any other error ends it too, and <code>Run</code> returns that error.</li>
+<li><strong>Ctrl+C ends any glonk game.</strong> So do <code>kill</code> and a closing window: SIGINT, SIGTERM and SIGHUP. <code>Run</code> returns <code>nil</code>, so a game needs no signal handler.</li>
+<li><strong>When your <code>context</code> ends,</strong> <code>Run</code> returns the context&#39;s error.</li>
+<li><strong><code>Run</code> restores the terminal</strong> when it returns.</li>
+<li><strong>Ctrl+Z suspends.</strong> It restores the terminal and stops the program, and <code>fg</code> takes the terminal over again. Windows has no suspend.</li>
+<li><strong>Some endings skip the cleanup:</strong> <code>os.Exit</code>, <code>log.Fatal</code>, a panic in a goroutine you started, <code>kill -9</code> and <code>kill -QUIT</code>. They leave the terminal raw. Type <code>reset</code> to repair it.</li>
+<li><strong>A second quit signal kills a game that is stuck,</strong> unless your program catches those signals itself.</li>
+</ul>
+<h2 id="the-size-of-the-frame">The size of the frame</h2>
+<pre tabindex="0" class="odd"><code>func (g *sized) Resize(width, height int) { g.width, g.height = width, height }
+</code></pre>
+<ul>
+<li><strong><code>Width</code> and <code>Height</code> of 0 fill the terminal,</strong> and the frame follows the window when its size changes.</li>
+<li><strong>A game with a <code>Resize</code> method is told the size:</strong> before the first <code>Update</code>, and again whenever it changes.</li>
+<li><strong>A fixed size larger than the terminal is cut off.</strong> Only the top left part that fits is shown.</li>
+</ul>
+<h2 id="nothing-else-prints">Nothing else prints</h2>
+<p><code>Run</code> sends only the cells that changed since the last frame. So text that something else prints while it runs, a <code>Println</code> or a log line, is not wiped by the next frame: it stays until those cells change. Log to a file instead.</p>
+<h2 id="frame-numbers">Frame numbers</h2>
+<p>A game with a <code>Stats</code> method is told how each frame went, after the frame was sent:</p>
+<pre tabindex="0" class="odd"><code>func (g *sized) Stats(s engine.Stats) { g.stats = s }
+</code></pre>
+<p>It keeps the numbers and shows them in its next <code>Draw</code>:</p>
+<pre tabindex="0" class="odd"><code>	fb.DrawText(0, 0, fmt.Sprintf(&#34;%.0f fps  %d bytes&#34;, g.stats.FPS, g.stats.Bytes), engine.Color{})
+</code></pre>
+<ul>
+<li><strong><code>FPS</code></strong> is the frames a second, averaged over about the last ten.</li>
+<li><strong><code>Update</code>, <code>Draw</code> and <code>Write</code></strong> are how long each part of the frame took. A slow terminal shows in <code>Write</code>.</li>
+<li><strong><code>Bytes</code></strong> is what was sent for the frame. It is 0 when nothing on screen changed.</li>
+<li><strong>The bytes decide whether a game works over ssh.</strong> A moving 3D scene on the pixel canvas is about 7 KB a frame.</li>
+<li><strong>A frame where every pixel changes is far more:</strong> at 100 by 30 cells, 66 KB in 256 colors and 110 KB in true color.</li>
+<li><strong>A game without the method is not timed,</strong> so asking is the only way to pay for it.</li>
+<li><code>cube3d</code> and the viewer show these numbers on screen.</li>
+</ul>
+<nav class="guides" aria-label="Guides">
+<a href="/manual/">All guides</a>
+<a rel="next" href="/manual/input/">Next: Keys, text and the mouse</a>
+</nav>
+</article>
+</main>
+
+<footer>
+  <nav aria-label="More">
+    <a href="https://pkg.go.dev/glonk.dev">pkg.go.dev</a>
+    <a href="https://github.com/usrgames/glonk">GitHub</a>
+    <a href="/showcase/">Showcase</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/CONTRIBUTING.md">Contributing</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/SECURITY.md">Security</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/BRAND.md">Brand</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/LICENSE">MIT license</a>
+  </nav>
+  <p class="fine">Early and pre-1.0: the API may change. Built to work in most terminals; Windows is untested.</p>
+</footer>
+
+</div>
+</body>
+</html>
