@@ -1,0 +1,18 @@
+# a crate: a box of two materials, wood on the sides and a lid on top
+mtllib crate.mtl
+v -1 -1 -1
+v 1 -1 -1
+v 1 1 -1
+v -1 1 -1
+v -1 -1 1
+v 1 -1 1
+v 1 1 1
+v -1 1 1
+usemtl wood
+f 1 4 3 2
+f 5 6 7 8
+f 1 5 8 4
+f 2 3 7 6
+f 1 2 6 5
+usemtl lid
+f 4 8 7 3

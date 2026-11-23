@@ -8,6 +8,8 @@ Guides to glonk, one for each job. They are being written one by one: until all 
 - [Pixels, shapes and pictures](pixels.md): the pixel canvas, shapes, pixel text and pictures.
 - [Sprites, collision and tile maps](sprites.md): things that move, walls that stop them, and a level bigger than the screen.
 - [Widgets](widgets.md): a label, a panel, a bar, a menu and a text field.
+- [A 3D scene](3d.md): a camera, shapes, lights, wireframes, fog and rays.
+- [Models and textures](models.md): OBJ files, colors on each vertex, pictures on faces, and see-through faces.
 - [A game in a web page](web.md): the same game as in the terminal, played in a browser.
 
 Every type and function is documented, with examples that run, on [pkg.go.dev](https://pkg.go.dev/glonk.dev).

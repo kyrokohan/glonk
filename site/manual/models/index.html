@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="go-import" content="glonk.dev git https://github.com/usrgames/glonk">
+<meta name="go-source" content="glonk.dev https://github.com/usrgames/glonk https://github.com/usrgames/glonk/tree/main{/dir} https://github.com/usrgames/glonk/blob/main{/dir}/{file}#L{line}">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Models and textures: glonk</title>
+<meta name="description" content="A mesh can come from an OBJ file, carry a color on each vertex, show a picture on its faces, or be see-through. This guide builds on A 3D scene.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://glonk.dev/manual/models/">
+<meta property="og:title" content="Models and textures: glonk">
+<meta property="og:description" content="A mesh can come from an OBJ file, carry a color on each vertex, show a picture on its faces, or be see-through. This guide builds on A 3D scene.">
+<meta property="og:image" content="https://glonk.dev/card.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="The glonk logo, the words: a terminal rendering engine for Go: 2D, 3D, or both in one frame, and a gold block on a dark floor of lines.">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" href="/media/fonts/DepartureMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+<!-- Made from the repository by internal/sitepages. Do not edit: change the source and run make site. -->
+<a class="skip" href="#text">Skip to the text</a>
+<div class="page">
+
+<header class="top">
+  <a class="name" href="/"><span class="mark" aria-hidden="true"></span>glonk</a>
+  <nav aria-label="glonk">
+    <a href="/manual/" aria-current="true">Manual</a>
+    <a href="/changelog/">Changelog</a>
+    <a href="https://github.com/usrgames/glonk/tree/main/examples">Examples</a>
+    <a href="https://github.com/usrgames/glonk">GitHub</a>
+  </nav>
+</header>
+
+<main class="doc">
+<div class="front">
+<h1 id="models-and-textures">Models and textures</h1>
+<p class="lede">A mesh can come from an OBJ file, carry a color on each vertex, show a picture on its faces, or be see-through. This guide builds on <a href="/manual/3d/">A 3D scene</a>.</p>
+</div>
+
+<nav class="contents" aria-label="Contents">
+<p>Contents</p>
+<ul role="list">
+<li><a href="#an-obj-file">An OBJ file</a></li>
+<li><a href="#with-its-materials">With its materials</a></li>
+<li><a href="#files-that-cannot-be-trusted">Files that cannot be trusted</a></li>
+<li><a href="#a-color-on-each-vertex">A color on each vertex</a></li>
+<li><a href="#a-picture-on-a-face">A picture on a face</a></li>
+<li><a href="#see-through-faces">See-through faces</a></li>
+</ul>
+</nav>
+
+<article class="text" id="text">
+<h2 id="an-obj-file">An OBJ file</h2>
+<pre tabindex="0" class="odd"><code>	model, err := mesh.LoadOBJ(strings.NewReader(pyramid))
+	if err != nil {
+		fmt.Println(err) // it names the line that went wrong: &#34;obj line 12: bad number&#34;
+		return
+	}
+	model = model.Fit(2) // centered on the origin, its longest side 2
+	model.Transform.Position = geometry.Vector3{Z: 4}
+
+	fmt.Println(len(model.Faces), &#34;triangles,&#34;, len(model.Edges), &#34;edges&#34;)
+	// Output:
+	// 6 triangles, 8 edges
+</code></pre>
+<ul>
+<li><strong><code>LoadOBJ</code> reads any <code>io.Reader</code>:</strong> a file, an embedded asset, a download.</li>
+<li><strong>An error names the line that went wrong.</strong> Malformed input is an error, never a panic.</li>
+<li><strong><code>Fit(n)</code></strong> centers a model on the origin, its longest side <code>n</code> long.</li>
+<li><strong>What is read:</strong> vertices, with a color after them if the file has one; normals; faces of any number of corners; lines.</li>
+<li><strong>What is skipped:</strong> groups and curves. Everything in the file becomes one mesh.</li>
+<li><strong>Faces with more than three corners</strong> are cut into triangles for shading, and the wireframe keeps the polygons.</li>
+<li><strong>OBJ looks down -Z and glonk down +Z.</strong> <code>LoadOBJ</code> flips Z and the winding, so a model is not mirrored. Its front faces a camera on the -Z side.</li>
+<li><strong>A model that looks inside out</strong> was wound the other way. Set <code>DoubleSided</code> to draw both sides.</li>
+</ul>
+<h2 id="with-its-materials">With its materials</h2>
+<pre tabindex="0"><code>//go:embed testdata/crate.obj testdata/crate.mtl
+var crateFiles embed.FS
+</code></pre>
+<pre tabindex="0"><code>	crate, err := mesh.LoadOBJFS(crateFiles, &#34;testdata/crate.obj&#34;, 1&lt;&lt;20)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	wood, lid := crate.FaceColors[0], crate.FaceColors[len(crate.FaceColors)-1]
+	fmt.Println(&#34;the sides:&#34;, wood, &#34;the top:&#34;, lid)
+	// Output:
+	// the sides: #996633 the top: #e6cc4d
+</code></pre>
+<ul>
+<li><strong><code>LoadOBJFS(fsys, name, maxBytes)</code></strong> reads a model from an <code>fs.FS</code>, and follows its <code>mtllib</code> to the <code>.mtl</code> file beside it.</li>
+<li><strong>Each face gets its material&#39;s color,</strong> in <code>FaceColors</code>, still lit. Faces without one use <code>Material.Color</code>.</li>
+<li><strong>Only <code>Kd</code>, the color, and <code>map_Kd</code>, the picture, are read</strong> from a material.</li>
+<li><strong>A name must be a plain path inside the model&#39;s folder.</strong> A <code>.mtl</code> that is missing, too large or broken never fails the load.</li>
+<li><strong><code>os.DirFS</code> follows symbolic links,</strong> so give it only a folder you trust.</li>
+</ul>
+<h2 id="files-that-cannot-be-trusted">Files that cannot be trusted</h2>
+<ul>
+<li><strong><code>LoadOBJLimit(r, maxBytes)</code></strong> fails with <code>ErrOBJTooLarge</code> past the limit. A plain <code>io.LimitReader</code> would quietly cut the model short.</li>
+<li><strong><code>LoadOBJFS</code> bounds what it reads too:</strong> the model, each <code>.mtl</code> and each picture.</li>
+<li><strong>The time taken grows in step with the size of the file.</strong> Memory is about 25 times the file&#39;s size, so bound the input when you do not trust it.</li>
+<li>The documentation of <a href="https://pkg.go.dev/glonk.dev/mesh#LoadOBJFS">LoadOBJFS</a> has every limit.</li>
+</ul>
+<h2 id="a-color-on-each-vertex">A color on each vertex</h2>
+<pre tabindex="0" class="odd"><code>	tri := mesh.Mesh{
+		Vertices:     []geometry.Vector3{{X: -2, Y: -1}, {X: 2, Y: -1}, {Y: 2}},
+		Faces:        [][3]int{{0, 1, 2}},
+		VertexColors: []engine.Color{engine.RGB(255, 0, 0), engine.RGB(0, 255, 0), engine.RGB(0, 0, 255)},
+		DoubleSided:  true,
+	}
+	tri.Transform.Position = geometry.Vector3{Z: 3}
+</code></pre>
+<ul>
+<li><strong><code>VertexColors</code></strong> gives each vertex a color, and a face fades from one corner&#39;s color to the next, with perspective.</li>
+<li><strong>The blend is linear in red, green and blue,</strong> with no gamma.</li>
+<li><strong>A face with a color of its own</strong> is tinted by its vertex colors: each channel is multiplied.</li>
+<li><strong>Wireframes ignore vertex colors.</strong></li>
+<li><strong>In a file,</strong> a vertex line of exactly six numbers, <code>v x y z r g b</code>, gives a color. The numbers go from 0 to 1.</li>
+</ul>
+<h2 id="a-picture-on-a-face">A picture on a face</h2>
+<pre tabindex="0"><code>	wall := mesh.Mesh{
+		Vertices: []geometry.Vector3{{X: -2, Y: -1}, {X: -2, Y: 1}, {X: 2, Y: 1}, {X: 2, Y: -1}},
+		Faces:    [][3]int{{0, 1, 2}, {0, 2, 3}},
+		FaceTexCoords: [][3]geometry.Vector2{
+			{{X: 0, Y: 1}, {X: 0, Y: 0}, {X: 2, Y: 0}}, // the bottom left, top left, top right,
+			{{X: 0, Y: 1}, {X: 2, Y: 0}, {X: 2, Y: 1}}, // and the picture twice across
+		},
+		Material: mesh.Material{Texture: checker(), Sharp: true},
+	}
+	wall.Transform.Position = geometry.Vector3{Z: 2.2}
+	wall.DrawShaded(fb, cam, mesh.Ambient{Level: 1})
+
+	fmt.Println(fb)
+	// Output:
+	// ┌────────────────────────┐
+	// │                        │
+	// │                        │
+	// │   @@@@     @@@@@       │
+	// │   @@@@     @@@@@       │
+	// │       @@@@@     @@@@   │
+	// │       @@@@@     @@@@   │
+	// │                        │
+	// │                        │
+	// └────────────────────────┘
+</code></pre>
+<ul>
+<li><strong><code>Material.Texture</code></strong> is a picture, a <code>*bitmap.Bitmap</code>. <strong><code>FaceTexCoords</code></strong> pins each corner of each face to a place in it.</li>
+<li><strong>(0, 0) is the top left of the picture and (1, 1) the bottom right,</strong> and the picture repeats: 2 is twice over.</li>
+<li><strong>Each cell takes the picture&#39;s nearest pixel,</strong> seen at a slant, with no blending.</li>
+<li><strong>A pixel with an alpha under 128 is a hole:</strong> nothing is drawn there, and what is behind shows. That is a leaf or a fence.</li>
+<li><strong>Far away, a face reads a smaller copy of its picture,</strong> so a far wall does not crawl as you walk. <code>Material.Sharp</code> turns that off, for pixel art.</li>
+<li><strong>One picture for a mesh.</strong> For two, make two meshes, or put both in one picture. Wireframes ignore it.</li>
+<li><strong><code>Sphere</code>, <code>Cylinder</code>, <code>Cone</code> and <code>Plane</code> come with coordinates,</strong> so setting <code>Texture</code> is enough.</li>
+<li><strong><code>Box</code> has the whole picture on each face,</strong> and <code>BoxFaces</code> a part of it on each: the six faces of a die from one picture.</li>
+<li><strong><code>LoadOBJFS</code> keeps a model&#39;s <code>map_Kd</code> picture</strong> and its coordinates. A picture is JPEG or PNG, and a bad one never fails the load.</li>
+</ul>
+<h2 id="see-through-faces">See-through faces</h2>
+<pre tabindex="0"><code>	wall := square(4, 6, mesh.Material{Color: engine.RGB(200, 0, 0)})
+	pane := square(1, 3, mesh.Material{Color: engine.RGB(0, 0, 200), Opacity: 0.5}) // half blue glass
+
+	canvas := fb.Canvas()
+	wall.DrawShadedPixels(canvas, cam, mesh.Ambient{Level: 1}) // solids first
+	pane.DrawShadedPixels(canvas, cam, mesh.Ambient{Level: 1}) // then see-through meshes, far to near
+</code></pre>
+<ul>
+<li><strong><code>Material.Opacity</code></strong> is the part of a mesh&#39;s color that shows, from 0 to 1, mixed over what is drawn behind it.</li>
+<li><strong>The order is yours.</strong> Draw the solids first, then the see-through meshes from far to near. glonk does not sort.</li>
+<li><strong>In cells the character behind stays,</strong> and the colors are mixed.</li>
+<li><strong>An empty cell or pixel counts as black.</strong> Fill the background first for another.</li>
+<li><strong><code>Opacity</code> 0 means solid,</strong> as does anything not between 0 and 1. There is one value for a mesh, and an MTL file&#39;s <code>d</code> is not read.</li>
+</ul>
+<p><code>examples/viewer</code> has a model with a color on each corner, and a die from one picture. <code>go run ./examples/viewer model.obj</code> shows a model of your own.</p>
+<nav class="guides" aria-label="Guides">
+<a rel="prev" href="/manual/3d/">Before: A 3D scene</a>
+<a href="/manual/">All guides</a>
+<a rel="next" href="/manual/web/">Next: A game in a web page</a>
+</nav>
+</article>
+</main>
+
+<footer>
+  <nav aria-label="More">
+    <a href="https://pkg.go.dev/glonk.dev">pkg.go.dev</a>
+    <a href="https://github.com/usrgames/glonk">GitHub</a>
+    <a href="/showcase/">Showcase</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/CONTRIBUTING.md">Contributing</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/SECURITY.md">Security</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/BRAND.md">Brand</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/LICENSE">MIT license</a>
+  </nav>
+  <p class="fine">Early and pre-1.0: the API may change. Built to work in most terminals; Windows is untested.</p>
+</footer>
+
+</div>
+</body>
+</html>
