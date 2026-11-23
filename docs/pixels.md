@@ -36,14 +36,16 @@ Each `#` here is a pixel that was set, printed for this guide. On screen they ar
 
 | Call | Draws |
 |---|---|
-| `FillRect(x, y, w, h, color)` | A filled rectangle |
-| `DrawRect(x, y, w, h, color)` | Its border, one pixel thick, inside the same rectangle |
-| `FillCircle(cx, cy, r, color)` | A filled circle, `2r+1` pixels across |
-| `DrawCircle(cx, cy, r, color)` | Its outline, one pixel thick |
-| `FillDisc(cx, cy, r, color)` | A disc whose center and radius can be fractions of a pixel, with a smooth edge |
-| `DrawLine(x0, y0, x1, y1, color)` | A line, one pixel thick |
-| `BlendRect(x, y, w, h, color, t)` | A color mixed over a rectangle, by the part `t` from 0 to 1 |
-| `BlendDisc(cx, cy, r, color, t)` | A color mixed over a disc: a shadow or a glow |
+| `FillRect` | A filled rectangle |
+| `DrawRect` | Its border, one pixel thick, inside the same rectangle |
+| `FillCircle` | A filled circle of radius `r`, `2r+1` pixels across |
+| `DrawCircle` | Its outline, one pixel thick |
+| `FillDisc` | A disc whose center and radius can be fractions of a pixel, with a smooth edge |
+| `DrawLine` | A line, one pixel thick |
+| `BlendRect` | A color mixed over a rectangle, by a part `t` from 0 to 1 |
+| `BlendDisc` | A color mixed over a disc: a shadow or a glow |
+
+The arguments of each are on [pkg.go.dev](https://pkg.go.dev/glonk.dev/engine#Canvas).
 
 - **Shapes clip.** Only the pixels on the canvas are visited, so a shape far off screen costs nothing.
 - **The zero `Color` erases.**
