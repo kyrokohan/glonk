@@ -18,6 +18,17 @@ import (
 // English, so only this shape is treated as a private name.
 var camelCase = regexp.MustCompile(`^[a-z]+[A-Z]\w*$`)
 
+// checkedPackages gives the folders of the packages whose documentation is checked, from this
+// one. glonk.dev/sound is a module of its own in the same repository, so it is checked where this
+// copy has it: a clone does, and a download of glonk does not.
+func checkedPackages() []string {
+	dirs := []string{".", "../geometry", "../mesh", "../sprite", "../tilemap", "../widget", "../bitmap"}
+	if _, err := os.Stat("../sound/go.mod"); err == nil {
+		dirs = append(dirs, "../sound")
+	}
+	return dirs
+}
+
 // selfExplanatory lists struct fields that need no comment of their own because the
 // type's comment already says what they are.
 var selfExplanatory = map[string]bool{
@@ -223,7 +234,7 @@ func parseDir(t *testing.T, fset *token.FileSet, dir string, keep func(name stri
 // The documentation of every package must describe each exported name and must not
 // point at names a reader cannot see.
 func TestDocumentation(t *testing.T) {
-	for _, dir := range []string{".", "../geometry", "../mesh", "../sprite", "../tilemap", "../widget", "../bitmap"} {
+	for _, dir := range checkedPackages() {
 		t.Run(dir, func(t *testing.T) {
 			fset := token.NewFileSet()
 			pkgs := parseDir(t, fset, dir, func(name string) bool {
@@ -307,7 +318,7 @@ func uncheckedExamples(files []*ast.File) []string {
 }
 
 func TestExamplesAreRun(t *testing.T) {
-	for _, dir := range []string{".", "../geometry", "../mesh", "../sprite", "../tilemap", "../widget", "../bitmap"} {
+	for _, dir := range checkedPackages() {
 		t.Run(dir, func(t *testing.T) {
 			fset := token.NewFileSet()
 			pkgs := parseDir(t, fset, dir, func(name string) bool {

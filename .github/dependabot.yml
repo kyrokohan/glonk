@@ -1,8 +1,10 @@
 version: 2
 updates:
-  # Go modules: golang.org/x/term and golang.org/x/sys.
+  # Go modules: golang.org/x/term and golang.org/x/sys for glonk, and glonk.dev/sound's own.
   - package-ecosystem: gomod
-    directory: /
+    directories:
+      - /
+      - /sound
     schedule:
       interval: weekly
     commit-message:

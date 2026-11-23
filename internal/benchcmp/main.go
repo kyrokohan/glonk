@@ -58,6 +58,7 @@ func parseFlags(args []string, w io.Writer) (config, error) {
 	var percent float64
 	fs := flag.NewFlagSet("benchcmp", flag.ContinueOnError)
 	fs.SetOutput(w)
+	fs.StringVar(&c.dir, "dir", ".", "the folder of the module to measure, such as sound")
 	fs.StringVar(&c.base, "base", "origin/main", "the commit, tag or branch to compare with")
 	fs.StringVar(&c.bench, "bench", ".", "run only the benchmarks that match this regular expression")
 	fs.StringVar(&c.pkgs, "pkgs", "./...", "the packages to run, as for go test")

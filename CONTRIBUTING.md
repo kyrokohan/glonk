@@ -13,6 +13,8 @@ Issues and pull requests are welcome. glonk is a one-person project, so replies 
 
 You need Go 1.26 or newer. The race detector needs cgo, so a C compiler must be installed; where there is none, `make test RACE=` runs the tests without it.
 
+The repository holds two Go modules: glonk itself, `glonk.dev`, and `glonk.dev/sound` in `sound/`, which has its own `go.mod` so that a program without sound does not get an audio library. Go leaves a folder with a `go.mod` out of the module around it, so every target below runs in each module, and `make benchcmp DIR=sound` measures the second. Work in `sound/` with `cd sound`; it needs a released glonk, named in its `go.mod`.
+
 ```
 make check    # formatting, go vet, and all tests with the race detector
 make lint     # staticcheck, which finds mistakes that go vet does not
