@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="go-import" content="glonk.dev git https://github.com/usrgames/glonk">
+<meta name="go-source" content="glonk.dev https://github.com/usrgames/glonk https://github.com/usrgames/glonk/tree/main{/dir} https://github.com/usrgames/glonk/blob/main{/dir}/{file}#L{line}">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A 3D scene: glonk</title>
+<meta name="description" content="glonk draws meshes through a perspective camera, lit by lights you choose, in characters or on the pixel canvas. A 3D scene is a camera, meshes placed in the world, and lights.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://glonk.dev/manual/3d/">
+<meta property="og:title" content="A 3D scene: glonk">
+<meta property="og:description" content="glonk draws meshes through a perspective camera, lit by lights you choose, in characters or on the pixel canvas. A 3D scene is a camera, meshes placed in the world, and lights.">
+<meta property="og:image" content="https://glonk.dev/card.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="The glonk logo, the words: a terminal rendering engine for Go: 2D, 3D, or both in one frame, and a gold block on a dark floor of lines.">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" href="/media/fonts/DepartureMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+<!-- Made from the repository by internal/sitepages. Do not edit: change the source and run make site. -->
+<a class="skip" href="#text">Skip to the text</a>
+<div class="page">
+
+<header class="top">
+  <a class="name" href="/"><span class="mark" aria-hidden="true"></span>glonk</a>
+  <nav aria-label="glonk">
+    <a href="/manual/" aria-current="true">Manual</a>
+    <a href="/changelog/">Changelog</a>
+    <a href="https://github.com/usrgames/glonk/tree/main/examples">Examples</a>
+    <a href="https://github.com/usrgames/glonk">GitHub</a>
+  </nav>
+</header>
+
+<main class="doc">
+<div class="front">
+<h1 id="a-3d-scene">A 3D scene</h1>
+<p class="lede">glonk draws meshes through a perspective camera, lit by lights you choose, in characters or on the pixel canvas. A 3D scene is a camera, meshes placed in the world, and lights.</p>
+</div>
+
+<nav class="contents" aria-label="Contents">
+<p>Contents</p>
+<ul role="list">
+<li><a href="#a-camera-a-cube-and-a-light">A camera, a cube and a light</a></li>
+<li><a href="#shapes">Shapes</a></li>
+<li><a href="#smooth-shading">Smooth shading</a></li>
+<li><a href="#lights">Lights</a></li>
+<li><a href="#on-the-pixel-canvas">On the pixel canvas</a></li>
+<li><a href="#wireframes-and-lines-on-a-surface">Wireframes and lines on a surface</a></li>
+<li><a href="#far-plane-and-fog">Far plane and fog</a></li>
+<li><a href="#points-and-rays">Points and rays</a></li>
+<li><a href="#meshes-off-screen">Meshes off screen</a></li>
+</ul>
+</nav>
+
+<article class="text" id="text">
+<h2 id="a-camera-a-cube-and-a-light">A camera, a cube and a light</h2>
+<pre tabindex="0"><code>var sun = []mesh.Light{
+	mesh.Ambient{Level: 0.2},
+	mesh.Directional{Direction: geometry.Vector3{X: 0.4, Y: -1, Z: 0.6}},
+}
+</code></pre>
+<pre tabindex="0"><code>	cam := mesh.Camera{Position: geometry.Vector3{Y: 1.5, Z: -3.5}}
+	cam.LookAt(geometry.Vector3{}) // at the origin
+
+	cube := mesh.Cube(2)
+	cube.Transform.Yaw = 0.6 // turned, so that two sides show
+	cube.Material.Color = engine.Palette(208)
+	cube.DrawShaded(fb, cam, sun...)
+
+	fmt.Println(fb)
+	// Output:
+	// ┌────────────────────────────┐
+	// │                            │
+	// │                            │
+	// │                            │
+	// │         %%%%%%%%%-         │
+	// │         ******---          │
+	// │         ******---          │
+	// │          *****--           │
+	// │             **-            │
+	// │                            │
+	// │                            │
+	// └────────────────────────────┘
+</code></pre>
+<ul>
+<li><strong>The world is in units of your choosing.</strong> +x is to the right, +y up, and the camera looks down +z when it is not turned.</li>
+<li><strong><code>mesh.Camera{}</code> is a working camera,</strong> at the origin. Its defaults are a field of view of a quarter turn, a near plane 0.1 away, and cells twice as tall as they are wide.</li>
+<li><strong><code>Yaw</code> and <code>Pitch</code> turn the camera,</strong> in radians. <code>LookAt</code> sets both, so that it looks from its <code>Position</code> at a place. Call it each frame after moving the camera.</li>
+<li><strong>A mesh is placed by its <code>Transform</code>:</strong> <code>Position</code>, <code>Yaw</code>, <code>Pitch</code>, <code>Roll</code> and <code>Scale</code>. Positive pitch tips its front up, as for the camera.</li>
+<li><strong><code>Material.Color</code></strong> is its color, and <strong><code>DrawShaded(fb, cam, lights...)</code></strong> draws it, lit, in characters: the brighter a cell, the denser its character.</li>
+<li><strong>Solids hide each other by depth,</strong> whatever the order of drawing, and faces turned away are skipped.</li>
+<li><strong>A camera with values that make no sense sees nothing,</strong> and a mesh whose <code>Transform</code> holds a number that is not finite is not drawn.</li>
+<li><strong>Cells are taken as twice as tall as they are wide.</strong> Set <code>Camera.CellAspect</code> for a font that is not.</li>
+</ul>
+<h2 id="shapes">Shapes</h2>
+<p><code>mesh.Cube</code>, <code>Box</code>, <code>Sphere</code>, <code>Cylinder</code>, <code>Cone</code>, <code>Plane</code> and <code>Grid</code> make meshes without a file. They stand on the y axis, centered on the origin.</p>
+<ul>
+<li><strong><code>Box(w, h, d)</code></strong> is any width, height and depth. <strong><code>Plane</code></strong> is a flat rectangle that faces up, and <strong><code>Grid</code></strong> lines for a floor.</li>
+<li><strong>Segments run from 3 to 512, and rings from 2 to 512,</strong> so a careless argument cannot ask for gigabytes.</li>
+<li><strong>A size that is negative or not finite counts as 0.</strong></li>
+<li><a href="/manual/models/">Models and textures</a> has meshes from files, colors on each vertex, and pictures on faces.</li>
+</ul>
+<h2 id="smooth-shading">Smooth shading</h2>
+<pre tabindex="0"><code>	ball := mesh.Sphere(1.3, 24, 12) // radius, segments around, rings from pole to pole
+	ball.Transform.Position = geometry.Vector3{X: -1.6}
+	ball.DrawShaded(fb, cam, sun...)
+
+	facets := mesh.Sphere(1.3, 8, 5)
+	facets.Normals = nil // lit face by face
+	facets.Transform.Position = geometry.Vector3{X: 1.6}
+	facets.DrawShaded(fb, cam, sun...)
+
+	fmt.Println(fb)
+	// Output:
+	// ┌──────────────────────────────────────┐
+	// │                                      │
+	// │                                      │
+	// │                                      │
+	// │           %%##*+=   %@@@##           │
+	// │          ***++=--  *****+++          │
+	// │           =------   ------           │
+	// │                                      │
+	// │                                      │
+	// │                                      │
+	// └──────────────────────────────────────┘
+</code></pre>
+<ul>
+<li><strong>A mesh with a normal at each vertex is lit at every cell,</strong> so it looks round. One with no <code>Normals</code> is lit face by face.</li>
+<li><strong><code>Box</code>, <code>Sphere</code>, <code>Cylinder</code>, <code>Cone</code> and <code>Plane</code> come with normals,</strong> and so does a model file that has them.</li>
+<li><strong><code>Mesh.SmoothNormals()</code></strong> returns a copy with a normal at each vertex, averaged over the faces that share it.</li>
+<li><strong>It averages shared vertices only.</strong> A cube made of 8 vertices comes out looking like a ball: hard edges need their own vertices.</li>
+<li><strong>To draw facets,</strong> set a copy&#39;s <code>Normals</code> to nil.</li>
+<li><strong>Smooth shading costs about 12 to 23% more</strong> on a scene of spheres. Drawing allocates nothing either way.</li>
+</ul>
+<h2 id="lights">Lights</h2>
+<pre tabindex="0"><code>	floor := mesh.Plane(12, 6)
+	lamp := mesh.Point{Position: geometry.Vector3{X: -2.5, Y: 1}, Range: 4}
+	floor.DrawShaded(fb, cam, mesh.Ambient{Level: 0.05}, lamp)
+	fb.DrawBox(0, 0, fb.Width(), fb.Height(), engine.Color{}) // a frame round the picture
+
+	fmt.Println(fb)
+	// Output:
+	// ┌──────────────────────────────────────┐
+	// │                                      │
+	// │        ....:::::.............        │
+	// │      .::::--=--::::............      │
+	// │    .::::-=+*+=--:::..............    │
+	// │  .:::::--===---::::................  │
+	// │..:::::::----::::::...................│
+	// │..::::::::::::::::....................│
+	// └──────────────────────────────────────┘
+</code></pre>
+<ul>
+<li><strong><code>mesh.Ambient</code></strong> lights everything a little, and <strong><code>mesh.Directional</code></strong> from one direction, as the sun does.</li>
+<li><strong><code>mesh.Point</code></strong> is a lamp at a place. It fades with distance, to nothing at its <code>Range</code>. A <code>Range</code> of 0 never fades.</li>
+<li><strong>A light has a <code>Color</code>.</strong> Its zero value is white. In cells the brightest channel picks the character, and a colored light takes a fifth to a third longer to draw.</li>
+<li><strong>A light of your own</strong> is a type with a <code>Brightness(point, normal)</code> method. <code>mesh.Brightness</code> adds lights up as drawing does, for things you draw yourself.</li>
+<li><strong>A lamp is not asked about a mesh wholly beyond its <code>Range</code>,</strong> so a level can have a lamp in every room. Your own light opts in with a <code>Reach</code> method.</li>
+</ul>
+<h2 id="on-the-pixel-canvas">On the pixel canvas</h2>
+<pre tabindex="0" class="odd"><code>	canvas := fb.Canvas()
+	cube.DrawShadedPixels(canvas, cam, sun...)
+	canvas.Compose()
+</code></pre>
+<ul>
+<li><strong><code>DrawShadedPixels</code></strong> draws into the <a href="/manual/pixels/">pixel canvas</a>: twice as fine from top to bottom, and shaded by color, not by character.</li>
+<li><strong><code>Compose</code></strong> then puts the pixels in the cells. Each cell gets the depth of its nearer pixel, so what is drawn with a depth afterwards is hidden behind nearer pixels.</li>
+<li><strong>Character shading needs only ASCII,</strong> and the pixel canvas a font with <code>▀</code> and <code>▄</code>. Nearly every monospace font has them.</li>
+</ul>
+<h2 id="wireframes-and-lines-on-a-surface">Wireframes and lines on a surface</h2>
+<pre tabindex="0" class="odd"><code>	floor := mesh.Plane(8, 6)
+	floor.Transform.Position = geometry.Vector3{Y: -1}
+	grid := mesh.Grid(8, 6)
+	grid.Transform.Position = floor.Transform.Position
+	cube := mesh.Cube(1.6)
+	cube.Transform.Position = geometry.Vector3{X: 0.3, Y: -0.2}
+	cube.Transform.Yaw = 0.5
+
+	floor.DrawShaded(fb, cam, mesh.Ambient{Level: 0.1})
+	grid.DrawOnSurface(fb, cam, engine.Cell{Character: &#39;+&#39;}) // on the floor, whole at any distance
+	cube.DrawShaded(fb, cam, sun...)
+	cube.DrawOnSurface(fb, cam, engine.Cell{Character: &#39;#&#39;}) // its edges, on its own faces
+	fb.DrawBox(0, 0, fb.Width(), fb.Height(), engine.Color{})
+
+	fmt.Println(fb)
+	// Output:
+	// ┌────────────────────────────────────────┐
+	// │                                        │
+	// │                                        │
+	// │                                        │
+	// │         +++++++++########+++++         │
+	// │       +++++++++####%%%%##+++++++       │
+	// │     +++++++++++#***####-#+++++++++     │
+	// │   +++++++++++++##*****###+++++++++++   │
+	// │ ++:::::+::::+::###***###:+::::+:::::++ │
+	// │+++++++++++++++++++####+++++++++++++++++│
+	// └────────────────────────────────────────┘
+</code></pre>
+<ul>
+<li><strong><code>Draw</code></strong> paints a mesh&#39;s edges over whatever is there, so a wireframe drawn that way shows through solids.</li>
+<li><strong><code>DrawDepth</code></strong> gives each cell of an edge a depth: a nearer surface hides it, and the order of drawing stops mattering.</li>
+<li><strong>A line that lies on a surface ties with it,</strong> and <code>DrawDepth</code> loses some or all of it. <strong><code>DrawOnSurface</code></strong> draws such lines whole: a grid on a floor, a mesh&#39;s edges on its own faces.</li>
+<li><strong>Draw the surface before its lines.</strong> <code>DrawOnSurface</code> reads the surface&#39;s slope from what is drawn, and a line more than a quarter of the depth behind is hidden.</li>
+<li><strong><code>DrawPixels</code>, <code>DrawDepthPixels</code> and <code>DrawOnSurfacePixels</code></strong> are the same on the pixel canvas. A line there is one pixel thick.</li>
+<li><strong>To draw over a scene,</strong> a tool in the player&#39;s hand or a model in a menu, <code>ClearDepth</code> the canvas or the frame first. It keeps what is drawn.</li>
+</ul>
+<h2 id="far-plane-and-fog">Far plane and fog</h2>
+<pre tabindex="0" class="odd"><code>	cam := mesh.Camera{Position: geometry.Vector3{Y: 1.5}, Far: 30}
+	cam.Fog = &amp;mesh.Fog{Color: engine.RGB(40, 40, 60), Start: 4, End: 30}
+
+	for _, depth := range []float64{2, 17, 30} {
+		r, g, b := cam.Fog.Apply(engine.RGB(200, 200, 200), depth).RGB()
+		fmt.Printf(&#34;%2.0f deep: %3d %3d %3d\n&#34;, depth, r, g, b)
+	}
+	// Output:
+	// 2 deep: 200 200 200
+	// 17 deep: 120 120 130
+	// 30 deep:  40  40  60
+</code></pre>
+<ul>
+<li><strong><code>Camera.Far</code></strong> is the distance beyond which nothing is drawn. A mesh wholly beyond it is skipped. 0, the default, means no limit.</li>
+<li><strong><code>Camera.Fog</code></strong> fades every shaded mesh toward a color by how deep it is: nothing before <code>Start</code>, the color itself from <code>End</code>.</li>
+<li><strong>Give <code>Far</code> at or after the fog&#39;s <code>End</code>,</strong> and the world ends in the fog and not in a line.</li>
+<li><strong>In cells the color fades and the character stays.</strong> Wireframes are not fogged.</li>
+<li><strong><code>Fog.Apply(color, depth)</code></strong> fades a thing you draw yourself in step with the meshes.</li>
+</ul>
+<h2 id="points-and-rays">Points and rays</h2>
+<pre tabindex="0"><code>	x, y, depth, ok := cam.ProjectPixels(geometry.Vector3{X: 1, Y: 1, Z: 4}, canvas)
+	fmt.Printf(&#34;in pixel (%.0f, %.0f), %.0f deep, on screen %v\n&#34;, math.Floor(x), math.Floor(y), depth, ok)
+
+	origin, dir, _ := cam.RayPixels(20, 12, canvas) // the middle of the canvas
+	fmt.Println(&#34;the ray starts at&#34;, origin, &#34;and goes&#34;, dir)
+	// Output:
+	// in pixel (23, 9), 4 deep, on screen true
+	// the ray starts at {0 0 0} and goes {0 0 1}
+</code></pre>
+<ul>
+<li><strong><code>ProjectPixels(p, canvas)</code></strong> says which pixel a point of the world is in, and how deep it is. Floor the coordinates to get the pixel.</li>
+<li><strong>The depth is the distance along the camera&#39;s view,</strong> not the straight-line distance: the number <code>SetDepth</code>, <code>Far</code> and <code>Fog</code> use.</li>
+<li><strong><code>RayPixels(x, y, canvas)</code></strong> is the way back: the ray through a place on the canvas, for what is under the pointer or the crosshair.</li>
+<li><strong>The ray&#39;s direction is one deep,</strong> not a unit vector, so the point <code>origin + t*direction</code> is <code>t</code> deep.</li>
+<li><strong><code>RaysPixels(canvas)</code></strong> gives every ray of the canvas at once, for a sky or a ray marcher. That is about 14 times faster than asking pixel by pixel.</li>
+</ul>
+<h2 id="meshes-off-screen">Meshes off screen</h2>
+<ul>
+<li><strong>Drawing starts by asking whether any of a mesh can be on screen,</strong> so a scene of many meshes costs little for those out of view.</li>
+<li><strong>The shapes and models glonk makes know their bounds.</strong> A mesh you build by hand, with its vertices where they are in the world, calls <code>UpdateBounds</code> once, and again after a vertex is changed in place.</li>
+<li><strong><code>Validate</code></strong> says what is wrong with a mesh: an edge or a face that names a vertex it does not have, normals that cannot be used, bounds that are out of date. What is wrong is skipped when it is drawn.</li>
+</ul>
+<p><code>go run glonk.dev/examples/viewer@latest</code> shows models and shapes, solid or as lines, faceted or smooth, under three kinds of light.</p>
+<nav class="guides" aria-label="Guides">
+<a rel="prev" href="/manual/widgets/">Before: Widgets</a>
+<a href="/manual/">All guides</a>
+<a rel="next" href="/manual/models/">Next: Models and textures</a>
+</nav>
+</article>
+</main>
+
+<footer>
+  <nav aria-label="More">
+    <a href="https://pkg.go.dev/glonk.dev">pkg.go.dev</a>
+    <a href="https://github.com/usrgames/glonk">GitHub</a>
+    <a href="/showcase/">Showcase</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/CONTRIBUTING.md">Contributing</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/SECURITY.md">Security</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/BRAND.md">Brand</a>
+    <a href="https://github.com/usrgames/glonk/blob/main/LICENSE">MIT license</a>
+  </nav>
+  <p class="fine">Early and pre-1.0: the API may change. Built to work in most terminals; Windows is untested.</p>
+</footer>
+
+</div>
+</body>
+</html>
