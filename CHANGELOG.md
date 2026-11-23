@@ -4,6 +4,10 @@ All notable changes to glonk are written here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+### Fixed
+
+- `glonk.js` starts a fresh atlas for xterm.js's WebGL addon before the addon would merge its pages, which drew wrong cells in games with many colors (#164, xterm.js #5883).
+
 ## [0.16.0] - 2026-11-22
 
 On top of 0.15.0 this release asks the terminal what it can do before a game starts, and runs a game in a web page from any repository. Nothing was removed, renamed or changed. The module needs the same versions of `golang.org/x/sys` and `golang.org/x/term` as 0.15.0.
