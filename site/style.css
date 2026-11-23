@@ -451,7 +451,7 @@ footer {
 }
 
 /* A page of text: the manual, a guide or the changelog, which internal/sitepages makes from
-   README.md, a file of docs or CHANGELOG.md. The contents stay in view beside 50 cells of text. */
+   the files of docs or CHANGELOG.md. The contents stay in view beside 50 cells of text. */
 .doc {
   display: grid;
   grid-template-columns: calc(22 * var(--cw)) calc(50 * var(--cw));

@@ -24,6 +24,6 @@ glonk reads data it does not control and writes to a person's terminal, so these
 - **Material files** (`mesh.LoadOBJFS`): an OBJ that makes it open or read a file outside the OBJ's own folder, or an MTL file that crashes the loader or costs far more time or memory than its size and the documented limits explain.
 - **Terminal output**: text, cell contents or a file name that makes glonk send the terminal something other than the characters it was given, such as an escape sequence that runs.
 - **Keyboard input handling**: a byte sequence from the terminal that crashes the program, hangs it, or leaves keys stuck.
-- **Leaving the terminal in a bad state** after a crash, signal or panic that glonk claims to handle (see "Compatibility and limits" in the README for the cases it does not).
+- **Leaving the terminal in a bad state** after a crash, signal or panic that glonk claims to handle (see "How a run ends" in docs/first-game.md for the cases it does not).
 
-Bugs that are only wrong drawing, or are listed as known limits in the README, are ordinary issues.
+Bugs that are only wrong drawing, or are listed as known limits in the manual (`docs/`), are ordinary issues.

@@ -2,9 +2,11 @@ package sitepages
 
 import (
 	"fmt"
+	"html"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -14,13 +16,13 @@ import (
 const longestParagraph = 400
 
 // checkedDocs gives the Markdown files whose Go and whose paragraphs are held to the rules below:
-// the guides and their index.
+// the README, the guides and their index, and the examples' README.
 func checkedDocs() ([]string, error) {
 	files, err := filepath.Glob(root("docs/*.md"))
 	for i, f := range files {
 		files[i] = "docs/" + filepath.Base(f)
 	}
-	return files, err
+	return append([]string{"README.md", "examples/README.md"}, files...), err
 }
 
 // A block of Go in a Markdown file: what stands between ```go and ```.
@@ -151,6 +153,49 @@ func TestTheGoInTheGuidesIsInFilesThatCompile(t *testing.T) {
 		}
 		for _, w := range uncompiled(path, lines, files) {
 			t.Error(w)
+		}
+	}
+}
+
+// A block of code on a page of the site.
+var preCode = regexp.MustCompile(`(?s)<pre[^>]*><code>(.*?)</code></pre>`)
+
+// pageBlocks gives the blocks of code on a page of the site that is written by hand, as the
+// lines of Markdown a block of Go would be, with its line in the page.
+func pageBlocks(page string) []goBlock {
+	var blocks []goBlock
+	for _, m := range preCode.FindAllStringSubmatchIndex(page, -1) {
+		code := html.UnescapeString(page[m[2]:m[3]])
+		lines := md("```go\n" + code + "\n```")
+		b := goBlocks(lines)[0]
+		b.line = 1 + strings.Count(page[:m[0]], "\n")
+		blocks = append(blocks, b)
+	}
+	return blocks
+}
+
+// The code on the cover of glonk.dev runs too: its blocks are lines of Go files, as a guide's
+// are. The cover is written by hand, so this is what keeps its six steps and its program true.
+func TestTheCodeOnTheCoverIsInFilesThatCompile(t *testing.T) {
+	files, err := goFiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := os.ReadFile(root("site/index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocks := pageBlocks(string(page))
+	if len(blocks) == 0 {
+		t.Fatal("wanted the code of the cover, found no <pre><code> in site/index.html")
+	}
+	for _, b := range blocks {
+		most := 0
+		for _, file := range files {
+			most = max(most, held(file, b.parts))
+		}
+		if most < len(b.parts) {
+			t.Errorf("site/index.html:%d: this code is in no Go file of the repository, so nothing compiles it. No file has its part that starts %q.", b.line, clip(b.parts[most][0]))
 		}
 	}
 }

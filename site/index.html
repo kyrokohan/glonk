@@ -65,6 +65,7 @@
     <div class="say">
       <p>A terminal draws characters in cells, each about twice as tall as it is wide. glonk writes a character and two colors into any cell.</p>
       <p>With the upper half block as the character, the two colors are two pixels, one above the other. That is the pixel canvas, and it is the mark at the top of this page.</p>
+      <p>The guide: <a href="/manual/pixels/">Pixels, shapes and pictures</a>.</p>
     </div>
     <figure>
       <img src="/block.png" width="420" height="168" alt="A gold block lit from above on a dark floor of lines, with grey blocks behind it.">
@@ -82,6 +83,7 @@ canvas.Compose()</code></pre>
     <div class="say">
       <p>A sprite is a picture at a position: one cell, a frame made from text art, or an animation of frames.</p>
       <p>A layer draws its sprites in the order they were added. A space in the art is a hole, so a see-through sprite shows what is behind it.</p>
+      <p>The guide: <a href="/manual/sprites/">Sprites, collision and tile maps</a>.</p>
     </div>
     <figure>
       <a href="/media/sprites.gif"><img src="/media/sprites.png" width="420" height="280" alt="A ship of text characters on a blue sea beside a grey rock, a walking figure on the sand and a ghost. Opens the recording."></a>
@@ -105,6 +107,7 @@ layer.Draw(fb)</code></pre>
     <div class="say">
       <p>A tile map is a level bigger than the screen, written as text art. Solid tiles stop a moving box, so a player slides along a wall.</p>
       <p>The camera is a rectangle: the screen, centered on the player and kept inside the level.</p>
+      <p>The guide: <a href="/manual/sprites/#a-level">Sprites, collision and tile maps</a>.</p>
     </div>
     <figure>
       <a href="/media/world.gif"><img src="/media/world.png" width="420" height="280" alt="A small figure in a level of walls, grass and water with coins, and a panel counting the coins. Opens the recording."></a>
@@ -127,6 +130,7 @@ view := screen.CenterOn(player.Bounds().Center()).Within(level.Bounds())</code><
     <div class="say">
       <p>A mesh is drawn as lines or as shaded faces through a perspective camera, lit by a sun, lamps and ambient light, faceted or smooth.</p>
       <p>Cubes, spheres, cylinders and cones come with glonk, and an OBJ file loads with the colors and pictures of its materials.</p>
+      <p>The guide: <a href="/manual/3d/">A 3D scene</a>.</p>
     </div>
     <figure>
       <a href="/media/viewer.gif"><img src="/media/viewer.png" width="420" height="280" alt="A small house with a red roof, shaded and turning. Opens the recording."></a>
@@ -145,6 +149,7 @@ cube.DrawShaded(fb, cam, mesh.Ambient{Level: 0.2}, sun)</code></pre>
     <div class="say">
       <p>3D and 2D share the frame and its depth. Solids are drawn in half-block pixels, a picture stands among them and is hidden where a solid is nearer, and text and widgets go on top.</p>
       <p>The recording at the top of this page is this step.</p>
+      <p>The guide: <a href="/manual/3d/#on-the-pixel-canvas">A 3D scene</a>.</p>
     </div>
     <figure>
       <a href="/media/cube3d.gif"><img src="/media/cube3d.png" width="420" height="280" alt="Shaded blocks, a cube drawn as lines and a tree, with lines of text above and below. Opens the recording."></a>
@@ -162,6 +167,7 @@ fb.DrawText(1, 1, "25 fps", engine.Color{}) // and text on top</code></pre>
     <div class="say">
       <p>Input is held keys and new presses, key events with their modifiers, typed text, pastes and the mouse.</p>
       <p><code>Update</code> and <code>Draw</code> are plain methods, so a test presses keys with <code>engine.Keyboard</code> and reads the frame as text. Every recording on this page was made that way, with no terminal.</p>
+      <p>The guide: <a href="/manual/testing/">Testing a game</a>.</p>
     </div>
     <pre tabindex="0"><code>kb := engine.NewKeyboard()
 kb.Press('w')
@@ -175,7 +181,7 @@ fmt.Print(fb.String()) // the frame, as text</code></pre>
 
 <section aria-labelledby="start">
   <h2 id="start">Start</h2>
-  <p class="lede">The smallest program: a box that fills the window, and an @ that walks across it. Esc quits.</p>
+  <p class="lede">The smallest program: a box that fills the window, and an @ that walks across it. Esc quits. <a href="/manual/first-game/">Your first game</a> says what each part does.</p>
   <pre tabindex="0"><code>package main
 
 import (
@@ -211,7 +217,7 @@ func main() {
 }</code></pre>
   <p class="lede">Or run an example with nothing cloned:</p>
   <p class="cmd"><span aria-hidden="true">$</span> <code>go run glonk.dev/<wbr>examples/<wbr>viewer@latest</code></p>
-  <p class="fine">The same works for <code>cube3d</code>, <code>sprites</code>, <code>world</code>, <code>bounce2d</code> and <code>input</code>.</p>
+  <p class="fine">The same works for <code>hello</code>, <code>cube3d</code>, <code>sprites</code>, <code>world</code>, <code>bounce2d</code> and <code>input</code>.</p>
 </section>
 
 <section aria-labelledby="box">
@@ -222,8 +228,9 @@ func main() {
     <dt>mesh</dt><dd>3D meshes as lines or shaded faces, shapes, OBJ loading, lights, and the perspective camera.</dd>
     <dt>sprite</dt><dd>Sprites drawn in layers: a cell, a frame of text art or an animation, with bounds and collision queries.</dd>
     <dt>tilemap</dt><dd>Levels written as text art, drawn through a camera, with solid tiles, routes round walls and lines of sight.</dd>
-    <dt>widget</dt><dd>A label, a panel, a bar and a menu, for a HUD or a pause screen.</dd>
+    <dt>widget</dt><dd>A label, a panel, a bar, a menu and a text field, for a HUD or a pause screen.</dd>
     <dt>bitmap</dt><dd>JPEG and PNG pictures, or ones made in code, drawn on the pixel canvas.</dd>
+    <dt>web</dt><dd>A game in a web page, the same as in the terminal, drawn by xterm.js.</dd>
   </dl>
   <p class="fine">Every package is documented, with examples that run, on <a href="https://pkg.go.dev/glonk.dev">pkg.go.dev</a>.</p>
 </section>

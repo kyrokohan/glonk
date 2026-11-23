@@ -21,7 +21,7 @@ type Terminal struct {
 
 	// KeyReleases says it speaks the kitty keyboard protocol, so that it reports a key let
 	// go: Input.Exact will be true, and several keys can be held at once. Without it, a held
-	// key is a timing guess and only one stays held (see the README's Compatibility section).
+	// key is a timing guess and only one stays held (see the guide docs/input.md).
 	KeyReleases bool
 
 	// TrueColor says the environment says it shows 24-bit colors, so that ColorsAuto sends

@@ -320,7 +320,7 @@ func TestANearerSolidHidesTheOutline(t *testing.T) {
 	_ = outside
 }
 
-// The README's own example: a grid on a floor. It is a different mesh from the floor, and is whole on it,
+// The case the manual shows: a grid on a floor. It is a different mesh from the floor, and is whole on it,
 // and a box that is nearer hides it.
 func TestAGridOnAFloorIsWholeAndHiddenByANearerBox(t *testing.T) {
 	t.Setenv("TERM_PROGRAM", "")
