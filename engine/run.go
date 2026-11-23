@@ -95,7 +95,8 @@ type Config struct {
 	// keyboard protocol reports them, unless LegacyKeys asks for the timing-based
 	// handling. Ctrl-C ends Run as usual, Ctrl-Z does nothing, and the end of Input
 	// does not end Run. That makes Run testable with a string of key bytes in and a
-	// buffer out.
+	// buffer out. An Input that never ends a read, a pipe nobody closes, leaves one
+	// goroutine waiting on it after Run has returned.
 	Output io.Writer
 }
 
