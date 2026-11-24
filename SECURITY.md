@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-glonk is pre-1.0. Only the latest release (v0.16.x) and the latest commit on `main` are supported. A fix lands on `main` first and ships in a new patch release; older releases are not patched.
+glonk is pre-1.0. Only the latest release (v0.16.x), the latest release of `glonk.dev/sound` (sound/v0.1.x) and the latest commit on `main` are supported. A fix lands on `main` first and ships in a new patch release; older releases are not patched.
 
 ## Reporting a vulnerability
 
@@ -22,6 +22,7 @@ glonk reads data it does not control and writes to a person's terminal, so these
 
 - **OBJ loading** (`mesh.LoadOBJ`, `mesh.LoadOBJLimit` and `mesh.LoadOBJFS`): a file that crashes the loader, makes it run for far longer than its size explains, or uses far more memory than documented. `LoadOBJ` has no size limit on purpose; reading an endless source with it is expected, and `LoadOBJLimit` is the safe call for untrusted input.
 - **Material files** (`mesh.LoadOBJFS`): an OBJ that makes it open or read a file outside the OBJ's own folder, or an MTL file that crashes the loader or costs far more time or memory than its size and the documented limits explain.
+- **WAV loading** (`sound.LoadWAV`): a file that crashes the reader, or costs far more time or memory than its size and the 32 MiB limit explain.
 - **Terminal output**: text, cell contents or a file name that makes glonk send the terminal something other than the characters it was given, such as an escape sequence that runs.
 - **Keyboard input handling**: a byte sequence from the terminal that crashes the program, hangs it, or leaves keys stuck.
 - **Leaving the terminal in a bad state** after a crash, signal or panic that glonk claims to handle (see "How a run ends" in docs/first-game.md for the cases it does not).

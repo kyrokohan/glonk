@@ -102,6 +102,16 @@ The maintainer makes releases from `main` once CI there is green. While glonk is
    - https://pkg.go.dev/glonk.dev@vX.Y.Z shows it; if it doesn't, the page offers to fetch it.
 6. Close the release's milestone.
 
+### A release of glonk.dev/sound
+
+The same steps, with these differences:
+
+- The branch is `docs/release-sound-vX.Y.Z`, the commit `docs: prepare the sound vX.Y.Z release`, and the changelog `sound/CHANGELOG.md`. `SECURITY.md` supports `sound/vX.Y.x`.
+- The tag is `sound/vX.Y.Z`: `git tag -a sound/vX.Y.Z -m "glonk.dev/sound vX.Y.Z"`, then `git push origin sound/vX.Y.Z`.
+- The release is not Latest, which stays glonk's: `gh release create sound/vX.Y.Z --verify-tag --latest=false --title "glonk.dev/sound vX.Y.Z" --notes-file notes.md`, with "Full list of changes: sound/CHANGELOG.md".
+- The checks are under `glonk.dev/sound`: `https://proxy.golang.org/glonk.dev/sound/@v/vX.Y.Z.info` and `https://pkg.go.dev/glonk.dev/sound@vX.Y.Z`.
+- A release of glonk that `sound` needs comes first, and `sound/go.mod` requires it before the prep commit.
+
 ## License
 
 By contributing you agree that your work is released under the [MIT License](LICENSE) like the rest of the project.

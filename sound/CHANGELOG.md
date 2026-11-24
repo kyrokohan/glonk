@@ -4,6 +4,10 @@ The changes to `glonk.dev/sound`, a module of its own with its own versions, tag
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-23
+
+The first release: sounds placed in a scene, mixed, and played on the sound device.
+
 ### Added
 
 - A mixer that plays clips where they are in a scene: `Mixer.Play` at a place, `PlayHere` at the listener, and `Loop`, each a `Voice` to move, fade or stop. A sound is heard at its full gain within `Sound.Near` and fades to silence at `Sound.Range`, louder in the nearer ear by the equal-power law, and glides over 20 ms when it or the listener moves, so that nothing clicks (#120).
@@ -12,3 +16,6 @@ The changes to `glonk.dev/sound`, a module of its own with its own versions, tag
 - `Mixer.Read`, the mix as stereo samples, for tests with no sound device.
 - `Open` plays a mixer on the sound device through [oto](https://github.com/ebitengine/oto), with no C compiler on macOS and Linux. Where there is no device it returns an error, and the game plays on in silence.
 - `examples/listen`, three sounds to walk among, and [the Sound guide](https://glonk.dev/manual/sound/).
+
+[Unreleased]: https://github.com/usrgames/glonk/compare/sound/v0.1.0...HEAD
+[0.1.0]: https://github.com/usrgames/glonk/releases/tag/sound/v0.1.0
